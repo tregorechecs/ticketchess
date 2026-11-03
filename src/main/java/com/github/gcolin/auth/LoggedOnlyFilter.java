@@ -1,6 +1,6 @@
 package com.github.gcolin.auth;
 
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.RequestContext;
 import jakarta.annotation.Priority;
 import jakarta.ws.rs.Priorities;
@@ -22,7 +22,7 @@ public class LoggedOnlyFilter implements ContainerRequestFilter {
 
         if (user == null || user.getEmail() == null) {
             requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED)
-                    .entity(new JteHtml(Collections.emptyMap(), "auth/notlogged.jte"))
+                    .entity(new MustacheHtml(Collections.emptyMap(), "auth/notlogged.mustache"))
                     .build());
         }
     }

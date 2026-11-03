@@ -1,0 +1,34 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+  <main class="container flex-fill py-4">
+    <div class="bg-body p-4 rounded mx-auto" style="max-width: 32rem;">
+      <h1 class="h4 mb-3">{{payerTitleText}}</h1>
+      <p class="text-body-secondary">{{#i18n}}payment.payer.editIntro{{/i18n}}</p>
+
+      {{#payerUpdated}}
+        <div class="alert alert-success" role="alert">{{#i18n}}payment.payer.updated{{/i18n}}</div>
+      {{/payerUpdated}}
+
+      <form method="post" action="{{contextPath}}/payment/{{payment.id}}/payer" accept-charset="UTF-8">
+        <input type="hidden" name="returnTo" value="{{effectiveReturnTo}}">
+        <div class="mb-3">
+          <label class="form-label" for="payerName">{{#i18n}}payment.payerName{{/i18n}}</label>
+          <input type="text" class="form-control" id="payerName" name="payerName" maxlength="255" value="{{payerNameValue}}" autocomplete="name">
+          <div class="form-text">{{#i18n}}help.paymentPayerName{{/i18n}}</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 justify-content-between">
+          <a class="btn btn-outline-secondary" href="{{contextPath}}{{effectiveReturnTo}}">{{#i18n}}action.cancel{{/i18n}}</a>
+          <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-outline-success" href="{{contextPath}}/payment/{{payment.id}}/invoice">{{#i18n}}payment.downloadInvoice{{/i18n}}</a>
+            <button type="submit" class="btn btn-primary">{{#i18n}}action.save{{/i18n}}</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </main>
+  {{> platform/footer}}
+</body>
+</html>

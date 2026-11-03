@@ -1,0 +1,184 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+    <div class="bg-body p-3 rounded mb-3">
+    <div class="row justify-content-center mt-3">
+        <form id="editForm" method="post" action="{{contextPath}}/event/{{sub.event.id}}/register/{{sub.id}}">
+
+            <input type="hidden" name="toRemove" id="toRemove" value="false">
+
+            <div class="mb-3">
+                <label class="form-label">
+                    {{#i18n}}sub.nrFFE{{/i18n}}
+                </label>
+                <input type="text" id="nrFFE" name="nrFFE" value="{{sub.nrFfe}}" class="form-control" required>
+                {{#player}}
+                <div class="form-text">
+                    {{player.firstname}} {{player.name}}
+                </div>
+                {{/player}}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">
+                    {{#i18n}}sub.eventId{{/i18n}}
+                </label>
+                <input type="text" id="eventId" name="eventId" value="{{sub.event.id}}" class="form-control" required>
+                {{#sub.event}}
+                <div class="form-text">
+                    {{sub.event.name}}
+                    <a href="{{contextPath}}/event/{{sub.event.id}}">{{#i18n}}action.view{{/i18n}}</a>
+                </div>
+                {{/sub.event}}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">
+                    {{#i18n}}sub.creationUser{{/i18n}}
+                </label>
+                <input type="text" id="creationUser" name="creationUser" value="{{sub.creationUser}}" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{#i18n}}sub.createdAt{{/i18n}}</label>
+                <div class="form-control-plaintext">
+                    {{#sub.createdAt}}
+                        {{sub.createdAt}}
+                    {{/sub.createdAt}}{{^sub.createdAt}}
+                        —
+                    {{/sub.createdAt}}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{#i18n}}sub.updatedAt{{/i18n}}</label>
+                <div class="form-control-plaintext">
+                    {{#sub.updatedAt}}
+                        {{sub.updatedAt}}
+                    {{/sub.updatedAt}}{{^sub.updatedAt}}
+                        —
+                    {{/sub.updatedAt}}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{#i18n}}event.status{{/i18n}}</label>
+                <select id="status" name="status" class="form-select" required>
+                    {{#statusIsNOT_PAID}}
+                    <option value="NOT_PAID" selected>{{#i18n}}playerStatus.NOT_PAID{{/i18n}}</option>
+                    {{/statusIsNOT_PAID}}{{^statusIsNOT_PAID}}
+                    <option value="NOT_PAID">{{#i18n}}playerStatus.NOT_PAID{{/i18n}}</option>
+                    {{/statusIsNOT_PAID}}
+                    {{#statusIsPAID}}
+                    <option value="PAID" selected>{{#i18n}}playerStatus.PAID{{/i18n}}</option>
+                    {{/statusIsPAID}}{{^statusIsPAID}}
+                    <option value="PAID">{{#i18n}}playerStatus.PAID{{/i18n}}</option>
+                    {{/statusIsPAID}}
+                    {{#statusIsCANCELLED}}
+                    <option value="CANCELLED" selected>{{#i18n}}playerStatus.CANCELLED{{/i18n}}</option>
+                    {{/statusIsCANCELLED}}{{^statusIsCANCELLED}}
+                    <option value="CANCELLED">{{#i18n}}playerStatus.CANCELLED{{/i18n}}</option>
+                    {{/statusIsCANCELLED}}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{#i18n}}player.attendance{{/i18n}}</label>
+                <div id="attendance-at" class="form-control-plaintext">
+                    {{#sub.attendanceAt}}
+                        {{sub.attendanceAt}}
+                    {{/sub.attendanceAt}}{{^sub.attendanceAt}}
+                        {{#i18n}}player.attendance.none{{/i18n}}
+                    {{/sub.attendanceAt}}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">
+                    {{#i18n}}sub.amountCents{{/i18n}}
+                </label>
+                <input type="number" id="amountCents" name="amountCents" value="{{amountCentsValue}}" class="form-control" min="0" step="1" required>
+            </div>
+
+            {{#hasPayment}}
+            <div class="mb-3">
+                <div>
+                    <a class="btn btn-secondary" href="{{contextPath}}/payment/{{paymentId}}/edit">
+                        {{#i18n}}action.goToPayment{{/i18n}}
+                    </a>
+                </div>
+            </div>
+            {{/hasPayment}}
+
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label mb-0">{{#i18n}}sub.option.list{{/i18n}}</label>
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{{contextPath}}/event/{{sub.event.id}}/register/{{sub.id}}/option/new">
+                        {{#i18n}}sub.option.create{{/i18n}}
+                    </a>
+                </div>
+                {{#hasOptions}}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>{{#i18n}}sub.option.description{{/i18n}}</th>
+                                <th>{{#i18n}}sub.amountCents{{/i18n}}</th>
+                                <th>{{#i18n}}event.status{{/i18n}}</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{#optionRows}}
+                            <tr>
+                                <td>{{description}}</td>
+                                <td>{{amountEuros}} €</td>
+                                <td>{{#statusMessageKey}}{{#i18n}}{{statusMessageKey}}{{/i18n}}{{/statusMessageKey}}</td>
+                                <td class="text-end">
+                                    <a href="{{contextPath}}/event/{{sub.event.id}}/register/{{sub.id}}/option/{{id}}">
+                                        {{#i18n}}action.edit{{/i18n}}
+                                    </a>
+                                </td>
+                            </tr>
+                            {{/optionRows}}
+                        </tbody>
+                    </table>
+                </div>
+                {{/hasOptions}}{{^hasOptions}}
+                <div class="form-control-plaintext text-body-secondary">{{#i18n}}sub.option.empty{{/i18n}}</div>
+                {{/hasOptions}}
+            </div>
+
+            <div class="d-flex justify-content-between">
+                <button type="button"
+                        class="btn btn-outline-danger"
+                        onclick="removeAndSubmit()">
+                    🗑️ {{#i18n}}action.remove{{/i18n}}
+                </button>
+
+                <button type="submit" class="btn btn-outline-primary">
+                    💾 {{#i18n}}action.save{{/i18n}}
+                </button>
+            </div>
+
+        </form>
+
+<script>
+    function removeAndSubmit() {
+        if (confirm('{{#i18n}}sub.confirmDelete{{/i18n}}')) {
+            document.getElementById('toRemove').value = 'true';
+            document.getElementById('editForm').submit();
+        }
+    }
+</script>
+    </div></div>
+    </main>
+{{> platform/footer}}
+</body>
+</html>

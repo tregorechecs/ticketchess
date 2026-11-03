@@ -1,0 +1,15 @@
+<div class="d-flex align-items-center gap-2">
+  <span>{{group.name}}</span>
+  <div class="dropdown">
+    <button class="btn btn-sm btn-link text-body-secondary text-decoration-none border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{#i18n}}label.action{{/i18n}}" title="{{#i18n}}label.action{{/i18n}}">
+      <i class="bi bi-three-dots-vertical"></i>
+    </button>
+    <ul class="dropdown-menu">
+      <li><a class="dropdown-item" href="{{contextPath}}/eventgroup/{{group.id}}">{{#i18n}}action.edit{{/i18n}}</a></li>
+      <li><a class="dropdown-item" href="{{contextPath}}/event/{{group.shortname}}">{{#i18n}}action.view{{/i18n}}</a></li>
+      {{#showAdminStatisticsLink}}
+      <li><a class="dropdown-item" href="{{contextPath}}/statistics">{{#i18n}}event.statistics{{/i18n}}</a></li>
+      {{/showAdminStatisticsLink}}
+    </ul>
+  </div>
+</div>

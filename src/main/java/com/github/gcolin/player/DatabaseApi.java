@@ -31,7 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.ModelUtils;
 
 @Path("database")
@@ -50,11 +50,11 @@ public class DatabaseApi {
 
     @GET
     @RequireRole(RoleCode.ADMIN)
-    public JteHtml page(@QueryParam("status") String status) {
+    public MustacheHtml page(@QueryParam("status") String status) {
         Map<String, Object> model = new HashMap<>();
         model.put("excludeAffTypeN", Boolean.parseBoolean(config.getProperty("ffe.excludeAffTypeN", "false")));
         model.put("status", status);
-        return new JteHtml(model, "player/database.jte");
+        return new MustacheHtml(model, "player/database.mustache");
     }
 
     @POST
@@ -147,12 +147,12 @@ public class DatabaseApi {
     @GET
     @Path("manual-players")
     @RequireRole(RoleCode.ADMIN)
-    public JteHtml manualPlayersPage(@QueryParam("status") String status) throws IOException {
+    public MustacheHtml manualPlayersPage(@QueryParam("status") String status) throws IOException {
         Map<String, Object> model = new HashMap<>();
         model.put("players", luceneDb.getManualPlayers());
         model.put("manualPlayersFile", luceneDb.getManualPlayersFile().getAbsolutePath());
         model.put("status", status);
-        return new JteHtml(model, "player/databasePlayers.jte");
+        return new MustacheHtml(model, "player/databasePlayers.mustache");
     }
 
     @POST

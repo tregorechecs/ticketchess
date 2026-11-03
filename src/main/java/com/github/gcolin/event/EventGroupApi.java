@@ -23,7 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @RequireRole(RoleCode.EVENT_ADMIN)
 @Path("eventgroup")
@@ -39,35 +39,34 @@ public class EventGroupApi {
     private Caches caches;
 
     @GET
-    public JteHtml list() {
+    public MustacheHtml list() {
         List<EventGroup> eventGroups = eventGroupService.all();
         eventGroups.sort((p1, p2) -> {
             return p1.getName().compareTo(p2.getName());
         });
-        return new JteHtml(Collections.singletonMap("eventGroups", eventGroups), "event/eventgroup.jte");
+        return new MustacheHtml(Collections.singletonMap("eventGroups", eventGroups), "event/eventgroup.mustache");
     }
 
     @GET
     @Path("new")
-    public JteHtml newEventGroup() {
+    public MustacheHtml newEventGroup() {
         List<EventGroup> eventGroups = eventGroupService.all();
         eventGroups.sort((p1, p2) -> {
             return p1.getName().compareTo(p2.getName());
         });
-        return new JteHtml(Collections.singletonMap("eventGroup", new EventGroup()), "event/eventgroupEdit.jte");
+        return new MustacheHtml(Collections.singletonMap("eventGroup", new EventGroup()), "event/eventgroupEdit.mustache");
     }
 
     @GET
     @Path("{id:\\d+}")
-    public JteHtml edit(@PathParam("id") Integer id) {
+    public MustacheHtml edit(@PathParam("id") Integer id) {
         Map<String, Object> model = new HashMap<String, Object>();
 
         EventGroup eventGroup = eventGroupService.findDetachedForEdit(id);
         model.put("events", eventGroup.getEvents());
-        model.put("egnotifications", eventGroup.getNotifications());
         model.put("eventGroup", eventGroup);
 
-        return new JteHtml(model, "event/eventgroupEdit.jte");
+        return new MustacheHtml(model, "event/eventgroupEdit.mustache");
     }
 
     @POST

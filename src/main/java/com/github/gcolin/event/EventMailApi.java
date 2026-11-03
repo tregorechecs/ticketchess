@@ -43,7 +43,7 @@ import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("event/{id:\\d+}/mail")
 @RequireRole(RoleCode.EVENT_ADMIN)
@@ -70,7 +70,7 @@ public class EventMailApi {
     private static final Logger logger = LoggerFactory.getLogger(EventMailApi.class);
 
     @GET
-    public JteHtml showForm(@PathParam("id") Integer eventId, @QueryParam("sent") Integer sent) {
+    public MustacheHtml showForm(@PathParam("id") Integer eventId, @QueryParam("sent") Integer sent) {
         Event event = eventService.find(eventId);
         Map<String, Object> model = new HashMap<>();
         model.put("event", event);
@@ -78,7 +78,7 @@ public class EventMailApi {
         if (sent != null) {
             model.put("sent", sent);
         }
-        return new JteHtml(model, "event/eventMail.jte");
+        return new MustacheHtml(model, "event/eventMail.mustache");
     }
 
     @POST

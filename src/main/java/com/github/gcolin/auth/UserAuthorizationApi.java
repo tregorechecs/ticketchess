@@ -18,8 +18,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("user-authorization")
 @RequireRole(RoleCode.ADMIN)
@@ -38,12 +39,17 @@ public class UserAuthorizationApi {
     UriInfo uriInfo;
 
     @GET
-    public JteHtml page() {
+    public MustacheHtml page() {
         Map<String, Object> model = new HashMap<>();
-        model.put("authorizations", userAuthorizationDao.allOrdered());
-        model.put("roles", Arrays.asList(RoleCode.values()));
+        List<UserAuthorization> authorizations = userAuthorizationDao.allOrdered();
+        List<RoleCode> roles = Arrays.asList(RoleCode.values());
+        model.put("authorizations", authorizations);
+        model.put("roles", roles);
         model.put("scopeTypes", Arrays.asList(AuthorizationScopeType.values()));
-        return new JteHtml(model, "auth/userauthorization.jte");
+        AuthMustacheView.enrichUserAuthorization(model, authorizations, roles);
+        model.put("titleKey", "page.userAuthorizations");
+        model.put("activePageTitleKey", "page.userAuthorizations");
+        return new MustacheHtml(model, "auth/userauthorization.mustache");
     }
 
     @POST

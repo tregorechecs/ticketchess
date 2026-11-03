@@ -6,9 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -16,18 +13,14 @@ import org.junit.jupiter.api.Test;
 public class AdminOrgPageTest extends PlaywrightBaseTest {
 
     @Test
-    public void saveClubTabShouldKeepCurrentConfig() throws Exception {
-        Path params = AppContext.get().config().getConfigFile();
-        Path backup = Files.createTempFile("params-backup", ".properties");
-        Files.copy(params, backup, StandardCopyOption.REPLACE_EXISTING);
-
+    public void saveClubTabShouldKeepCurrentConfig() {
         Page page = browserContext.newPage();
         try {
             login(page);
-            page.navigate(BASE_URL + "/admin/org");
+            page.navigate(BASE_URL + "/admin/organisations/1?tab=club");
 
-            assertEquals(BASE_URL + "/admin/org", getBaseUrl(page.url()));
-            assertThat(page.locator("h1")).containsText("Organisation");
+            assertEquals(BASE_URL + "/admin/organisations/1", getBaseUrl(page.url()));
+            assertThat(page.locator("h1")).containsText("organisation");
 
             Locator orgName = page.locator("#club input[name='org.name']");
             Locator title = page.locator("#club input[name='title']");
@@ -44,8 +37,6 @@ public class AdminOrgPageTest extends PlaywrightBaseTest {
             assertEquals(updatedName, page.locator("#club input[name='org.name']").inputValue());
         } finally {
             page.close();
-            Files.copy(backup, params, StandardCopyOption.REPLACE_EXISTING);
-            Files.deleteIfExists(backup);
         }
     }
 }

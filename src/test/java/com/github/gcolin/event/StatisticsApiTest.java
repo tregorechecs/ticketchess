@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class StatisticsApiTest {
 
@@ -51,10 +51,10 @@ class StatisticsApiTest {
         inject(api, "find", find);
         inject(api, "clubSeasonFilter", clubSeasonFilter);
 
-        JteHtml html = api.page(null);
+        MustacheHtml html = api.page(null);
         Map<String, Object> model = html.getModel();
 
-        assertEquals("event/statistics.jte", html.getTemplate());
+        assertEquals("event/statistics.mustache", html.getTemplate());
         assertSame(closestEvents, model.get("closestEvents"));
         assertSame(topEvents, model.get("topEvents"));
         assertEquals(123.45, (Double) model.get("totalPayments"));
@@ -83,7 +83,7 @@ class StatisticsApiTest {
         inject(api, "find", find);
         inject(api, "clubSeasonFilter", clubSeasonFilter);
 
-        JteHtml html = api.page(null);
+        MustacheHtml html = api.page(null);
         Map<String, Object> model = html.getModel();
 
         assertEquals(0.0, (Double) model.get("totalPayments"));

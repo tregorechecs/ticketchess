@@ -14,7 +14,6 @@ class CachesTest {
         Assertions.assertNotNull(caches.getDebtCache());
         Assertions.assertNotNull(caches.getAllEvents());
         Assertions.assertNotNull(caches.getEvent());
-        Assertions.assertNotNull(caches.getNotifications());
         Assertions.assertNotNull(caches.getEventGroups());
     }
 

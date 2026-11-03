@@ -1,0 +1,129 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.database{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-database fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}heading.databaseAdmin{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.databaseDesc{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      {{#statusIssettingsSaved}}
+        <div class="alert alert-success">{{#i18n}}database.settingsSaved{{/i18n}}</div>
+      {{/statusIssettingsSaved}}
+      {{#statusIssettingsError}}
+        <div class="alert alert-danger">{{#i18n}}database.settingsError{{/i18n}}</div>
+      {{/statusIssettingsError}}
+
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-3">{{#i18n}}label.ffeDatabase{{/i18n}}</h2>
+        <pre id="ffe-info" class="flex-grow-1 bg-light p-2 rounded mb-0" style="overflow:auto"></pre>
+        <form method="post" action="{{contextPath}}/database/ffe/settings" class="mt-3">
+          <div class="form-check mb-2">
+            {{#excludeAffTypeN}}
+            <input class="form-check-input" type="checkbox" name="ffe.excludeAffTypeN" value="true" id="ffe.excludeAffTypeN" checked>
+            {{/excludeAffTypeN}}
+            {{^excludeAffTypeN}}
+            <input class="form-check-input" type="checkbox" name="ffe.excludeAffTypeN" value="true" id="ffe.excludeAffTypeN">
+            {{/excludeAffTypeN}}
+            <label class="form-check-label" for="ffe.excludeAffTypeN">{{#i18n}}database.excludeAffTypeN{{/i18n}}</label>
+          </div>
+          <p class="form-text text-body-secondary mb-2">{{#i18n}}database.excludeAffTypeNHelp{{/i18n}}</p>
+          <button class="btn btn-outline-primary btn-sm" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+        </form>
+        <div class="mt-3 d-flex justify-content-between">
+          <button class="btn btn-primary" id="download-ffe">{{#i18n}}action.downloadExtract{{/i18n}}</button>
+          <button class="btn btn-secondary" id="refresh-ffe">{{#i18n}}action.refresh{{/i18n}}</button>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-3">{{#i18n}}label.fideDatabase{{/i18n}}</h2>
+        <pre id="fide-info" class="flex-grow-1 bg-light p-2 rounded mb-0" style="overflow:auto"></pre>
+        <div class="mt-3 d-flex justify-content-between">
+          <button class="btn btn-primary" id="download-fide">{{#i18n}}action.downloadExtract{{/i18n}}</button>
+          <button class="btn btn-secondary" id="refresh-fide">{{#i18n}}action.refresh{{/i18n}}</button>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="text-center">
+          <button class="btn btn-danger" id="reload-db">{{#i18n}}action.reloadDb{{/i18n}}</button>
+        </div>
+      </div>
+
+      <div id="status-alert" class="alert d-none" role="alert"></div>
+    </main>
+    {{> platform/footer}}
+    <script type="text/javascript">
+      function setStatus(message, isError){
+        const el=document.getElementById('status-alert');
+        el.className='alert ' + (isError?'alert-danger':'alert-success');
+        el.textContent=message;
+        el.classList.remove('d-none');
+      }
+      async function fetchText(url){
+        const res=await fetch(url, {headers:{'Accept':'text/plain'}});
+        if(!res.ok) throw new Error(await res.text());
+        return await res.text();
+      }
+      async function loadDBInfo(){
+        try{ document.getElementById('ffe-info').textContent=await fetchText('{{contextPath}}/database/ffe'); }
+        catch(e){ document.getElementById('ffe-info').textContent='{{#i18n}}error.prefix{{/i18n}}'+e.message; }
+        try{ document.getElementById('fide-info').textContent=await fetchText('{{contextPath}}/database/fide'); }
+        catch(e){ document.getElementById('fide-info').textContent='{{#i18n}}error.prefix{{/i18n}}'+e.message; }
+      }
+      document.getElementById('download-ffe').addEventListener('click', async () => {
+        const btn = document.getElementById('download-ffe');
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> {{#i18n}}action.downloadExtract{{/i18n}}';
+        try{ await fetchText('{{contextPath}}/database/ffe/download'); setStatus('{{#i18n}}database.downloadFfeOk{{/i18n}}'); }
+        catch(e){ setStatus(e.message, true); }
+        loadDBInfo();
+        btn.disabled = false;
+        btn.textContent = originalText;
+      });
+
+      document.getElementById('download-fide').addEventListener('click', async () => {
+        const btn = document.getElementById('download-fide');
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> {{#i18n}}action.downloadExtract{{/i18n}}';
+        try{ await fetchText('{{contextPath}}/database/fide/download'); setStatus('{{#i18n}}database.downloadFideOk{{/i18n}}'); }
+        catch(e){ setStatus(e.message, true); }
+        loadDBInfo();
+        btn.disabled = false;
+        btn.textContent = originalText;
+      });
+
+      document.getElementById('reload-db').addEventListener('click', async () => {
+        const btn = document.getElementById('reload-db');
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> {{#i18n}}database.reloading{{/i18n}}';
+        try{ await fetchText('{{contextPath}}/database/reload'); setStatus('{{#i18n}}database.reloadOk{{/i18n}}'); }
+        catch(e){ setStatus(e.message, true); }
+        loadDBInfo();
+        btn.disabled = false;
+        btn.textContent = originalText;
+      });
+      document.getElementById('refresh-ffe').addEventListener('click', loadDBInfo);
+      document.getElementById('refresh-fide').addEventListener('click', loadDBInfo);
+      loadDBInfo();
+    </script>
+  </body>
+</html>

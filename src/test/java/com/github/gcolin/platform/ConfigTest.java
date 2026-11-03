@@ -104,8 +104,8 @@ class ConfigTest {
     @Test
     void bankTransferEnabledRespectsProperty() {
         Properties props = new Properties();
-        props.setProperty("stripe.transfer.events", "false");
-        props.setProperty("stripe.transfer.memberships", "false");
+        props.setProperty("payment.transfer.events", "false");
+        props.setProperty("payment.transfer.memberships", "false");
         Assertions.assertFalse(Config.isBankTransferEnabledForEvents(props));
         Assertions.assertFalse(Config.isBankTransferEnabledForMemberships(props));
     }

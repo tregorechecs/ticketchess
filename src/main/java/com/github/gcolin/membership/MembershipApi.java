@@ -56,7 +56,7 @@ import com.github.gcolin.player.Find;
 import com.github.gcolin.player.IPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @RequireRole(value = RoleCode.TRESORIER, or = RoleCode.ENTRAINEUR)
 @Path("membership")
@@ -106,7 +106,7 @@ public class MembershipApi {
     UriInfo uriInfo;
 
     @GET
-    public JteHtml list(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml list(@QueryParam("seasonId") Integer seasonId) {
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
         List<Membership> memberships = membershipDao.all(scope);
         memberships.sort(Comparator.comparing(Membership::getId, Comparator.nullsLast(Integer::compareTo)).reversed());
@@ -122,7 +122,8 @@ public class MembershipApi {
         model.put("memberships", memberships);
         model.put("membershipSubscriptions", subscriptionsByMembership);
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "membership/membership.jte");
+        MembershipMustacheView.enrichListPage(model, memberships, subscriptionsByMembership);
+        return new MustacheHtml(model, "membership/membership.mustache");
     }
 
     @GET
@@ -481,13 +482,14 @@ public class MembershipApi {
 
     @GET
     @Path("new")
-    public JteHtml createPage(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml createPage(@QueryParam("seasonId") Integer seasonId) {
         Map<String, Object> model = new HashMap<String, Object>();
         model.put("membership", new Membership());
         model.put("statuses", MembershipStatus.values());
         model.put("licenses", licenseDao.all());
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "membership/membershipNew.jte");
+        MembershipMustacheView.enrichNewPage(model, MembershipStatus.values(), licenseDao.all(), seasonId);
+        return new MustacheHtml(model, "membership/membershipNew.mustache");
     }
 
     @POST
@@ -527,7 +529,7 @@ public class MembershipApi {
 
     @GET
     @Path("{id}/edit")
-    public JteHtml editPage(@PathParam("id") Integer id) {
+    public MustacheHtml editPage(@PathParam("id") Integer id) {
         Membership membership = membershipDao.find(id);
         if (membership == null) {
             throw new jakarta.ws.rs.NotFoundException("Membership not found");
@@ -549,9 +551,17 @@ public class MembershipApi {
         model.put("membershipOptions", subscriptions);
         model.put("availableOptions", availableOptions);
         model.put("licenses", licenseDao.all());
-        clubSeasonFilter.addToModel(
-                model, membership.getSeason() != null ? membership.getSeason().getId() : null);
-        return new JteHtml(model, "membership/membershipEdit.jte");
+        Integer seasonId = membership.getSeason() != null ? membership.getSeason().getId() : null;
+        clubSeasonFilter.addToModel(model, seasonId);
+        MembershipMustacheView.enrichEditPage(
+                model,
+                membership,
+                MembershipStatus.values(),
+                licenseDao.all(),
+                subscriptions,
+                availableOptions,
+                seasonId);
+        return new MustacheHtml(model, "membership/membershipEdit.mustache");
     }
 
     @POST
@@ -654,7 +664,7 @@ public class MembershipApi {
         BroadcastMail mail = buildConfirmationMail(membership);
 
         try {
-            sendMail.send(mail, recipient, "Votre inscription a bien été prise en compte");
+            sendMail.send(mail, recipient, "Votre préinscription a bien été enregistrée");
         } catch (Exception e) {
             logger.error("Unable to send membership confirmation email to {}: {}", recipient, e.getMessage());
         }
@@ -677,7 +687,7 @@ public class MembershipApi {
                 .signWith(config.getKeys(), Config.JWT_ALGORITHM)
                 .compact();
 
-        String loginUrl = config.getProperties().getProperty("baseurl", "http://localhost:8080")
+        String loginUrl = config.getPublicBaseUrl()
                 + "/login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8)
                 + "&redirect_uri=" + URLEncoder.encode("/club-register?success=mail", StandardCharsets.UTF_8);
 
@@ -701,9 +711,9 @@ public class MembershipApi {
         StringBuilder body = new StringBuilder();
         String seasonName = currentSeasonName();
         body.append("Bonjour").append(greetingName.isBlank() ? "" : " " + greetingName)
-                .append(",<br><br>Votre inscription à la saison ")
+                .append(",<br><br>Votre préinscription à la saison ")
                 .append(seasonName)
-                .append(" a bien été prise en compte :")
+                .append(" a bien été enregistrée. Merci de procéder au paiement pour finaliser l'inscription :")
                 .append("<br><br>").append(optionsText);
         if (needsConfirmation) {
             body.append("<br><br>Merci de confirmer votre adhésion en cliquant sur le bouton ci-dessous.");

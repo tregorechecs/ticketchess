@@ -1,0 +1,139 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+  {{> platform/menubar}}
+  <main class="container flex-fill mt-3">
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+        <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+        <li class="breadcrumb-item"><a href="{{contextPath}}/event/{{event.id}}">{{event.name}}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{#i18n}}event.statistics{{/i18n}}</li>
+      </ol>
+    </nav>
+
+    <div class="bg-body p-3 rounded mb-3 d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <h2><i class="bi bi-bar-chart-line me-2"></i>{{event.name}} &mdash; {{#i18n}}event.statistics{{/i18n}}</h2>
+        <p class="text-body-secondary">{{totalSummaryText}}</p>
+        <p class="text-body-secondary mb-2">{{#i18n}}statistics.event.totalAmount{{/i18n}}: <strong>{{totalAmountFormatted}} €</strong>
+          {{#hasAmountByPaymentType}}<br>
+          {{#paymentTypeRows}}<span class="d-block ms-2">{{#i18n}}{{labelKey}}{{/i18n}}: {{amountFormatted}} € ({{percentFormatted}}%)</span>{{/paymentTypeRows}}
+          {{/hasAmountByPaymentType}}
+        </p>
+        <p class="text-body-secondary mb-2">{{#i18n}}statistics.event.totalUnpaidAmount{{/i18n}}: <strong>{{totalUnpaidAmountFormatted}} €</strong></p>
+        <p class="text-body-secondary mb-0">{{#i18n}}statistics.event.totalExpected{{/i18n}}: <strong>{{totalExpectedFormatted}} €</strong></p>
+      </div>
+      <div class="d-flex flex-column flex-sm-row gap-2 flex-shrink-0">
+        <a href="{{contextPath}}/event/{{event.id}}/statistics/csv" class="btn btn-outline-success"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{#i18n}}statistics.event.downloadCsv{{/i18n}}</a>
+        <a href="{{contextPath}}/event/{{event.id}}/statistics/pdf" class="btn btn-outline-danger"><i class="bi bi-file-earmark-pdf me-1"></i>{{#i18n}}statistics.event.downloadPdf{{/i18n}}</a>
+        <a href="{{contextPath}}/event/{{event.id}}/statistics/payments/pdf" class="btn btn-outline-primary"><i class="bi bi-cash-coin me-1"></i>{{#i18n}}statistics.event.downloadPaymentsPdf{{/i18n}}</a>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-lg-4">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="bi bi-shield me-1"></i> {{#i18n}}statistics.event.byClub{{/i18n}}</strong>
+            <span class="badge bg-primary">{{byClubCount}}</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-striped align-middle mb-0">
+                <thead><tr><th>{{#i18n}}player.club{{/i18n}}</th><th class="text-end">{{#i18n}}statistics.event.count{{/i18n}}</th><th class="text-end">%</th></tr></thead>
+                <tbody>
+                  {{#byClubRows}}<tr><td>{{label}}</td><td class="text-end">{{count}}</td><td class="text-end">{{percentFormatted}}%</td></tr>{{/byClubRows}}
+                  {{^byClubRows}}<tr><td colspan="3" class="text-center text-muted">{{#i18n}}info.noData{{/i18n}}</td></tr>{{/byClubRows}}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="bi bi-award me-1"></i> {{#i18n}}statistics.event.byCategory{{/i18n}}</strong>
+            <span class="badge bg-success">{{byCategoryCount}}</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-striped align-middle mb-0">
+                <thead><tr><th>{{#i18n}}player.category{{/i18n}}</th><th class="text-end">{{#i18n}}statistics.event.count{{/i18n}}</th><th class="text-end">%</th></tr></thead>
+                <tbody>
+                  {{#byCategoryRows}}<tr><td>{{label}}</td><td class="text-end">{{count}}</td><td class="text-end">{{percentFormatted}}%</td></tr>{{/byCategoryRows}}
+                  {{^byCategoryRows}}<tr><td colspan="3" class="text-center text-muted">{{#i18n}}info.noData{{/i18n}}</td></tr>{{/byCategoryRows}}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="bi bi-flag me-1"></i> {{#i18n}}statistics.event.byFederation{{/i18n}}</strong>
+            <span class="badge bg-info">{{byFederationCount}}</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-striped align-middle mb-0">
+                <thead><tr><th>{{#i18n}}player.federation{{/i18n}}</th><th class="text-end">{{#i18n}}statistics.event.count{{/i18n}}</th><th class="text-end">%</th></tr></thead>
+                <tbody>
+                  {{#byFederationRows}}<tr><td>{{label}}</td><td class="text-end">{{count}}</td><td class="text-end">{{percentFormatted}}%</td></tr>{{/byFederationRows}}
+                  {{^byFederationRows}}<tr><td colspan="3" class="text-center text-muted">{{#i18n}}info.noData{{/i18n}}</td></tr>{{/byFederationRows}}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-people me-1"></i> {{#i18n}}statistics.event.agePyramid{{/i18n}}</strong>
+        <span class="badge bg-dark">{{#i18n}}statistics.event.ageScale2{{/i18n}}</span>
+      </div>
+      <div class="card-body">
+        {{#hasAgePyramid}}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th class="text-end" style="width: 42%;">{{#i18n}}statistics.event.male{{/i18n}}</th><th class="text-center" style="width: 16%;">{{#i18n}}statistics.event.ageRange{{/i18n}}</th><th style="width: 42%;">{{#i18n}}statistics.event.female{{/i18n}}</th></tr></thead>
+              <tbody>
+                {{#agePyramidRows}}<tr>
+                  <td class="text-end"><div class="d-flex align-items-center gap-2"><span class="text-body-secondary flex-shrink-0">{{male}}</span><div class="flex-grow-1" style="min-width: 0;"><div class="bg-primary-subtle ms-auto" style="height: 0.75rem; width: {{maleBarWidth}}%; min-width: {{maleBarMinWidth}};"></div></div></div></td>
+                  <td class="text-center fw-semibold">{{label}}</td>
+                  <td><div class="d-flex align-items-center gap-2"><div class="flex-grow-1" style="min-width: 0;"><div class="bg-danger-subtle" style="height: 0.75rem; width: {{femaleBarWidth}}%; min-width: {{femaleBarMinWidth}};"></div></div><span class="text-body-secondary flex-shrink-0">{{female}}</span></div></td>
+                </tr>{{/agePyramidRows}}
+              </tbody>
+            </table>
+          </div>
+        {{/hasAgePyramid}}
+        {{^hasAgePyramid}}<p class="text-body-secondary mb-0">{{#i18n}}info.noData{{/i18n}}</p>{{/hasAgePyramid}}
+      </div>
+    </div>
+
+    {{#hasUnknownPaymentPlayers}}
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i> {{#i18n}}statistics.event.unknownPayments{{/i18n}}</strong>
+        <span class="badge bg-warning text-dark">{{unknownPaymentPlayersCount}}</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped align-middle mb-0">
+            <thead><tr><th>{{#i18n}}player.licence{{/i18n}}</th><th>{{#i18n}}player.name{{/i18n}}</th><th>{{#i18n}}player.firstname{{/i18n}}</th><th class="text-end">{{#i18n}}payment.amount{{/i18n}}</th></tr></thead>
+            <tbody>
+              {{#unknownPaymentPlayerRows}}<tr><td>{{licence}}</td><td>{{name}}</td><td>{{firstname}}</td><td class="text-end">{{amountFormatted}} €</td></tr>{{/unknownPaymentPlayerRows}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {{/hasUnknownPaymentPlayers}}
+  </main>
+  {{> platform/footer}}
+</body>
+</html>

@@ -1,0 +1,112 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.statistics{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-bar-chart fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.statistics{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.statisticsDesc{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <form method="get" action="{{contextPath}}/statistics" class="d-flex flex-wrap align-items-center gap-2 mb-0">
+          <div class="input-group w-auto">
+            <label for="statistics_season" class="input-group-text">{{#i18n}}label.season{{/i18n}}</label>
+            <select id="statistics_season" name="seasonId" class="form-select w-auto">
+              {{#seasons}}{{#selected}}<option value="{{value}}" selected>{{label}}</option>{{/selected}}{{^selected}}<option value="{{value}}">{{label}}</option>{{/selected}}{{/seasons}}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-secondary">{{#i18n}}action.applyFilters{{/i18n}}</button>
+        </form>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-2">{{#i18n}}statistics.totalPayments{{/i18n}}</h2>
+        <h3 class="display-6 text-success mb-0">{{totalPaymentsFormatted}} €</h3>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-2">{{#i18n}}statistics.totalPayments{{/i18n}} + {{#i18n}}statistics.unpaidSubscriptions{{/i18n}}</h2>
+        <h3 class="display-6 text-info mb-0">{{totalWithUnpaidFormatted}} €</h3>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-2">{{#i18n}}statistics.closestEvents{{/i18n}}</h2>
+        <p class="text-body-secondary mb-3">{{closestEventsCountText}}</p>
+        <table class="table table-striped align-middle mb-0">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{{#i18n}}event.name{{/i18n}}</th>
+              <th scope="col">{{#i18n}}event.start{{/i18n}}</th>
+              <th scope="col">{{#i18n}}event.end{{/i18n}}</th>
+              <th scope="col">{{#i18n}}event.status{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#closestEvents}}
+            <tr>
+              <td>{{id}}</td>
+              <td>{{name}}</td>
+              <td>{{#hasStartDate}}{{startDateText}}{{/hasStartDate}}</td>
+              <td>{{#hasEndDate}}{{endDateText}}{{/hasEndDate}}</td>
+              <td>{{statusName}}</td>
+              <td><a class="btn btn-sm btn-outline-primary" href="{{contextPath}}/event/{{id}}">{{#i18n}}action.view{{/i18n}}</a></td>
+            </tr>
+            {{/closestEvents}}
+            {{#closestEventsEmpty}}
+            <tr><td colspan="6" class="text-center text-muted">{{#i18n}}info.noEvent{{/i18n}}</td></tr>
+            {{/closestEventsEmpty}}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-2">{{#i18n}}statistics.topEventsByParticipants{{/i18n}}</h2>
+        <p class="text-body-secondary mb-3">{{topEventsCountText}}</p>
+        <table class="table table-striped align-middle mb-0">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{{#i18n}}event.name{{/i18n}}</th>
+              <th scope="col">{{#i18n}}event.start{{/i18n}}</th>
+              <th scope="col">{{#i18n}}statistics.participantCount{{/i18n}}</th>
+              <th scope="col">{{#i18n}}event.status{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#topEvents}}
+            <tr>
+              <td>{{id}}</td>
+              <td>{{name}}</td>
+              <td>{{#hasStartDate}}{{startDateText}}{{/hasStartDate}}</td>
+              <td><span class="badge bg-success">{{participantCount}}</span></td>
+              <td>{{statusName}}</td>
+              <td><a class="btn btn-sm btn-outline-primary" href="{{contextPath}}/event/{{id}}">{{#i18n}}action.view{{/i18n}}</a></td>
+            </tr>
+            {{/topEvents}}
+            {{#topEventsEmpty}}
+            <tr><td colspan="6" class="text-center text-muted">{{#i18n}}info.noEvent{{/i18n}}</td></tr>
+            {{/topEventsEmpty}}
+          </tbody>
+        </table>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

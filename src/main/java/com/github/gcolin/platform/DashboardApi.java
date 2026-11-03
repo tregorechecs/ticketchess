@@ -34,7 +34,7 @@ public class DashboardApi {
     @GET
     @RequireRole(RoleCode.EVENT_ADMIN)
     @Transactional
-    public JteHtml page(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml page(@QueryParam("seasonId") Integer seasonId) {
         Map<String, Object> model = new HashMap<>();
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
         clubSeasonFilter.addToModel(model, seasonId);
@@ -49,7 +49,7 @@ public class DashboardApi {
         model.put("subsWithoutPayment", subsWithoutPayment);
         model.put("cancelledSubs", cancelledSubs);
         model.put("notPaidSubs", notPaidSubs);
-        return new JteHtml(model, "platform/dashboard.jte");
+        return new MustacheHtml(model, "platform/dashboard.mustache");
     }
 
     private void fillPlayers(List<PlayerSubscription> subs) {

@@ -1,0 +1,82 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}breadcrumb.membershipOptions{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-toggles fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.membershipOptions{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.membershipOptions{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <form method="get" action="{{contextPath}}/membership-option-admin" class="d-flex align-items-center mb-0">
+            <div class="input-group w-auto">
+              <label for="membership_option_season" class="input-group-text">{{#i18n}}label.season{{/i18n}}</label>
+              <select id="membership_option_season" name="seasonId" class="form-select w-auto" onchange="this.form.submit()">
+                {{#seasons}}{{#selected}}
+                  <option value="{{value}}" selected>{{label}}</option>
+                {{/selected}}{{^selected}}
+                  <option value="{{value}}">{{label}}</option>
+                {{/selected}}{{/seasons}}
+              </select>
+            </div>
+          </form>
+          <a class="btn btn-success ms-md-auto" href="{{contextPath}}/membership-option-admin/new{{seasonQuery}}">{{#i18n}}action.addMembershipOption{{/i18n}}</a>
+        </div>
+        <div class="admin-table-scroll mt-3">
+          <table class="table table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">{{#i18n}}label.type{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.season{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.value{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.license{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.amount{{/i18n}} (€)</th>
+                <th scope="col">{{#i18n}}label.accessibility{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#safeOptions}}<tr>
+                <td>{{id}}</td>
+                <td>{{optionTypeName}}</td>
+                <td>{{seasonName}}</td>
+                <td>{{optionValue}}</td>
+                <td>{{#hasLicense}}{{licenseLabel}}{{/hasLicense}}{{^hasLicense}}{{#i18n}}label.allLicenses{{/i18n}}{{/hasLicense}}</td>
+                <td>{{amountFormatted}} €</td>
+                <td>{{#hasAccessRule}}{{accessRuleLabel}}{{/hasAccessRule}}</td>
+                <td>
+                  <div class="d-flex gap-2">
+                    <a class="btn btn-sm btn-outline-primary" href="{{contextPath}}/membership-option-admin/{{id}}/edit{{seasonQuery}}">{{#i18n}}action.edit{{/i18n}}</a>
+                    <form method="post" class="m-0" action="{{contextPath}}/membership-option-admin/{{id}}/delete" onsubmit="return confirm('{{#i18n}}sub.confirmDelete{{/i18n}}')">
+                      {{#seasonId}}<input type="hidden" name="seasonId" value="{{seasonId}}">{{/seasonId}}
+                      <button type="submit" class="btn btn-sm btn-outline-danger">{{#i18n}}action.delete{{/i18n}}</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>{{/safeOptions}}{{^safeOptions}}
+              <tr><td colspan="8" class="text-center text-body-secondary">{{#i18n}}info.noMembershipOption{{/i18n}}</td></tr>
+              {{/safeOptions}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

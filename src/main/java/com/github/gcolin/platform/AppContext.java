@@ -8,9 +8,14 @@ import com.github.gcolin.event.StatisticsReportService;
 import com.github.gcolin.membership.LicensePriceService;
 import com.github.gcolin.membership.MembershipOptionFileService;
 import com.github.gcolin.membership.MembershipReportService;
+import com.github.gcolin.organisation.OrganisationBootstrap;
+import com.github.gcolin.organisation.OrganisationFiles;
+import com.github.gcolin.organisation.OrganisationResolver;
+import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.payment.PaymentReceiptPdfService;
 import com.github.gcolin.payment.RibService;
 import com.github.gcolin.player.LuceneDb;
+import com.github.gcolin.player.LuceneDbRegistry;
 import jakarta.servlet.ServletContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,9 +28,10 @@ public final class AppContext {
     private Config config;
     private Caches caches;
     private PersistenceService persistence;
-    private JteConfig jteConfig;
+    private MustacheConfig mustacheConfig;
     private SendMail sendMail;
-    private LuceneDb luceneDb;
+    private LuceneDbRegistry luceneDbRegistry;
+    private OrganisationResolver organisationResolver;
     private ActiveLoggedUsers activeLoggedUsers;
     private EventDeskHub eventDeskHub;
     private EventDeskService eventDeskService;
@@ -48,81 +54,102 @@ public final class AppContext {
         }
         AppContext app = new AppContext();
         instance = app;
+        try {
+            app.config = new Config();
+            app.config.init(servletContext);
 
-        app.config = new Config();
-        app.config.init(servletContext);
+            app.caches = new Caches();
 
-        app.caches = new Caches();
+            app.persistence = new PersistenceService(app.config);
+            OrganisationFiles.migrateLegacyFiles(app.config);
+            app.persistence.init();
 
-        app.persistence = new PersistenceService(app.config);
-        app.persistence.init();
+            // Club / invoice / stripe (+ mail) live on organisation; files under CONFIG_DIR/orgs/{id}.
+            new OrganisationBootstrap(app.config, app.persistence.getEmf()).ensure();
 
-        DbInit dbInit = new DbInit(app.persistence.getEmf());
-        dbInit.initLicenses();
-        dbInit.initClubSeason();
-        dbInit.initMembershipOptions();
-        dbInit.initEvents();
+            DbInit dbInit = new DbInit(app.persistence.getEmf());
+            dbInit.initLicenses();
+            dbInit.initClubSeason();
+            dbInit.initMembershipOptions();
+            dbInit.initEvents();
 
-        app.jteConfig = new JteConfig();
-        app.jteConfig.init();
+            app.mustacheConfig = new MustacheConfig();
+            app.mustacheConfig.init();
 
-        app.sendMail = new SendMail();
-        app.sendMail.setProperties(app.config.getProperties());
-        app.sendMail.setConfig(app.config);
-        app.sendMail.init();
+            app.sendMail = new SendMail();
+            app.sendMail.setProperties(app.config.getProperties());
+            app.sendMail.setConfig(app.config);
+            app.sendMail.init();
 
-        app.luceneDb = new LuceneDb();
-        app.luceneDb.setConfig(app.config);
-        app.luceneDb.init();
+            app.luceneDbRegistry = new LuceneDbRegistry(app.config);
+            app.organisationResolver = new OrganisationResolver();
 
-        app.activeLoggedUsers = new ActiveLoggedUsers();
-        app.eventDeskHub = new EventDeskHub();
+            app.activeLoggedUsers = new ActiveLoggedUsers();
+            app.eventDeskHub = new EventDeskHub();
 
-        app.eventDeskService = new EventDeskService();
-        app.eventDeskService.setEmf(app.persistence.getEmf());
-        app.eventDeskService.setCaches(app.caches);
-        app.eventDeskService.setSendMail(app.sendMail);
+            app.eventDeskService = new EventDeskService();
+            app.eventDeskService.setEmf(app.persistence.getEmf());
+            app.eventDeskService.setCaches(app.caches);
+            app.eventDeskService.setSendMail(app.sendMail);
 
-        app.logoService = new LogoService();
-        app.logoService.setConfig(app.config);
+            app.logoService = new LogoService();
+            app.logoService.setConfig(app.config);
 
-        app.signatureService = new SignatureService();
-        app.signatureService.setConfig(app.config);
+            app.signatureService = new SignatureService();
+            app.signatureService.setConfig(app.config);
 
-        app.ribService = new RibService();
-        app.ribService.setConfig(app.config);
+            app.ribService = new RibService();
+            app.ribService.setConfig(app.config);
 
-        app.licensePriceService = new LicensePriceService();
-        app.statisticsReportService = new StatisticsReportService();
-        app.eventPaymentsReportService = new EventPaymentsReportService();
-        app.eventPaymentsReportService.setProperties(app.config.getProperties());
-        app.paymentReceiptPdfService = new PaymentReceiptPdfService();
-        app.paymentReceiptPdfService.setProperties(app.config.getProperties());
-        app.paymentReceiptPdfService.setLogoService(app.logoService);
-        app.paymentReceiptPdfService.setSignatureService(app.signatureService);
-        app.membershipReportService = new MembershipReportService();
-        app.membershipReportService.setProperties(app.config.getProperties());
+            app.licensePriceService = new LicensePriceService();
+            app.statisticsReportService = new StatisticsReportService();
+            app.eventPaymentsReportService = new EventPaymentsReportService();
+            app.eventPaymentsReportService.setProperties(app.config.getProperties());
+            app.paymentReceiptPdfService = new PaymentReceiptPdfService();
+            app.paymentReceiptPdfService.setProperties(app.config.getProperties());
+            app.paymentReceiptPdfService.setLogoService(app.logoService);
+            app.paymentReceiptPdfService.setSignatureService(app.signatureService);
+            app.membershipReportService = new MembershipReportService();
+            app.membershipReportService.setProperties(app.config.getProperties());
 
-        app.membershipOptionFileService = new MembershipOptionFileService();
-        app.membershipOptionFileService.setConfig(app.config);
+            app.membershipOptionFileService = new MembershipOptionFileService();
+            app.membershipOptionFileService.setConfig(app.config);
 
-        app.backgroundService = new BackgroundService();
-        app.backgroundService.setConfig(app.config);
+            app.backgroundService = new BackgroundService();
+            app.backgroundService.setConfig(app.config);
 
-        logger.info("Application context initialized");
+            logger.info("Application context initialized");
+        } catch (RuntimeException e) {
+            instance = null;
+            if (app.persistence != null) {
+                try {
+                    app.persistence.shutdown();
+                } catch (RuntimeException shutdownError) {
+                    logger.warn("Failed to clean up persistence after init failure", shutdownError);
+                }
+            }
+            throw e;
+        }
     }
 
     public static void shutdown() {
         if (instance == null) {
             return;
         }
-        try {
-            instance.sendMail.close();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.warn("Interrupted while closing mail executor", e);
+        if (instance.sendMail != null) {
+            try {
+                instance.sendMail.close();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.warn("Interrupted while closing mail executor", e);
+            }
         }
-        instance.persistence.shutdown();
+        if (instance.luceneDbRegistry != null) {
+            instance.luceneDbRegistry.closeAll();
+        }
+        if (instance.persistence != null) {
+            instance.persistence.shutdown();
+        }
         instance = null;
     }
 
@@ -155,16 +182,25 @@ public final class AppContext {
         return persistence;
     }
 
-    public JteConfig jteConfig() {
-        return jteConfig;
+    public MustacheConfig mustacheConfig() {
+        return mustacheConfig;
     }
 
     public SendMail sendMail() {
         return sendMail;
     }
 
+    /** Lucene index of the current organisation (default organisation outside a request). */
     public LuceneDb luceneDb() {
-        return luceneDb;
+        return luceneDbRegistry == null ? null : luceneDbRegistry.get(OrgScope.currentOrgIdOrDefault());
+    }
+
+    public LuceneDbRegistry luceneDbRegistry() {
+        return luceneDbRegistry;
+    }
+
+    public OrganisationResolver organisationResolver() {
+        return organisationResolver;
     }
 
     public ActiveLoggedUsers activeLoggedUsers() {

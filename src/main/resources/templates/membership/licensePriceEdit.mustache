@@ -1,0 +1,60 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/license-admin">{{#i18n}}menu.licenses{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/license-admin/{{license.id}}/price">{{#i18n}}breadcrumb.licensePrices{{/i18n}} {{licenseName}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#priceIsEdit}}{{#i18n}}page.licensePriceEdit{{/i18n}}{{/priceIsEdit}}{{^priceIsEdit}}{{#i18n}}page.licensePriceNew{{/i18n}}{{/priceIsEdit}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <h1 class="h3 mb-0">{{#priceIsEdit}}{{#i18n}}page.licensePriceEdit{{/i18n}}{{/priceIsEdit}}{{^priceIsEdit}}{{#i18n}}page.licensePriceNew{{/i18n}}{{/priceIsEdit}}</h1>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <form method="post" action="{{contextPath}}/license-admin/price/save">
+          <input type="hidden" name="licenseId" value="{{license.id}}">
+          {{#priceIsEdit}}<input type="hidden" name="id" value="{{price.id}}">{{/priceIsEdit}}
+          <div class="mb-3">
+            <label for="category" class="form-label">{{#i18n}}label.category{{/i18n}}</label>
+            <input type="text" class="form-control" id="category" name="category" value="{{categoryValue}}" required>
+          </div>
+          <div class="mb-3">
+            <label for="priceCents" class="form-label">{{#i18n}}label.price{{/i18n}} (€)</label>
+            <input type="number" class="form-control" id="priceCents" name="priceCents" step="0.01" value="{{priceEuros}}" required>
+            <div class="form-text">{{#i18n}}licensePrice.centsHint{{/i18n}}</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">{{#i18n}}action.save{{/i18n}}</button>
+            {{#priceIsEdit}}
+              <button type="button" class="btn btn-outline-danger" onclick="removePrice({{price.id}}, {{license.id}})">{{#i18n}}action.delete{{/i18n}}</button>
+            {{/priceIsEdit}}
+            <a href="{{contextPath}}/license-admin/{{license.id}}/price" class="btn btn-secondary">{{#i18n}}action.cancel{{/i18n}}</a>
+          </div>
+        </form>
+      </div>
+    </main>
+    {{> platform/footer}}
+    <script type="text/javascript">
+      function removePrice(priceId, licenseId) {
+        if (!confirm('{{#i18n}}licensePrice.confirmDelete{{/i18n}}')) {
+          return;
+        }
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = '{{contextPath}}/license-admin/price/save';
+        form.innerHTML = '<input type="hidden" name="id" value="' + priceId + '">' +
+                         '<input type="hidden" name="licenseId" value="' + licenseId + '">' +
+                         '<input type="hidden" name="toRemove" value="true">';
+        document.body.appendChild(form);
+        form.submit();
+      }
+    </script>
+  </body>
+</html>

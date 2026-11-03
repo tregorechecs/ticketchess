@@ -4,38 +4,37 @@
 # Ne jamais committer params.properties (fichier local / production).
 # ============================================================
 
-# Configuration Email
-mail.USER_NAME=contact@example.com
-# Si absent, les emails sont écrits dans ./emails (mode test local)
-#mail.PASSWORD=
-
-# Administrateurs (emails séparés par des virgules)
+# Administrateurs plateforme (emails séparés par des virgules)
 admins=admin@example.com
 
-# Notifications d'adhésion club
-membership.notif.emails=
+# URL de repli plateforme (chaque club a sa propre base_url en table organisation)
+baseurl=http://localhost:8080
 
-# Configuration Application
+# Au premier démarrage, les clés club / facture / stripe / mail ci-dessous sont
+# copiées dans la table organisation puis retirées de ce fichier.
+# Ensuite : Administration > Réglages du club (/admin/org).
+# Fichiers (logo, signature, fond, RIB) : CONFIG_DIR/orgs/{orgId}/
+
+# --- seed organisation (migré automatiquement) ---
+mail.USER_NAME=contact@example.com
+#mail.PASSWORD=
+membership.notif.emails=
 title=Mon club d'échecs
 org.name=Mon club d'échecs
 org.email=contact@example.com
 org.address=1 rue Example, 00000 Ville, France
 org.hosting.address=
-baseurl=http://localhost:8080
 contact.url=https://example.com/contact
-# URL du dépôt source (obligatoire pour la conformité AGPL en production)
 source.url=https://github.com/gcolin/ticketchess
-# RIB (PDF), logo et fond : Administration > Organisation
-
-# Configuration Stripe (Paiements)
 stripe.public=
 #stripe.secret=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 stripe.keyprefix=
 stripe.simuled=true
 stripe.card.events=true
 stripe.card.memberships=true
-stripe.transfer.events=true
-stripe.transfer.memberships=true
+payment.transfer.events=true
+payment.transfer.memberships=true
+# --- fin seed organisation ---
 
 # Mode développement local : true active /auth-sim (connexion admin sans OAuth).
 # En production : false + OAuth obligatoire + jwt.key personnalisé.

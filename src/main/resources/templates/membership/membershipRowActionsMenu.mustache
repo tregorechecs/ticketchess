@@ -1,0 +1,16 @@
+<div class="dropdown">
+  <button class="btn btn-sm btn-link text-body-secondary text-decoration-none border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" aria-label="{{#i18n}}label.action{{/i18n}}" title="{{#i18n}}label.action{{/i18n}}">
+    <i class="bi bi-three-dots-vertical"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" href="{{contextPath}}/membership/{{membership.id}}/edit">{{#i18n}}action.edit{{/i18n}}</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li>
+      <form method="post" class="m-0" action="{{contextPath}}/membership/{{membership.id}}/delete" onsubmit="return confirm('{{#i18n}}sub.confirmDelete{{/i18n}}')">
+        {{#seasonId}}<input type="hidden" name="seasonId" value="{{seasonId}}">
+        {{/seasonId}}
+        <button type="submit" class="dropdown-item text-danger">{{#i18n}}action.delete{{/i18n}}</button>
+      </form>
+    </li>
+  </ul>
+</div>

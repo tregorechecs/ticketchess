@@ -1,0 +1,40 @@
+{{#inline}}<div class="input-group w-auto">
+    <label for="{{selectId}}" class="input-group-text">{{#i18n}}label.season{{/i18n}}</label>
+    {{#autoSubmit}}<select id="{{selectId}}" name="seasonId" class="form-select w-auto" onchange="this.form.submit()">
+        {{#seasons}}{{#selected}}
+            <option value="{{value}}" selected>{{label}}</option>
+          {{/selected}}{{^selected}}
+            <option value="{{value}}">{{label}}</option>
+          {{/selected}}{{/seasons}}
+      </select>
+    {{/autoSubmit}}{{^autoSubmit}}
+      <select id="{{selectId}}" name="seasonId" class="form-select w-auto">
+        {{#seasons}}{{#selected}}
+            <option value="{{value}}" selected>{{label}}</option>
+          {{/selected}}{{^selected}}
+            <option value="{{value}}">{{label}}</option>
+          {{/selected}}{{/seasons}}
+      </select>
+    {{/autoSubmit}}
+  </div>
+{{/inline}}{{^inline}}
+<div class="col-12 col-md-auto">
+  <label for="{{selectId}}" class="form-label mb-0">{{#i18n}}label.season{{/i18n}}</label>
+  {{#autoSubmit}}<select id="{{selectId}}" name="seasonId" class="form-select" onchange="this.form.submit()">
+      {{#seasons}}{{#selected}}
+          <option value="{{value}}" selected>{{label}}</option>
+        {{/selected}}{{^selected}}
+          <option value="{{value}}">{{label}}</option>
+        {{/selected}}{{/seasons}}
+    </select>
+  {{/autoSubmit}}{{^autoSubmit}}
+    <select id="{{selectId}}" name="seasonId" class="form-select">
+      {{#seasons}}{{#selected}}
+          <option value="{{value}}" selected>{{label}}</option>
+        {{/selected}}{{^selected}}
+          <option value="{{value}}">{{label}}</option>
+        {{/selected}}{{/seasons}}
+    </select>
+  {{/autoSubmit}}
+</div>
+{{/inline}}

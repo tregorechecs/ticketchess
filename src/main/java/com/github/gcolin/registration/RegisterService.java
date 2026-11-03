@@ -171,7 +171,7 @@ public class RegisterService {
             LoggerFactory.getLogger(this.getClass().getName()).error("cannot send mail", e);
         }
         caches.getEvent().invalidateAll();
-        return playerSubscriptionService.detach(subscription);
+        return subscription;
     }
 
     public boolean unregisterPlayerToEvent(Integer eventId, String nrffe) {
@@ -239,10 +239,17 @@ public class RegisterService {
 
     private Integer resolveMaxSubscriptions(Event event) {
         Integer maxSubscriptions = eventOptionService.findIntOptionValue(event.getId(), EventOptionType.MAX_SUBSCRIPTIONS);
+        if (maxSubscriptions != null && maxSubscriptions <= 0) {
+            maxSubscriptions = null;
+        }
         if (maxSubscriptions != null) {
             return maxSubscriptions;
         }
-        return event.getMaxSubscriptions();
+        Integer fromEvent = event.getMaxSubscriptions();
+        if (fromEvent != null && fromEvent <= 0) {
+            return null;
+        }
+        return fromEvent;
     }
 
     private boolean isEventFull(Event event) {

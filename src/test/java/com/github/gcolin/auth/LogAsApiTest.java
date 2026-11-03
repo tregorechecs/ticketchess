@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class LogAsApiTest {
 
@@ -33,10 +33,10 @@ class LogAsApiTest {
         inject(api, "paymentDao", paymentDao);
         inject(api, "config", config);
 
-        JteHtml html = api.page();
+        MustacheHtml html = api.page();
         Map<String, Object> model = html.getModel();
 
-        assertEquals("auth/logas.jte", html.getTemplate());
+        assertEquals("auth/logas.mustache", html.getTemplate());
 
         @SuppressWarnings("unchecked")
         List<String> users = (List<String>) model.get("users");
@@ -64,7 +64,7 @@ class LogAsApiTest {
         inject(api, "paymentDao", paymentDao);
         inject(api, "config", config);
 
-        JteHtml html = api.page();
+        MustacheHtml html = api.page();
         @SuppressWarnings("unchecked")
         List<String> users = (List<String>) html.getModel().get("users");
 
@@ -89,7 +89,7 @@ class LogAsApiTest {
         inject(api, "paymentDao", paymentDao);
         inject(api, "config", config);
 
-        JteHtml html = api.page();
+        MustacheHtml html = api.page();
         assertSame(admins, html.getModel().get("admins"));
     }
 
@@ -109,7 +109,7 @@ class LogAsApiTest {
         inject(api, "paymentDao", paymentDao);
         inject(api, "config", config);
 
-        JteHtml html = api.page();
+        MustacheHtml html = api.page();
         @SuppressWarnings("unchecked")
         List<String> users = (List<String>) html.getModel().get("users");
         assertEquals(0, users.size());

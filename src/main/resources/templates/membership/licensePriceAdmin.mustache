@@ -1,0 +1,56 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/license-admin">{{#i18n}}menu.licenses{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}breadcrumb.licensePrices{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <h1 class="h3 mb-1">{{headingText}}</h1>
+        <p class="text-body-secondary mb-0">{{#i18n}}help.licensePrices{{/i18n}}</p>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex gap-2 mb-3">
+          <a href="{{contextPath}}/license-admin/{{license.id}}/price/new" class="btn btn-success">{{#i18n}}action.createGeneric{{/i18n}}</a>
+          <a href="{{contextPath}}/license-admin" class="btn btn-secondary">{{#i18n}}action.cancel{{/i18n}}</a>
+        </div>
+        <table class="table table-striped align-middle mb-0 mt-3">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{{#i18n}}label.category{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.price{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#priceRows}}
+            <tr>
+              <td>{{id}}</td>
+              <td>{{category}}</td>
+              <td>{{priceEuros}} €</td>
+              <td>
+                <a href="{{contextPath}}/license-admin/{{licenseId}}/price/{{id}}/edit" class="btn btn-sm btn-outline-primary">{{#i18n}}action.edit{{/i18n}}</a>
+              </td>
+            </tr>
+            {{/priceRows}}
+            {{^priceRows}}
+            <tr>
+              <td colspan="4" class="text-center text-body-secondary">{{#i18n}}info.noLicensePrice{{/i18n}}</td>
+            </tr>
+            {{/priceRows}}
+          </tbody>
+        </table>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

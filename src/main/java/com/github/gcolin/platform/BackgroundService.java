@@ -1,5 +1,7 @@
 package com.github.gcolin.platform;
 
+import com.github.gcolin.organisation.OrganisationFiles;
+
 import jakarta.ws.rs.WebApplicationException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,7 +23,7 @@ public class BackgroundService {
     }
 
     public Path getBackgroundFile() {
-        Path dir = Path.of(config.getConfigDir());
+        Path dir = OrganisationFiles.currentDir(config);
         for (String name : NAMES) {
             Path candidate = dir.resolve(name);
             if (Files.isRegularFile(candidate)) {
@@ -57,7 +59,7 @@ public class BackgroundService {
             throw new WebApplicationException("Background file must be a PNG, JPEG or WebP image", 400);
         }
 
-        Path dir = Path.of(config.getConfigDir());
+        Path dir = OrganisationFiles.currentDir(config);
         Files.createDirectories(dir);
         String fileName = "background." + extension;
         Path target = dir.resolve(fileName);
@@ -79,7 +81,7 @@ public class BackgroundService {
     }
 
     public void delete() throws IOException {
-        Path dir = Path.of(config.getConfigDir());
+        Path dir = OrganisationFiles.currentDir(config);
         for (String name : NAMES) {
             Files.deleteIfExists(dir.resolve(name));
         }

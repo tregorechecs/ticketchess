@@ -184,6 +184,50 @@ class StatisticsReportServiceTest {
         }
     }
 
+    @Test
+    void emptyReportsAndCsvSkipInvalidRowsAndGeneratePdf() throws Exception {
+        StatisticsReportService service = new StatisticsReportService();
+        Find find = mock(Find.class);
+        PlayerSubscription noLicence = new PlayerSubscription();
+        noLicence.setStatus(PlayerSubscriptionStatus.PAID);
+        PlayerSubscription missingPlayer = new PlayerSubscription();
+        missingPlayer.setStatus(PlayerSubscriptionStatus.PAID);
+        missingPlayer.setNrFfe("MISSING");
+        when(find.player("MISSING", null)).thenReturn(null);
+        try (TestContext ignored = TestContext.open(find)) {
+            StatisticsReport empty = service.computeForEvent(new com.github.gcolin.event.Event(), List.of());
+            assertEquals(0, empty.getTotal());
+            assertTrue(empty.getAgePyramid().isEmpty());
+            assertTrue(service.generatePdf("Empty", empty).length > 100);
+            assertEquals(1, service.generateCsv(List.of(noLicence, missingPlayer), false).lines().count());
+        }
+    }
+
+    @Test
+    void collectionModeNormalizesMissingCategoryAndUsesUnpaidCollectionPrice() throws Exception {
+        StatisticsReportService service = new StatisticsReportService();
+        Find find = mock(Find.class);
+        IPlayer player = mock(IPlayer.class);
+        when(player.getCategory()).thenReturn("");
+        when(player.getClub()).thenReturn("");
+        when(player.getClubRef()).thenReturn("");
+        when(player.getFederation()).thenReturn("");
+        when(player.getBirthDate()).thenReturn("not-a-date");
+        when(find.player("X", null)).thenReturn(player);
+        PlayerSubscription unpaid = new PlayerSubscription();
+        unpaid.setStatus(PlayerSubscriptionStatus.NOT_PAID);
+        unpaid.setNrFfe("X");
+        Event event = new Event();
+        event.setPriceCents(1000L);
+        unpaid.setEvent(event);
+        try (TestContext ignored = TestContext.open(find)) {
+            StatisticsReport report = service.computeForEventCollection(List.of(unpaid));
+            assertEquals(1, report.getTotal());
+            assertEquals(0, report.getAgePyramid().size());
+            assertEquals(0, report.getTotalAmount(), 0.001);
+        }
+    }
+
     private static void inject(Object target, String fieldName, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

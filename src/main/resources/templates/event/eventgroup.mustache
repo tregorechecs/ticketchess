@@ -1,0 +1,47 @@
+    
+
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+    <html>
+
+    <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+
+{{> platform/menubar}}
+		
+		
+        <main class="container flex-fill mt-3">
+        <nav aria-label="breadcrumb" class="mb-3 mt-3">
+          <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+            <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+            <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.eventGroups{{/i18n}}</li>
+          </ol>
+        </nav>
+        <div>
+  <a class="btn btn-dark mb-3" href="{{contextPath}}/eventgroup/new">{{#i18n}}action.createGeneric{{/i18n}}</a>
+	</div>
+            <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">{{#i18n}}player.name{{/i18n}}</th>
+                    <th scope="col">{{#i18n}}label.shortname{{/i18n}}</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                  {{#eventGroups}}{{#eventGroups}}<tr>
+                    <td><a href="{{contextPath}}/eventgroup/{{eg.id}}">{{eg.id}}</a></td>
+                    <td>{{eg.name}}</td>
+                    <td>{{eg.shortname}}</td>
+                  </tr>
+                  {{/eventGroups}}
+                  {{/eventGroups}}
+                </tbody>
+              </table>
+        </main>
+		{{> platform/footer}}
+    </body>
+
+    </html>

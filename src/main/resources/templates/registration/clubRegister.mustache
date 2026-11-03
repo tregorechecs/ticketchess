@@ -1,0 +1,353 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+  {{> platform/menubar}}
+
+  <main class="container flex-fill mt-3">
+    {{#successIsMembership}}
+      <div id="alert" class="alert alert-success" role="alert">{{#i18n}}clubRegister.membership.success{{/i18n}}</div>
+    {{/successIsMembership}}
+    {{#successIsConfirmation}}
+      <div id="alert" class="alert alert-success" role="alert">{{#i18n}}clubRegister.membership.confirmationSuccess{{/i18n}}</div>
+    {{/successIsConfirmation}}
+    {{#successIsPayment}}
+      <div id="alert" class="alert alert-success" role="alert">{{#i18n}}clubRegister.payment.success{{/i18n}}</div>
+    {{/successIsPayment}}
+
+    <div class="bg-body p-3 rounded mb-3" id="help" style="{{helpHiddenStyle}}">
+      <h1 class="h3 mb-2">{{clubRegisterTitleText}}</h1>
+      <p class="text-body-secondary mb-0">{{clubRegisterDescriptionText}}</p>
+    </div>
+
+    {{#showNewInscriptionButton}}
+      <div class="mb-3" id="inscriptionButton">
+        <button type="button" class="btn btn-primary" id="newInscriptionButton">{{#i18n}}clubRegister.newInscription{{/i18n}}</button>
+      </div>
+
+      <script type="text/javascript">
+        document.getElementById('newInscriptionButton').addEventListener('click', function () {
+          document.getElementById('inscriptionForm').style.display = 'block';
+          document.getElementById('manualForm').style.display = 'block';
+          document.getElementById('inscriptionButton').style.display = 'none';
+          document.getElementById('membershipsSection').style.display = 'none';
+          document.getElementById('alert').style.display = 'none';
+          document.getElementById('help').style.display = 'block';
+        });
+      </script>
+    {{/showNewInscriptionButton}}
+
+    <div id="inscriptionForm" style="{{inscriptionFormHiddenStyle}}">
+
+    {{^user.logged}}
+      <div class="bg-body p-4 rounded mb-3">
+        <p class="lead mb-3">{{#i18n}}clubRegister.loginRequired{{/i18n}}</p>
+        <a class="btn btn-primary" href="{{state.login}}">{{#i18n}}action.login{{/i18n}}</a>
+      </div>
+    {{/user.logged}}{{#user.logged}}
+      <div class="bg-body p-3 rounded mb-3">
+        <h2 class="h5 mb-3">{{#i18n}}clubRegister.licence.title{{/i18n}}</h2>
+        <form method="GET" action="{{contextPath}}/club-register" class="mb-0">
+          <div class="mb-3">
+            <label for="query" class="form-label">{{#i18n}}search.label{{/i18n}}</label>
+            <input type="text" class="form-control" id="query" name="query" value="{{query}}" />
+          </div>
+          <div class="d-flex align-items-center">
+            <button type="submit" class="btn btn-primary">{{#i18n}}action.search{{/i18n}}</button>
+          </div>
+        </form>
+      </div>
+
+      {{#hasSearchQuery}}
+        {{#hasPlayers}}
+          <div class="rounded mb-3" style="overflow: hidden;">
+            <table class="table table-striped mb-0">
+              <thead>
+                <tr>
+                  <th scope="col">{{#i18n}}player.licence{{/i18n}}</th>
+                  <th scope="col">{{#i18n}}player.name{{/i18n}}</th>
+                  <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.category{{/i18n}}</th>
+                  <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.rating{{/i18n}}</th>
+                  <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.club{{/i18n}}</th>
+                  <th scope="col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#players}}
+                  <tr>
+                    <td>{{licence}}</td>
+                    <td>{{name}} {{firstname}}</td>
+                    <td class="d-none d-md-table-cell">{{category}}</td>
+                    <td class="d-none d-md-table-cell">{{rating}}</td>
+                    <td class="d-none d-md-table-cell">{{club}}</td>
+                    <td>
+                      <form method="POST" action="{{contextPath}}/club-register/select-player">
+                        <input type="hidden" name="nrffe" value="{{licence}}">
+                        <button type="submit" class="btn btn-sm btn-primary">{{#i18n}}action.select{{/i18n}}</button>
+                      </form>
+                    </td>
+                  </tr>
+                {{/players}}
+              </tbody>
+            </table>
+          </div>
+        {{/hasPlayers}}{{^hasPlayers}}{{#showNoPlayersFound}}
+          <div class="bg-body p-3 rounded mb-3">
+            <p class="mb-0">{{#i18n}}info.noplayer{{/i18n}}</p>
+          </div>
+        {{/showNoPlayersFound}}{{/hasPlayers}}
+      {{/hasSearchQuery}}
+
+      <div class="bg-body p-3 rounded mb-3" id="manualForm">
+        <h2 class="h5 mb-3">{{#i18n}}clubRegister.manual.title{{/i18n}}</h2>
+        <form method="GET" action="{{contextPath}}/club-register/membership-options" class="mb-0">
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="lastname" class="form-label">{{#i18n}}player.familyname{{/i18n}}</label>
+              <input type="text" class="form-control" id="lastname" name="lastname" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="firstname" class="form-label">{{#i18n}}player.firstname{{/i18n}}</label>
+              <input type="text" class="form-control" id="firstname" name="firstname" required>
+            </div>
+            <div class="col-12 col-md-4">
+              <label for="birthdate" class="form-label">{{#i18n}}player.birthdate{{/i18n}}</label>
+              <input type="date" class="form-control" id="birthdate" name="birthdate" required>
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-secondary">{{#i18n}}clubRegister.manual.submit{{/i18n}}</button>
+          </div>
+        </form>
+      </div>
+    {{/user.logged}}
+
+    </div>
+
+    {{#showMembershipsSection}}
+      {{#showMembershipPaymentSection}}
+        <div class="bg-body p-3 rounded mb-3">
+          <h2 class="h5 mb-3">💶 {{#i18n}}clubRegister.payment.title{{/i18n}}</h2>
+          <div class="row g-3">
+            {{#showCardMembershipPayment}}
+            <div class="col-md-6">
+              <div class="alert alert-primary p-3 h-100">
+                <h6>💳 {{#i18n}}payment.cardTitle{{/i18n}}</h6>
+                <p class="text-muted mb-3">{{#i18n}}payment.cardSecure{{/i18n}}</p>
+                {{#stripePublic}}
+                <a class="btn btn-primary w-100" href="javascript:void(0)" id="paynow-membership">{{#i18n}}payment.payByCard{{/i18n}}</a>
+                {{/stripePublic}}{{^stripePublic}}
+                <a class="btn btn-primary w-100" href="{{contextPath}}/payment/membership/sim" id="paynow-membership">{{#i18n}}payment.payByCard{{/i18n}}</a>
+                {{/stripePublic}}
+              </div>
+            </div>
+            {{/showCardMembershipPayment}}
+
+            {{#showBankTransferMembershipPayment}}
+            <div class="col-md-6">
+              <div class="alert alert-primary p-3 h-100">
+                <h6>🏦 {{#i18n}}payment.bankTransferTitle{{/i18n}}</h6>
+                <p class="text-muted mb-3">
+                  {{#i18n}}payment.bankTransferDesc{{/i18n}}
+                  <br />
+                  <small class="text-muted">{{#i18n}}payment.bankTransferNote{{/i18n}}</small>
+                </p>
+                <a href="{{contextPath}}/rib" class="btn btn-primary w-100" target="_blank">{{#i18n}}payment.downloadRIB{{/i18n}}</a>
+              </div>
+            </div>
+            {{/showBankTransferMembershipPayment}}
+          </div>
+
+          <div class="alert alert-info mt-4 mb-0">
+            💡 <strong>{{#i18n}}payment.otherMeansTitle{{/i18n}}</strong>
+            {{#i18n}}clubRegister.payment.otherMeansDesc{{/i18n}}
+            <br>
+            <small class="text-muted">{{#i18n}}payment.otherMeansNote{{/i18n}}</small>
+          </div>
+        </div>
+        {{#stripePublic}}
+        <script type="text/javascript">
+          const membershipPayButton = document.getElementById('paynow-membership');
+          if (membershipPayButton) {
+            let stripePromise = null;
+            function loadStripe() {
+              if (stripePromise) return stripePromise;
+              stripePromise = new Promise((resolve, reject) => {
+                if (window.Stripe) { resolve(window.Stripe); return; }
+                const script = document.createElement('script');
+                script.src = "https://js.stripe.com/v3/";
+                script.async = true;
+                script.onload = () => resolve(window.Stripe);
+                script.onerror = () => reject(new Error("{{#i18n}}error.stripeLoadError{{/i18n}}"));
+                document.head.appendChild(script);
+              });
+              return stripePromise;
+            }
+            membershipPayButton.addEventListener('click', async () => {
+              membershipPayButton.disabled = true;
+              try {
+                const res = await fetch('{{contextPath}}/payment/membership/initiate', { method: 'POST' });
+                if (!res.ok) {
+                  membershipPayButton.disabled = false;
+                  alert('{{#i18n}}error.serverError{{/i18n}}');
+                  return;
+                }
+                const data = await res.json();
+                if (!data['sessionId']) {
+                  window.location.reload();
+                  return;
+                }
+                const StripeLib = await loadStripe();
+                const stripe = StripeLib('{{stripePublic}}');
+                const result = await stripe.redirectToCheckout({ sessionId: data['sessionId'] });
+                if (result.error) {
+                  membershipPayButton.disabled = false;
+                  alert(result.error.message);
+                }
+              } catch (e) {
+                membershipPayButton.disabled = false;
+                alert('{{#i18n}}error.serverError{{/i18n}}');
+              }
+            });
+          }
+        </script>
+        {{/stripePublic}}
+      {{/showMembershipPaymentSection}}
+
+      <div id="membershipsSection" class="bg-body p-3 rounded mb-3">
+        <h2 class="h5 mb-3">{{#i18n}}clubRegister.myMemberships.title{{/i18n}}</h2>
+          {{#hasPendingConfirmationMembership}}
+            <div class="alert alert-info" role="alert"><p class="mb-0">Veuillez cliquer sur <strong>confirmer</strong> si l'adhésion convient sinon vous pouvez nous contacter pour plus d'informations.</p></div>
+          {{/hasPendingConfirmationMembership}}{{^hasPendingConfirmationMembership}}{{#hasPendingApprovalMembership}}
+            <div class="alert alert-info" role="alert"><p class="mb-0">{{#i18n}}clubRegister.myMemberships.pendingApprovalInfo{{/i18n}}</p></div>
+          {{/hasPendingApprovalMembership}}{{^hasPendingApprovalMembership}}{{#hasApprovedMembershipInfo}}
+            <div class="alert alert-info" role="alert"><p class="mb-0">{{#i18n}}clubRegister.myMemberships.approvedPaymentInfo{{/i18n}}</p></div>
+          {{/hasApprovedMembershipInfo}}{{/hasPendingApprovalMembership}}{{/hasPendingConfirmationMembership}}
+        
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th></th>
+                <th class="d-none d-md-table-cell">{{#i18n}}player.licence{{/i18n}}</th>
+                <th>{{#i18n}}player.familyname{{/i18n}}</th>
+                <th>{{#i18n}}player.firstname{{/i18n}}</th>
+                <th>{{#i18n}}payment.amount{{/i18n}}</th>
+                <th class="d-none d-md-table-cell">{{#i18n}}payment.created{{/i18n}}</th>
+                <th>{{#i18n}}clubRegister.myMemberships.options{{/i18n}}</th>
+                <th>{{#i18n}}payment.status{{/i18n}}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#membershipTableRows}}
+                <tr>
+                  <td>
+                    {{#showConfirmButton}}
+                      <form method="POST" action="{{contextPath}}/club-register/{{id}}/confirm" class="d-inline-block ms-1">
+                        <button type="submit" class="btn btn-sm btn-success">{{#i18n}}clubRegister.membership.confirm{{/i18n}}</button>
+                      </form>
+                    {{/showConfirmButton}}
+                  </td>
+                  <td class="d-none d-md-table-cell">{{nrFfe}}</td>
+                  <td>{{lastname}}</td>
+                  <td>{{firstname}}</td>
+                  <td>{{amountDisplay}} €</td>
+                  <td class="d-none d-md-table-cell">{{#createdAtDisplay}}{{createdAtDisplay}}{{/createdAtDisplay}}</td>
+                  <td>
+                    
+                      {{#optionBadges}}
+                        <span class="badge bg-secondary me-1 text-dark">{{label}}</span>
+                      {{/optionBadges}}
+                    
+                  </td>
+                  <td>{{#i18n}}{{statusMessageKey}}{{/i18n}}</td>
+                </tr>
+              {{/membershipTableRows}}
+            </tbody>
+          </table>
+        </div>
+
+        {{#hasPaidMembershipPayments}}
+          {{#successIsPayerUpdated}}
+            <div class="alert alert-success mt-3" role="alert">{{#i18n}}payment.payer.updated{{/i18n}}</div>
+          {{/successIsPayerUpdated}}
+          <div class="mt-3 bg-body p-3 rounded">
+            <div class="mb-2">{{#i18n}}payment.invoiceReady{{/i18n}}</div>
+            <div class="d-flex flex-column gap-2">
+              {{#paidMembershipPayments}}
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between border rounded p-2">
+                  <div class="small text-body-secondary">
+                    #{{id}}
+                    {{#hasPayerName}}
+                      — {{payerName}}
+                    {{/hasPayerName}}
+                  </div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-outline-secondary btn-sm" href="{{contextPath}}/payment/{{id}}/payer?returnTo=/club-register">{{#i18n}}payment.payer.edit{{/i18n}}</a>
+                    <a class="btn btn-outline-success btn-sm" href="{{contextPath}}/payment/{{id}}/invoice">
+                      {{#i18n}}payment.downloadInvoice{{/i18n}}
+                    </a>
+                  </div>
+                </div>
+              {{/paidMembershipPayments}}
+            </div>
+          </div>
+        {{/hasPaidMembershipPayments}}
+
+        {{#hasSharedFiles}}
+          <div class="mt-4" id="shared-files">
+            <h3 class="h6 mb-3">{{#i18n}}clubRegister.sharedFiles.title{{/i18n}}</h3>
+            {{#sharedFileSections}}
+              
+                <div class="mb-3">
+                  <div class="fw-semibold mb-1">{{label}}</div>
+                  <ul class="list-unstyled mb-0">
+                    {{#files}}
+                      <li class="mb-1" id="shared-file-{{id}}">
+                        <a href="{{contextPath}}/club-register/files/{{id}}/download">
+                          <i class="bi bi-download me-1"></i>{{originalName}}
+                        </a>
+                      </li>
+                    {{/files}}
+                  </ul>
+                </div>
+              
+            {{/sharedFileSections}}
+          </div>
+        {{/hasSharedFiles}}
+      </div>
+    {{/showMembershipsSection}}
+
+    {{^hasSearchQuery}}{{#showDonationAttestations}}
+      <div class="bg-body p-3 rounded mb-3" id="donationAttestationsSection">
+        <div class="mb-2">{{#i18n}}payment.donationAttestationReady{{/i18n}}</div>
+        <div class="d-flex flex-column gap-2">
+          {{#paidDonationPayments}}
+            <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between border rounded p-2">
+              <div class="small text-body-secondary">
+                #{{id}}
+                {{#hasPayerName}}
+                  — {{payerName}}
+                {{/hasPayerName}}
+                {{#hasAmount}}
+                  — {{amountDisplay}} €
+                {{/hasAmount}}
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-outline-success btn-sm" href="{{contextPath}}/payment/{{id}}/invoice">
+                  {{#i18n}}action.downloadDonationAttestation{{/i18n}}
+                </a>
+              </div>
+            </div>
+          {{/paidDonationPayments}}
+        </div>
+      </div>
+    {{/showDonationAttestations}}{{/hasSearchQuery}}
+  </main>
+
+  {{> platform/footer}}
+</body>
+
+</html>

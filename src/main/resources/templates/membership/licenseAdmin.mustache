@@ -1,0 +1,60 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}menu.licenses{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-card-list fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}heading.licenses{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.licenses{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex justify-content-end mb-3">
+          <a class="btn btn-success" href="{{contextPath}}/license-admin/new">{{#i18n}}action.createGeneric{{/i18n}}</a>
+        </div>
+        <table class="table table-striped align-middle mb-0 mt-3">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{{#i18n}}label.name{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#licenses}}
+            <tr>
+              <td>{{id}}</td>
+              <td>{{name}}</td>
+              <td>
+                <div class="d-flex gap-2">
+                  <a href="{{contextPath}}/license-admin/{{id}}" class="btn btn-sm btn-outline-primary">{{#i18n}}action.edit{{/i18n}}</a>
+                  <a href="{{contextPath}}/license-admin/{{id}}/price" class="btn btn-sm btn-secondary">{{#i18n}}action.prices{{/i18n}}</a>
+                </div>
+              </td>
+            </tr>
+            {{/licenses}}
+            {{^licenses}}
+            <tr>
+              <td colspan="3" class="text-center text-body-secondary">{{#i18n}}info.noLicense{{/i18n}}</td>
+            </tr>
+            {{/licenses}}
+          </tbody>
+        </table>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

@@ -1,0 +1,65 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}breadcrumb.seasons{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-calendar-range fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.seasons{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.seasons{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="mb-3">
+          <a class="btn btn-success" href="{{contextPath}}/admin/seasons/new">{{#i18n}}action.addSeason{{/i18n}}</a>
+        </div>
+        <table class="table table-striped align-middle mb-0 mt-3">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{{#i18n}}label.seasonName{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.startDate{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.endDate{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.seasonCurrent{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#seasonRows}}<tr>
+              <td>{{id}}</td>
+              <td>{{name}}</td>
+              <td>{{startDate}}</td>
+              <td>{{endDate}}</td>
+              <td>
+                {{#current}}<span class="badge bg-primary">{{#i18n}}label.yes{{/i18n}}</span>{{/current}}
+                {{^current}}<span class="text-body-secondary">—</span>{{/current}}
+              </td>
+              <td>
+                <div class="d-flex gap-2">
+                  <a class="btn btn-sm btn-outline-primary" href="{{contextPath}}/admin/seasons/{{id}}/edit">{{#i18n}}action.edit{{/i18n}}</a>
+                  <form method="post" action="{{contextPath}}/admin/seasons/{{id}}/delete" class="m-0" onsubmit="return confirm('{{#i18n}}action.confirmDeleteSeason{{/i18n}}')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">{{#i18n}}action.delete{{/i18n}}</button>
+                  </form>
+                </div>
+              </td>
+            </tr>{{/seasonRows}}
+            {{^hasSeasons}}<tr><td colspan="6" class="text-center text-body-secondary">{{#i18n}}seasons.empty{{/i18n}}</td></tr>{{/hasSeasons}}
+          </tbody>
+        </table>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

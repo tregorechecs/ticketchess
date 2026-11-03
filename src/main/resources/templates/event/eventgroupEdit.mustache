@@ -1,0 +1,89 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+    <div class="container flex-fill">
+        <nav aria-label="breadcrumb" class="mb-3 mt-3">
+            <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+                <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+                <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+                <li class="breadcrumb-item"><a href="{{contextPath}}/admin/events">{{#i18n}}breadcrumb.events{{/i18n}}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{#editMode}}{{#i18n}}eventgroup.editBreadcrumb{{/i18n}}{{else}}{{#i18n}}eventgroup.createBreadcrumb{{/i18n}}{{/editMode}}</li>
+            </ol>
+        </nav>
+        <div class="bg-body p-3 rounded mb-3">
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="home-tab" data-bs-toggle="tab"
+                    data-bs-target="#general" type="button" role="tab" aria-controls="general"
+                    aria-selected="true">
+                    {{#i18n}}event.generalinfo{{/i18n}}
+                </button>
+            </li>
+            {{#editMode}}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="profile-tab" data-bs-toggle="tab"
+                    data-bs-target="#egevents" type="button" role="tab" aria-controls="events"
+                    aria-selected="false">
+                    {{#i18n}}label.events{{/i18n}}
+                </button>
+            </li>
+            {{/editMode}}
+        </ul>
+        <div class="tab-content" id="myTabContent">
+            <div class="tab-pane fade show active" id="general" role="tabpanel"
+                aria-labelledby="general-tab">
+                <div class="row justify-content-center mt-3">
+                    <form method="post" action="{{contextPath}}/eventgroup">
+                        {{#editMode}}<input type="hidden" name="id" value="{{eventGroup.id}}">{{/editMode}}
+
+                        <div class="mb-3">
+                            <label class="form-label">#</label>
+                            <input id="id" type="text" value="{{groupIdDisplay}}" class="form-control" disabled>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}event.name{{/i18n}}</label>
+                            <input id="event_name" type="text" name="name" value="{{eventGroup.name}}" class="form-control" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}label.shortname{{/i18n}}</label>
+                            <input id="shortname" type="text" name="shortname" value="{{eventGroup.shortname}}" class="form-control" required>
+                        </div>
+
+                        <div class="d-flex justify-content-end mb-3">
+                            <button id="event_submit" type="submit" class="btn btn-primary">
+                                &#128190; {{#i18n}}action.save{{/i18n}}
+                            </button>
+                        </div>
+                    </form>
+                    {{#editMode}}
+                    <form method="post" action="{{contextPath}}/eventgroup" class="d-flex justify-content-end mb-3">
+                        <input type="hidden" name="action" value="remove">
+                        <input type="hidden" name="id" value="{{eventGroup.id}}">
+                        <button type="submit" class="btn btn-danger">
+                            &#10006; {{#i18n}}action.remove{{/i18n}}
+                        </button>
+                    </form>
+                    {{/editMode}}
+                </div>
+            </div>
+            {{#editMode}}
+            <div class="tab-pane fade" id="egevents" role="tabpanel" aria-labelledby="description-tab">
+                <div class="row justify-content-center mt-3 p-3">
+                    <ul>
+                    {{#events}}
+                        <li><a href="{{contextPath}}/event/{{id}}">{{id}} - {{name}}</a></li>
+                    {{/events}}
+                    </ul>
+                </div>
+            </div>
+            {{/editMode}}
+         </div>
+    </div>
+</div>
+{{> platform/footer}}
+</body>
+</html>

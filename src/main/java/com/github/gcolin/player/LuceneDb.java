@@ -237,15 +237,16 @@ public class LuceneDb {
     }
 
     public void init() {
-        configurePaths();
+        init(com.github.gcolin.organisation.OrgScope.DEFAULT_ORG_ID);
     }
 
-    private void configurePaths() {
-        String configDir = config.getConfigDir();
-        dir = new File(configDir + "/lucene/index");
-        mdbFile = configDir + "/Data.mdb";
-        fideFile = configDir + "/players_list_xml.zip";
-        manualPlayersFile = configDir + "/lucene/manual-players.json";
+    public void init(int orgId) {
+        java.nio.file.Path orgDir = com.github.gcolin.organisation.OrganisationFiles.orgDir(config, orgId);
+        java.nio.file.Path shared = com.github.gcolin.organisation.OrganisationFiles.sharedDir(config);
+        dir = orgDir.resolve("lucene").resolve("index").toFile();
+        manualPlayersFile = orgDir.resolve("lucene").resolve("manual-players.json").toString();
+        mdbFile = shared.resolve("Data.mdb").toString();
+        fideFile = shared.resolve("players_list_xml.zip").toString();
     }
 
     private void ensureLoaded() throws IOException {
@@ -264,7 +265,7 @@ public class LuceneDb {
             loadToLucene();
         } else {
             directory = FSDirectory.open(Paths.get(dir.getAbsolutePath()));
-            if (!dir.exists() || refresh) {
+            if (!DirectoryReader.indexExists(directory) || refresh) {
                 loadToLucene();
             }
         }

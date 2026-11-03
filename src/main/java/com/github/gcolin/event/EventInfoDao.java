@@ -27,12 +27,13 @@ public class EventInfoDao extends AbstractDao<EventInfo> {
 
     public void setEventInfo(Integer eventId, String description) {
         Event event = eventService.get().find(eventId);
-        EventInfo eventInfo = event.getEventInfo();
+        EventInfo eventInfo = find(event);
         if (eventInfo == null) {
             eventInfo = new EventInfo();
             eventInfo.setEvent(event);
             eventInfo.setDescription(description);
             persist(eventInfo);
+            flush();
         } else {
             eventInfo.setDescription(description);
         }

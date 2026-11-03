@@ -1,0 +1,285 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+    <html>
+
+
+    <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+        <main class="container flex-fill mt-3">
+
+          {{#successRegister}}
+            <div class="alert alert-success" role="alert">{{#i18n}}register.success{{/i18n}}</div>
+          {{/successRegister}}
+          {{#hasMissingPlayers}}
+            <div class="alert alert-danger" role="alert">
+              {{missingPlayersErrorText}}
+            </div>
+          {{/hasMissingPlayers}}
+
+          <div class="bg-body p-3 pb-1 rounded mb-3">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <h2 class="mb-0"><i class="bi bi-trophy me-2"></i>{{event.name}}
+                {{#eventHasFfeId}}
+                  <a id="ffe-link" class="btn btn-outline-info btn-sm ms-2 align-middle"
+                     href="{{ffeUrl}}"
+                     target="_blank" rel="noopener noreferrer"
+                     title="{{#i18n}}event.ffeLink{{/i18n}}">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>{{#i18n}}event.ffeLink{{/i18n}}
+                  </a>
+                {{/eventHasFfeId}}
+              </h2>
+              {{> event/eventActionsMenu}}
+            </div>
+            {{#hasRemainingSubscriptions}}
+            <p class="text-body-secondary mb-2">{{remainingSubscriptionsText}}</p>
+            {{/hasRemainingSubscriptions}}
+            {{#hasCollectionRemaining}}
+            <p class="text-body-secondary mb-2">{{collectionRemainingSubscriptionsText}}</p>
+            {{/hasCollectionRemaining}}
+
+          <div class="mt-3">
+            {{#eventIsActive}}
+              {{#user.logged}}
+                <a id="register" class="btn btn-primary mb-2" href="{{contextPath}}/event/{{event.id}}/register">&#9997; {{registerActionLabel}}</a>
+                {{#showPendingQueue}}
+                  <p class="fw-semibold text-success mb-2">{{fullMessageText}}</p>
+                  <p class="text-body-secondary mb-2">{{#i18n}}event.pendingQueueAvailable{{/i18n}}</p>
+                {{/showPendingQueue}}
+              {{/user.logged}}
+              {{^user.logged}}
+                <p><a class="btn btn-primary" id="googleauth2" href="{{state.login}}">{{#i18n}}event.loginToRegister{{/i18n}}</a></p>
+                {{#showPendingQueue}}
+                  <p class="fw-semibold text-success mb-2">{{fullMessageText}}</p>
+                {{/showPendingQueue}}
+              {{/user.logged}}
+            {{/eventIsActive}}
+            <div id="uploadPapiFeedback" class="mt-2"></div>
+          </div>
+          <div id="info">{{#hasEventInfoHtml}}{{{eventInfoHtml}}}{{/hasEventInfoHtml}}</div>
+
+          </div>
+
+		<div class="rounded" style="overflow: hidden;"> 
+          <table id="players-table" class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th scope="col"></th>
+                <th scope="col" class="d-none d-md-table-cell">
+                  <a id="sort-by-licence" class="js-sort-link" href="javascript:void(0)" data-sort-key="licence">
+                    <i class="bi bi-person-vcard me-2"></i> {{#i18n}}player.licence{{/i18n}} <span class="js-sort-icon" aria-hidden="true"></span>
+                  </a>
+                </th>
+                <th scope="col">
+                  <a id="sort-by-name" class="js-sort-link" href="javascript:void(0)" data-sort-key="name">
+                    <i class="bi bi-person me-2"></i> {{#i18n}}player.name{{/i18n}} <span class="js-sort-icon" aria-hidden="true"></span>
+                  </a>
+                </th>
+                <th scope="col" class="d-none d-md-table-cell">
+                  <a id="sort-by-category" class="js-sort-link" href="javascript:void(0)" data-sort-key="category">
+                    <i class="bi bi-award me-2"></i> {{#i18n}}player.category{{/i18n}} <span class="js-sort-icon" aria-hidden="true"></span>
+                  </a>
+                </th>
+                <th scope="col">
+                    <a id="sort-by-rating" class="js-sort-link" href="javascript:void(0)" data-sort-key="rating">
+                    <i class="bi bi-bar-chart me-2"></i> {{#i18n}}player.rating{{/i18n}} <span class="js-sort-icon" aria-hidden="true"></span>
+                  </a>
+                </th>
+                <th class="d-none d-md-table-cell">
+                  <a id="sort-by-club" class="js-sort-link" href="javascript:void(0)" data-sort-key="club">
+                    <i class="bi bi-shield me-2"></i> {{#i18n}}player.club{{/i18n}} <span class="js-sort-icon" aria-hidden="true"></span>
+                  </a>
+                </th>
+                {{#user.canManageEvents}}
+                {{#eventNotFree}}
+                <th scope="col" class="d-none d-md-table-cell">{{#i18n}}event.status{{/i18n}}</th>
+                {{/eventNotFree}}
+                <th scope="col"></th>
+                {{/user.canManageEvents}}
+              </tr>
+            </thead>
+            <tbody>
+                {{#players}}
+              <tr>
+                <td></td>
+                <td class="js-licence d-none d-md-table-cell" data-sort="{{licenceOrEmpty}}">{{licenceOrEmpty}}</td>
+                <td class="js-name" data-sort="{{fullName}}">{{name}} {{firstname}}
+                {{#fideTitre}}<span class="badge bg-success">{{#i18n}}{{fideTitreMessageKey}}{{/i18n}}</span>{{/fideTitre}}</td>
+                <td class="js-category d-none d-md-table-cell" data-sort="{{categoryOrEmpty}}">{{category}}</td>
+                <td class="js-rating" data-rating="{{ratingSortValue}}">{{ratingOrEmpty}}</td>
+                <td class="js-club d-none d-md-table-cell" data-sort="{{clubOrEmpty}}">{{clubOrEmpty}}</td>
+                 {{#user.canManageEvents}}
+                {{#eventNotFree}}
+                <td class="js-status d-none d-md-table-cell">
+                   {{#i18n}}{{statusMessageKey}}{{/i18n}}
+                </td>
+                {{/eventNotFree}}
+                <td>
+                    <a class="btn btn-info btn-sm" href="{{contextPath}}/event/{{event.id}}/register/{{subId}}">{{#i18n}}action.edit{{/i18n}}</a>
+                </td>
+                {{/user.canManageEvents}}
+                </tr>
+              {{/players}}
+            </tbody>
+          </table>
+		</div>
+
+        <script>
+          (function () {
+            const table = document.getElementById('players-table');
+            if (!table) {
+              return;
+            }
+
+            const tbody = table.querySelector('tbody');
+            const sortLinks = Array.from(table.querySelectorAll('.js-sort-link'));
+            if (!tbody || sortLinks.length === 0) {
+              return;
+            }
+
+            Array.from(tbody.rows).forEach(function (row, index) {
+              row.setAttribute('data-original-index', String(index));
+            });
+
+            const normalizeText = function (value) {
+              return (value || '')
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim()
+                .toLowerCase();
+            };
+
+            const getCellValue = function (row, key) {
+              const cell = row.querySelector('.js-' + key);
+              if (!cell) {
+                return '';
+              }
+              return (cell.getAttribute('data-sort') || cell.textContent || '').trim();
+            };
+
+            const getRating = function (row) {
+              const ratingCell = row.querySelector('.js-rating');
+              if (!ratingCell) {
+                return 0;
+              }
+              const rawRating = (ratingCell.getAttribute('data-rating') || ratingCell.textContent || '').trim();
+              const normalized = rawRating
+                .replace(/\s/g, '')
+                .replace(',', '.')
+                .replace(/[^0-9.-]/g, '');
+              const parsed = Number(normalized);
+              return Number.isFinite(parsed) ? parsed : 0;
+            };
+
+            const renumberRows = function () {
+              Array.from(tbody.rows).forEach(function (row, index) {
+                if (row.children[0]) {
+                  row.children[0].textContent = String(index + 1);
+                }
+              });
+            };
+
+            const applySort = function (key, descending) {
+              const rows = Array.from(tbody.rows);
+              rows.sort(function (a, b) {
+                let comparison = 0;
+                if (key === 'rating') {
+                  comparison = getRating(a) - getRating(b);
+                } else {
+                  const left = normalizeText(getCellValue(a, key));
+                  const right = normalizeText(getCellValue(b, key));
+                  comparison = left.localeCompare(right, 'fr', { numeric: true, sensitivity: 'base' });
+                }
+
+                if (comparison === 0) {
+                  const ai = Number(a.getAttribute('data-original-index'));
+                  const bi = Number(b.getAttribute('data-original-index'));
+                  comparison = ai - bi;
+                }
+
+                return descending ? -comparison : comparison;
+              });
+              rows.forEach(function (row) {
+                tbody.appendChild(row);
+              });
+              renumberRows();
+
+              sortLinks.forEach(function (link) {
+                const icon = link.querySelector('.js-sort-icon');
+                if (!icon) {
+                  return;
+                }
+                icon.textContent = link.getAttribute('data-sort-key') === key
+                  ? (descending ? "↓" : "↑")
+                  : '';
+              });
+            };
+
+            let activeKey = 'rating';
+            let descending = true;
+            applySort(activeKey, descending);
+
+            sortLinks.forEach(function (link) {
+              link.addEventListener('click', function () {
+                const key = link.getAttribute('data-sort-key');
+                if (!key) {
+                  return;
+                }
+                if (key === activeKey) {
+                  descending = !descending;
+                } else {
+                  activeKey = key;
+                  descending = false;
+                }
+                applySort(activeKey, descending);
+              });
+            });
+
+            const uploadButton = document.getElementById('uploadPapi');
+            const uploadFeedback = document.getElementById('uploadPapiFeedback');
+            if (uploadButton && uploadFeedback) {
+              uploadButton.addEventListener('click', async function () {
+                uploadButton.disabled = true;
+                uploadFeedback.className = 'alert alert-info mt-2';
+                uploadFeedback.textContent = 'Upload PAPI en cours...';
+                try {
+                  const response = await fetch('{{contextPath}}/event/{{event.id}}/papi/upload', {
+                    method: 'POST',
+                    headers: {
+                      'Accept': 'text/plain'
+                    }
+                  });
+                  const text = await response.text();
+                  if (!response.ok) {
+                    throw new Error(text || 'Erreur serveur');
+                  }
+                  uploadFeedback.className = 'alert alert-success mt-2';
+                  uploadFeedback.textContent = text || 'Upload PAPI termine';
+                } catch (error) {
+                  uploadFeedback.className = 'alert alert-danger mt-2';
+                  uploadFeedback.textContent = error && error.message ? error.message : 'Echec upload PAPI';
+                } finally {
+                  uploadButton.disabled = false;
+                }
+              });
+            }
+          })();
+        </script>
+
+        <style>
+          .js-sort-link,
+          .js-sort-link:hover,
+          .js-sort-link:focus {
+            color: #fff;
+            text-decoration: none;
+          }
+        </style>
+
+        </main>
+
+         {{> platform/footer}}
+
+    </body>
+
+    </html>

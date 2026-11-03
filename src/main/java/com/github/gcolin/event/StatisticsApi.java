@@ -20,7 +20,7 @@ import jakarta.ws.rs.QueryParam;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("statistics")
 public class StatisticsApi {
@@ -43,7 +43,7 @@ public class StatisticsApi {
     @GET
     @RequireRole(value = RoleCode.TRESORIER, or = RoleCode.EVENT_ADMIN)
     @Transactional
-    public JteHtml page(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml page(@QueryParam("seasonId") Integer seasonId) {
         Map<String, Object> model = new HashMap<>();
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
         clubSeasonFilter.addToModel(model, seasonId);
@@ -60,7 +60,7 @@ public class StatisticsApi {
         Double unpaidPlayerSubscriptions = calculateUnpaidSubscriptionsTotal(scope);
         model.put("unpaidPlayerSubscriptions", unpaidPlayerSubscriptions);
 
-        return new JteHtml(model, "event/statistics.jte");
+        return new MustacheHtml(model, "event/statistics.mustache");
     }
 
     private Double calculateUnpaidSubscriptionsTotal(SeasonScope scope) {

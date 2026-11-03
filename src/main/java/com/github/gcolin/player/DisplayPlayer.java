@@ -33,6 +33,7 @@ public class DisplayPlayer implements IPlayer {
     private boolean editable;
     private int id;
     private Integer pendingQueueAhead;
+    private String pendingQueueAheadText;
 
     public DisplayPlayer() {}
 
@@ -288,5 +289,13 @@ public class DisplayPlayer implements IPlayer {
 
     public void setPendingQueueAhead(Integer pendingQueueAhead) {
         this.pendingQueueAhead = pendingQueueAhead;
+    }
+
+    public String getPendingQueueAheadText() {
+        return pendingQueueAheadText;
+    }
+
+    public void setPendingQueueAheadText(String pendingQueueAheadText) {
+        this.pendingQueueAheadText = pendingQueueAheadText;
     }
 }

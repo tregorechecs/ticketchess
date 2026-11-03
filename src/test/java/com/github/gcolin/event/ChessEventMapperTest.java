@@ -31,6 +31,10 @@ class ChessEventMapperTest {
         assertEquals(2, ChessEventMapper.mapPairing("Haley"));
         assertEquals(3, ChessEventMapper.mapPairing("HaleySoft"));
         assertEquals(6, ChessEventMapper.mapPairing("Berger"));
+        assertEquals(4, ChessEventMapper.mapPairing("SAD"));
+        assertEquals(5, ChessEventMapper.mapPairing("Nicois"));
+        assertEquals(1, ChessEventMapper.mapPairing(null));
+        assertEquals(1, ChessEventMapper.mapPairing("unknown"));
     }
 
     @Test
@@ -38,6 +42,33 @@ class ChessEventMapperTest {
         assertEquals(8, ChessEventMapper.mapCategory("SenM"));
         assertEquals(3, ChessEventMapper.mapCategory("PupF"));
         assertEquals(0, ChessEventMapper.mapCategory(null));
+        assertEquals(1, ChessEventMapper.mapCategory("PpoM"));
+        assertEquals(0, ChessEventMapper.mapCategory("Other"));
+    }
+
+    @Test
+    void staticMappingsHandleMissingAndMalformedValues() {
+        assertEquals(1, ChessEventMapper.mapRatingType(null));
+        assertEquals(2, ChessEventMapper.mapRatingType(EventType.RAPID));
+        assertEquals(3, ChessEventMapper.mapRatingType(EventType.BLITZ));
+        assertEquals(0, ChessEventMapper.parseRounds(eventWithOption("bad")));
+        assertEquals(0L, ChessEventMapper.toEpochSeconds(null));
+        assertEquals(0L, ChessEventMapper.toBirthEpoch(null));
+        assertEquals(0L, ChessEventMapper.toBirthEpoch("bad"));
+        assertEquals(1, ChessEventMapper.mapGender("SenF"));
+        assertEquals(2, ChessEventMapper.mapGender("SenM"));
+        assertEquals(0, ChessEventMapper.mapGender(null));
+        assertEquals(3, ChessEventMapper.mapFfeLicence("A"));
+        assertEquals(0, ChessEventMapper.mapFfeLicence("X"));
+        assertEquals("123456", ChessEventMapper.mapLicenceNumber("123456"));
+        assertEquals("", ChessEventMapper.mapLicenceNumber("1"));
+        assertEquals(0, ChessEventMapper.parseClubRef("bad"));
+        assertEquals(1650, ChessEventMapper.extractRating("1650F"));
+        assertEquals(0, ChessEventMapper.extractRating("bad"));
+        assertEquals(1, ChessEventMapper.mapRatingTypeFlag("1500E"));
+        assertEquals(2, ChessEventMapper.mapRatingTypeFlag("1500N"));
+        assertEquals(3, ChessEventMapper.mapRatingTypeFlag("1500F"));
+        assertEquals(0, ChessEventMapper.mapFideTitle("unknown"));
     }
 
     @Test
@@ -107,5 +138,11 @@ class ChessEventMapperTest {
         option.setOptionType(type);
         option.setValue(value);
         return option;
+    }
+
+    private static Event eventWithOption(String value) {
+        Event event = new Event();
+        event.setEventOptions(Map.of(EventOptionType.ROUNDS, option(EventOptionType.ROUNDS, value)));
+        return event;
     }
 }

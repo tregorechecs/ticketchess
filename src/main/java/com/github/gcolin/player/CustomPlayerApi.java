@@ -33,7 +33,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("customplayer")
 public class CustomPlayerApi {
@@ -61,7 +61,7 @@ public class CustomPlayerApi {
 
     @GET
     @RequireRole(RoleCode.EVENT_ADMIN)
-    public JteHtml players(
+    public MustacheHtml players(
             @QueryParam("page") @DefaultValue("1") @Min(1) Integer page,
             @QueryParam("size") @DefaultValue("25") @Max(100) @Min(1) Integer size) {
         int start = (page - 1) * size;
@@ -86,13 +86,13 @@ public class CustomPlayerApi {
         model.put("prevPage", Math.max(1, page - 1));
         model.put("nextPage", Math.min(totalPages, page + 1));
         model.put("startIndex", start);
-        return new JteHtml(model, "player/players.jte");
+        return new MustacheHtml(model, "player/players.mustache");
     }
 
     @GET
     @LoggedOnly
     @Path("new")
-    public JteHtml newplayer(
+    public MustacheHtml newplayer(
             @QueryParam("eventId") Integer eventId)
             throws ServletException, IOException {
         return edit(null, eventId);
@@ -101,26 +101,32 @@ public class CustomPlayerApi {
     @GET
     @LoggedOnly
     @Path("{id:\\d+}")
-    public JteHtml edit(
+    public MustacheHtml edit(
             @PathParam("id") Integer id,
             @QueryParam("eventId") Integer eventId)
             throws ServletException, IOException {
         Map<String, Object> model = new HashMap<String, Object>();
         model.put("eventId", eventId);
+        model.put("eventIdValue", eventId != null ? String.valueOf(eventId) : "");
 
+        CustomPlayer player;
         if (id != null) {
-            model.put("player", customPlayerService.find(id));
+            player = customPlayerService.find(id);
         } else {
-            CustomPlayer player = new CustomPlayer();
+            player = new CustomPlayer();
             player.setLicence("");
             player.setName("");
             player.setFirstname("");
             player.setBirthDate("");
             player.setElo("");
             player.setCreationUser("");
-            model.put("player", player);
         }
-        return new JteHtml(model, "player/customplayer.jte");
+        model.put("player", player);
+        model.put("playerIdValue", player.getId() != null ? String.valueOf(player.getId()) : "");
+        model.put("genderMaleSelected", Boolean.TRUE.equals(player.getGender()));
+        model.put("genderFemaleSelected", Boolean.FALSE.equals(player.getGender()));
+        model.put("canManageEvents", loggerUser != null && loggerUser.canManageEvents());
+        return new MustacheHtml(model, "player/customplayer.mustache");
     }
 
     @POST
@@ -167,6 +173,7 @@ public class CustomPlayerApi {
         caches.getDebtCache().invalidateAll();
         if (id == null) {
             customPlayerService.persist(player);
+            customPlayerService.flush();
         } else {
             customPlayerService.merge(player);
         }
@@ -186,7 +193,15 @@ public class CustomPlayerApi {
     }
 
     private Response redirectAfterRegister(Integer eventId, PlayerSubscription sub) {
-        if (sub != null && sub.getStatus() == PlayerSubscriptionStatus.PAID) {
+        if (sub == null) {
+            URI uri = uriInfo.getBaseUriBuilder()
+                    .path("event")
+                    .path("my")
+                    .queryParam("success", "pending")
+                    .build();
+            return Response.seeOther(uri).build();
+        }
+        if (sub.getStatus() == PlayerSubscriptionStatus.PAID) {
             URI uri = uriInfo.getBaseUriBuilder()
                     .path("event")
                     .path(eventId.toString())

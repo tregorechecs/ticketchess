@@ -3,7 +3,7 @@ package com.github.gcolin.event;
 import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.auth.RoleCode;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -38,19 +38,19 @@ public class SharlySelectApi {
     private LoggedUser loggedUser;
 
     @GET
-    public JteHtml page(@QueryParam("callback") String callback) {
+    public MustacheHtml page(@QueryParam("callback") String callback) {
         if (!sharlyCallbackAllowlist.isAllowed(callback)) {
             Map<String, Object> model = new HashMap<>();
             model.put("error", "invalidCallback");
             model.put("callback", callback == null ? "" : callback);
             model.put("items", List.of());
-            return new JteHtml(model, "event/sharlySelect.jte");
+            return new MustacheHtml(model, "event/sharlySelect.mustache");
         }
         Map<String, Object> model = new HashMap<>();
         model.put("callback", callback.trim());
         model.put("items", sharlySelectService.listOpenItems());
         model.put("error", null);
-        return new JteHtml(model, "event/sharlySelect.jte");
+        return new MustacheHtml(model, "event/sharlySelect.mustache");
     }
 
     @POST
@@ -69,7 +69,7 @@ public class SharlySelectApi {
             model.put("callback", callback.trim());
             model.put("items", sharlySelectService.listOpenItems());
             model.put("error", "notFound");
-            return Response.ok(new JteHtml(model, "event/sharlySelect.jte"))
+            return Response.ok(new MustacheHtml(model, "event/sharlySelect.mustache"))
                     .type(MediaType.TEXT_HTML_TYPE.withCharset("UTF-8"))
                     .build();
         }

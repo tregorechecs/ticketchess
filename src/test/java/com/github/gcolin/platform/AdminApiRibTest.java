@@ -1,6 +1,7 @@
 package com.github.gcolin.platform;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -8,7 +9,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.auth.LoggedUser;
+import com.github.gcolin.organisation.Organisation;
 import com.github.gcolin.payment.RibService;
+import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
@@ -20,55 +24,50 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 class AdminApiRibTest {
 
-    @TempDir
-    Path tempDir;
-
-    @Test
-    void ribPageShouldExposeMissingFile() throws Exception {
-        AdminApi api = new AdminApi();
-        RibService ribService = mock(RibService.class);
-        when(ribService.exists()).thenReturn(false);
-        inject(api, "ribService", ribService);
-        inject(api, "logoService", missingLogo());
-        inject(api, "signatureService", missingSignature());
-        inject(api, "backgroundService", missingBackground());
-        inject(api, "config", configWithProps());
-
-        JteHtml html = api.orgPage("", "", "club");
-
-        assertEquals("platform/adminOrg.jte", html.getTemplate());
-        assertEquals(false, html.getModel().get("ribAvailable"));
-        assertEquals("Event Test", ((Map<?, ?>) html.getModel().get("cfg")).get("title"));
+    @AfterEach
+    void clearRequestContext() {
+        RequestContext.close();
     }
 
     @Test
-    void ribPageShouldExposeExistingFileSize() throws Exception {
-        Path ribFile = tempDir.resolve("rib.pdf");
-        Files.writeString(ribFile, "%PDF-1.4 test");
-
+    void orgPageShouldRedirectMovedTabsToOrganisationEdit() throws Exception {
         AdminApi api = new AdminApi();
-        RibService ribService = mock(RibService.class);
-        when(ribService.exists()).thenReturn(true);
-        when(ribService.getRibFile()).thenReturn(ribFile);
-        inject(api, "ribService", ribService);
-        inject(api, "logoService", missingLogo());
-        inject(api, "signatureService", missingSignature());
-        inject(api, "backgroundService", missingBackground());
         inject(api, "config", configWithProps());
+        inject(api, "user", mockUser(false));
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/organisations/1?tab=club")));
 
-        JteHtml html = api.orgPage("ribUploaded", "", "files");
+        Organisation org = new Organisation();
+        org.setId(1);
+        org.setName("Club");
+        org.setSlug("club");
+        RequestContext.openForTest((EntityManager) null);
+        RequestContext.require().setOrganisation(org);
 
-        assertEquals(true, html.getModel().get("ribAvailable"));
-        assertEquals("ribUploaded", html.getModel().get("success"));
-        assertNotNull(html.getModel().get("ribSize"));
+        Response response = api.orgPage("", "", "club");
+
+        assertEquals(303, response.getStatus());
+        assertEquals(URI.create("/admin/organisations/1?tab=club"), response.getLocation());
+    }
+
+    @Test
+    void orgPageShouldExposeOauthTab() throws Exception {
+        AdminApi api = new AdminApi();
+        inject(api, "config", configWithProps());
+        inject(api, "user", mockUser(false));
+
+        Response response = api.orgPage("", "", "oauth");
+
+        assertEquals(200, response.getStatus());
+        MustacheHtml html = assertInstanceOf(MustacheHtml.class, response.getEntity());
+        assertEquals("platform/adminOrg.mustache", html.getTemplate());
+        assertEquals("oauth", html.getModel().get("tab"));
+        assertEquals("Event Test", ((Map<?, ?>) html.getModel().get("cfg")).get("title"));
     }
 
     @Test
@@ -76,14 +75,22 @@ class AdminApiRibTest {
         AdminApi api = new AdminApi();
         RibService ribService = mock(RibService.class);
         inject(api, "ribService", ribService);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?success=ribUploaded&tab=files#files")));
+        inject(
+                api,
+                "uriInfo",
+                mockUriInfo(URI.create("http://localhost:8080/admin/organisations/1?success=ribUploaded&tab=files#files")));
+
+        Organisation org = new Organisation();
+        org.setId(1);
+        RequestContext.openForTest((EntityManager) null);
+        RequestContext.require().setOrganisation(org);
 
         InputStream file = new ByteArrayInputStream("%PDF-1.4".getBytes(StandardCharsets.US_ASCII));
         Response response = api.uploadRib(file);
 
         verify(ribService).save(file);
         assertEquals(200, response.getStatus());
-        assertEquals("/admin/org?success=ribUploaded&tab=files#files", readRedirect(response));
+        assertEquals("/admin/organisations/1?success=ribUploaded&tab=files#files", readRedirect(response));
     }
 
     @Test
@@ -94,12 +101,20 @@ class AdminApiRibTest {
                 .when(ribService)
                 .save(org.mockito.ArgumentMatchers.any());
         inject(api, "ribService", ribService);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?error=invalidRib&tab=files#files")));
+        inject(
+                api,
+                "uriInfo",
+                mockUriInfo(URI.create("http://localhost:8080/admin/organisations/1?error=invalidRib&tab=files#files")));
+
+        Organisation org = new Organisation();
+        org.setId(1);
+        RequestContext.openForTest((EntityManager) null);
+        RequestContext.require().setOrganisation(org);
 
         Response response = api.uploadRib(new ByteArrayInputStream("hello".getBytes(StandardCharsets.US_ASCII)));
 
         assertEquals(200, response.getStatus());
-        assertEquals("/admin/org?error=invalidRib&tab=files#files", readRedirect(response));
+        assertEquals("/admin/organisations/1?error=invalidRib&tab=files#files", readRedirect(response));
     }
 
     @Test
@@ -108,34 +123,42 @@ class AdminApiRibTest {
         RibService ribService = mock(RibService.class);
         doThrow(new IOException("disk")).when(ribService).save(org.mockito.ArgumentMatchers.any());
         inject(api, "ribService", ribService);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?error=ribUploadFailed&tab=files#files")));
+        inject(
+                api,
+                "uriInfo",
+                mockUriInfo(URI.create(
+                        "http://localhost:8080/admin/organisations/1?error=ribUploadFailed&tab=files#files")));
+
+        Organisation org = new Organisation();
+        org.setId(1);
+        RequestContext.openForTest((EntityManager) null);
+        RequestContext.require().setOrganisation(org);
 
         Response response = api.uploadRib(new ByteArrayInputStream("%PDF-1.4".getBytes(StandardCharsets.US_ASCII)));
 
         assertEquals(200, response.getStatus());
-        assertEquals("/admin/org?error=ribUploadFailed&tab=files#files", readRedirect(response));
+        assertEquals("/admin/organisations/1?error=ribUploadFailed&tab=files#files", readRedirect(response));
     }
 
     @Test
-    void saveConfigShouldPersistClubTab() throws Exception {
+    void saveConfigShouldPersistOauthTab() throws Exception {
         AdminApi api = new AdminApi();
         Config config = mock(Config.class);
         inject(api, "config", config);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?success=configSaved&tab=club")));
+        inject(api, "user", mockUser(false));
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?success=configSaved&tab=oauth")));
 
         MultivaluedMap<String, String> form = new MultivaluedHashMap<>();
-        form.putSingle("tab", "club");
-        form.putSingle("title", "New Title");
-        form.putSingle("org.name", "Club");
-        form.putSingle("membership.notif.emails", "admin@club.fr");
+        form.putSingle("tab", "oauth");
+        form.putSingle("oauth.clientId", "cid");
+        form.putSingle("oauth.authorizationUrl", "https://example.org/auth");
 
         Response response = api.saveConfig(form);
 
         assertEquals(303, response.getStatus());
         verify(config).updateProperties(org.mockito.ArgumentMatchers.argThat(updates ->
-                "New Title".equals(updates.get("title"))
-                        && "Club".equals(updates.get("org.name"))
-                        && "admin@club.fr".equals(updates.get("membership.notif.emails"))));
+                "cid".equals(updates.get("oauth.clientId"))
+                        && "https://example.org/auth".equals(updates.get("oauth.authorizationUrl"))));
     }
 
     @Test
@@ -145,14 +168,22 @@ class AdminApiRibTest {
         Config config = mock(Config.class);
         inject(api, "logoService", logoService);
         inject(api, "config", config);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?success=logoDeleted&tab=files#files")));
+        inject(
+                api,
+                "uriInfo",
+                mockUriInfo(URI.create("http://localhost:8080/admin/organisations/1?success=logoDeleted&tab=files#files")));
+
+        Organisation org = new Organisation();
+        org.setId(1);
+        RequestContext.openForTest((EntityManager) null);
+        RequestContext.require().setOrganisation(org);
 
         Response response = api.deleteLogo();
 
         verify(logoService).delete();
         verify(config).applyRuntime();
         assertEquals(200, response.getStatus());
-        assertEquals("/admin/org?success=logoDeleted&tab=files#files", readRedirect(response));
+        assertEquals("/admin/organisations/1?success=logoDeleted&tab=files#files", readRedirect(response));
     }
 
     @Test
@@ -160,31 +191,28 @@ class AdminApiRibTest {
         AdminApi api = new AdminApi();
         SignatureService signatureService = mock(SignatureService.class);
         inject(api, "signatureService", signatureService);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?success=signatureDeleted&tab=files#files")));
+        inject(
+                api,
+                "uriInfo",
+                mockUriInfo(URI.create(
+                        "http://localhost:8080/admin/organisations/1?success=signatureDeleted&tab=files#files")));
+
+        Organisation org = new Organisation();
+        org.setId(1);
+        RequestContext.openForTest((EntityManager) null);
+        RequestContext.require().setOrganisation(org);
 
         Response response = api.deleteSignature();
 
         verify(signatureService).delete();
         assertEquals(200, response.getStatus());
-        assertEquals("/admin/org?success=signatureDeleted&tab=files#files", readRedirect(response));
+        assertEquals("/admin/organisations/1?success=signatureDeleted&tab=files#files", readRedirect(response));
     }
 
-    private static LogoService missingLogo() {
-        LogoService logoService = mock(LogoService.class);
-        when(logoService.exists()).thenReturn(false);
-        return logoService;
-    }
-
-    private static SignatureService missingSignature() {
-        SignatureService signatureService = mock(SignatureService.class);
-        when(signatureService.exists()).thenReturn(false);
-        return signatureService;
-    }
-
-    private static BackgroundService missingBackground() {
-        BackgroundService backgroundService = mock(BackgroundService.class);
-        when(backgroundService.exists()).thenReturn(false);
-        return backgroundService;
+    private static LoggedUser mockUser(boolean platformAdmin) {
+        LoggedUser user = mock(LoggedUser.class);
+        when(user.isPlatformAdmin()).thenReturn(platformAdmin);
+        return user;
     }
 
     private static Config configWithProps() {
@@ -193,6 +221,9 @@ class AdminApiRibTest {
         page.setClubRegisterEnabled(true);
         when(config.getOrgFormValues()).thenReturn(Map.of("title", "Event Test", "org.name", "Club"));
         when(config.getPage()).thenReturn(page);
+        when(config.pageForRequest()).thenReturn(page);
+        when(config.getPublicBaseUrl()).thenReturn("http://localhost:8080");
+        when(config.platformProperty(anyString(), anyString())).thenReturn("");
         when(config.isSecretConfigured(anyString())).thenReturn(false);
         return config;
     }
@@ -211,7 +242,7 @@ class AdminApiRibTest {
         UriBuilder uriBuilder = mock(UriBuilder.class);
         when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
         when(uriBuilder.path(anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.queryParam(anyString(), anyString())).thenReturn(uriBuilder);
+        when(uriBuilder.queryParam(anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(uriBuilder);
         when(uriBuilder.fragment(anyString())).thenReturn(uriBuilder);
         when(uriBuilder.build()).thenReturn(target);
         return uriInfo;

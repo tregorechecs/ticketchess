@@ -1,0 +1,12 @@
+<nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+  <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+    <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+    {{#adminHub}}<li class="breadcrumb-item active" aria-current="page">{{#i18n}}menu.admin{{/i18n}}</li>
+    {{else}}
+      <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+      {{#trail}}{{trail}}
+      {{/trail}}
+      <li class="breadcrumb-item active" aria-current="page">{{activePageTitle}}</li>
+    {{/adminHub}}
+  </ol>
+</nav>

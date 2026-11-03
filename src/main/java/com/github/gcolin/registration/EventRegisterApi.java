@@ -55,7 +55,7 @@ import java.util.Set;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("event/{id:\\d+}/register")
 public class EventRegisterApi {
@@ -100,7 +100,7 @@ public class EventRegisterApi {
 
     @GET
     @LoggedOnly
-    public JteHtml register(@PathParam("id") Integer eventId, @QueryParam("query") String query) {
+    public MustacheHtml register(@PathParam("id") Integer eventId, @QueryParam("query") String query) {
         Map<String, Object> model = new HashMap<String, Object>();
         Event event = eventService.find(eventId);
         eventService.fillSubscriptionLimits(event);
@@ -190,7 +190,7 @@ public class EventRegisterApi {
         });
         model.put("favoritePlayers", favoritePlayers);
 
-        return new JteHtml(model, "registration/register.jte");
+        return new MustacheHtml(model, "registration/register.mustache");
     }
 
     private String getRegistrationClosedMessageKey(Event event) {
@@ -258,13 +258,16 @@ public class EventRegisterApi {
     @GET
     @Path("{subId}")
     @RequireRole(RoleCode.EVENT_ADMIN)
-    public JteHtml registeredit(@PathParam("id") Integer eventId, @PathParam("subId") Integer subId) {
+    public MustacheHtml registeredit(@PathParam("id") Integer eventId, @PathParam("subId") Integer subId) {
         PlayerSubscription sub = playerSubscriptionService.findWithEvent(subId);
         Map<String, Object> model = new HashMap<>();
         model.put("sub", sub);
         model.put("player", find.player(sub.getNrFfe(), null));
         model.put("options", playerSubscriptionOptionService.findByPlayerSubscription(subId));
-        return new JteHtml(model, "registration/subEdit.jte");
+        if (sub.getStatus() != null) {
+            model.put("status", sub.getStatus().name());
+        }
+        return new MustacheHtml(model, "registration/subEdit.mustache");
     }
 
     @POST

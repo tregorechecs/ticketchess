@@ -1,0 +1,80 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/customplayer">{{#i18n}}menu.players{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}action.edit{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-people fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}player.title{{/i18n}} {{player.name}}</h1>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <form id="editForm" method="post" action="{{contextPath}}/customplayer">
+          <input type="hidden" name="id" value="{{playerIdValue}}">
+          <input type="hidden" name="eventId" id="eventId" value="{{eventIdValue}}">
+
+          <div class="mb-3">
+            <label class="form-label" for="licence">{{#i18n}}player.licence{{/i18n}}</label>
+            <input type="text" id="licence" name="licence" value="{{player.licence}}" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="name">{{#i18n}}player.familyname{{/i18n}}</label>
+            <input type="text" id="name" name="name" value="{{player.name}}" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="firstname">{{#i18n}}player.firstname{{/i18n}}</label>
+            <input type="text" id="firstname" name="firstname" value="{{player.firstname}}" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="birthdate">{{#i18n}}player.birthdate{{/i18n}}</label>
+            <input type="date" id="birthdate" name="birthdate" value="{{player.birthDate}}" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="elo">{{#i18n}}player.rating{{/i18n}}</label>
+            <input type="text" id="elo" name="elo" value="{{player.elo}}" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}player.gender{{/i18n}}</label>
+            <div class="form-check">
+              <input type="radio" id="genderMale" name="gender" value="true" class="form-check-input"{{#genderMaleSelected}} checked{{/genderMaleSelected}}>
+              <label class="form-check-label" for="genderMale">{{#i18n}}player.male{{/i18n}}</label>
+            </div>
+            <div class="form-check">
+              <input type="radio" id="genderFemale" name="gender" value="false" class="form-check-input"{{#genderFemaleSelected}} checked{{/genderFemaleSelected}}>
+              <label class="form-check-label" for="genderFemale">{{#i18n}}player.female{{/i18n}}</label>
+            </div>
+          </div>
+
+          {{#canManageEvents}}
+            <div class="mb-3">
+              <label class="form-label" for="creationUser">creationUser</label>
+              <input type="text" id="creationUser" name="creationUser" value="{{player.creationUser}}" class="form-control">
+            </div>
+          {{/canManageEvents}}
+
+          <div class="d-flex justify-content-end">
+            <button type="submit" id="save" class="btn btn-primary">{{#i18n}}action.save{{/i18n}}</button>
+          </div>
+        </form>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

@@ -3,7 +3,6 @@ package com.github.gcolin.event;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
-import com.github.gcolin.notification.Notification;
 
 @Entity
 @Table(name = "event_group")
@@ -18,10 +17,6 @@ public class EventGroup {
 
     @Column(nullable = false, length = 255)
     private String shortname;
-
-    // Relation vers Notification (OneToMany)
-    @OneToMany(mappedBy = "eventGroup")
-    private List<Notification> notifications = new ArrayList<>();
 
     @OneToMany(mappedBy = "eventGroup")
     private List<Event> events = new ArrayList<>();
@@ -52,14 +47,6 @@ public class EventGroup {
 
     public void setName(String name) {
         this.name = name;
-    }
-
-    public List<Notification> getNotifications() {
-        return notifications;
-    }
-
-    public void setNotifications(List<Notification> notifications) {
-        this.notifications = notifications;
     }
 
     public void setEvents(List<Event> events) {

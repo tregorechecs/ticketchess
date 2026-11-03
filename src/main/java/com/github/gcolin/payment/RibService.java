@@ -1,5 +1,6 @@
 package com.github.gcolin.payment;
 
+import com.github.gcolin.organisation.OrganisationFiles;
 import com.github.gcolin.platform.Config;
 import jakarta.ws.rs.WebApplicationException;
 import java.io.IOException;
@@ -22,7 +23,7 @@ public class RibService {
     }
 
     public Path getRibFile() {
-        return Path.of(config.getConfigDir(), FILE_NAME);
+        return OrganisationFiles.currentDir(config).resolve(FILE_NAME);
     }
 
     public boolean exists() {

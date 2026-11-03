@@ -1,0 +1,136 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}breadcrumb.memberships{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-person-vcard fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.memberships{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.memberships{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <form method="get" action="{{contextPath}}/membership" class="d-flex align-items-center mb-0">
+            <div class="input-group w-auto">
+              <label for="membership_season" class="input-group-text">{{#i18n}}label.season{{/i18n}}</label>
+              <select id="membership_season" name="seasonId" class="form-select w-auto" onchange="this.form.submit()">
+                {{#seasons}}{{#selected}}
+                  <option value="{{value}}" selected>{{label}}</option>
+                {{/selected}}{{^selected}}
+                  <option value="{{value}}">{{label}}</option>
+                {{/selected}}{{/seasons}}
+              </select>
+            </div>
+          </form>
+          {{#hasMemberships}}
+          <div class="input-group input-group-sm" style="max-width: 280px;">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input id="membership-filter" class="form-control" type="search" placeholder="{{#i18n}}membership.filterPlaceholder{{/i18n}}" aria-label="{{#i18n}}membership.filterPlaceholder{{/i18n}}" autocomplete="off">
+          </div>
+          {{/hasMemberships}}
+          <div class="d-flex align-items-center gap-2 ms-md-auto">
+            <a class="btn btn-success" href="{{contextPath}}/membership/new{{newMembershipHref}}">{{#i18n}}action.addMembership{{/i18n}}</a>
+            {{> membership/membershipPageActionsMenu}}
+          </div>
+        </div>
+        <div class="admin-table-scroll mt-3">
+          <table id="membership-table" class="table table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">{{#i18n}}admin.membership.user{{/i18n}}</th>
+                <th scope="col">{{#i18n}}admin.membership.nrFfe{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.lastname{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.firstname{{/i18n}}</th>
+                <th scope="col">{{#i18n}}player.birthdate{{/i18n}}</th>
+                <th scope="col">{{#i18n}}admin.membership.licenseType{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.season{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.status{{/i18n}}</th>
+                <th scope="col">{{#i18n}}admin.membership.amount{{/i18n}}</th>
+                <th scope="col">{{#i18n}}clubRegister.myMemberships.options{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#safeMemberships}}<tr data-search="{{searchName}}">
+                <td>{{membership.id}}</td>
+                <td>{{membership.user}}</td>
+                <td>{{membership.nrFfe}}</td>
+                <td>{{membership.lastname}}</td>
+                <td>{{membership.firstname}}</td>
+                <td>{{membership.birthDate}}</td>
+                <td>
+                  {{#hasLicenseType}}{{licenseTypeLabel}}{{/hasLicenseType}}{{^hasLicenseType}}
+                    <span class="text-body-secondary">—</span>
+                  {{/hasLicenseType}}
+                </td>
+                <td>{{seasonName}}</td>
+                <td>{{statusLabel}}</td>
+                <td>{{amountFormatted}} €</td>
+                <td>
+                  {{#hasOptions}}<ul class="mb-0 ps-3">
+                    {{#optionValues}}<li>{{.}}</li>{{/optionValues}}
+                  </ul>{{/hasOptions}}{{^hasOptions}}
+                    <span class="text-body-secondary">—</span>
+                  {{/hasOptions}}
+                </td>
+                <td>
+                  {{> membership/membershipRowActionsMenu}}
+                </td>
+              </tr>{{/safeMemberships}}{{^safeMemberships}}
+              <tr>
+                <td colspan="12" class="text-center text-body-secondary">{{#i18n}}info.noMembership{{/i18n}}</td>
+              </tr>
+              {{/safeMemberships}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+    {{> platform/footer}}
+
+    {{#hasMemberships}}
+    <script type="text/javascript">
+      (function () {
+        const input = document.getElementById('membership-filter');
+        const table = document.getElementById('membership-table');
+        if (!input || !table) {
+          return;
+        }
+        const rows = Array.from(table.querySelectorAll('tbody tr[data-search]'));
+
+        function normalize(value) {
+          return (value || '')
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function applyFilter() {
+          const terms = normalize(input.value).split(/\s+/).filter(Boolean);
+          rows.forEach((row) => {
+            const text = normalize(row.getAttribute('data-search'));
+            const match = terms.every((term) => text.includes(term));
+            row.classList.toggle('d-none', !match);
+          });
+        }
+
+        input.addEventListener('input', applyFilter);
+      })();
+    </script>
+    {{/hasMemberships}}
+  </body>
+</html>

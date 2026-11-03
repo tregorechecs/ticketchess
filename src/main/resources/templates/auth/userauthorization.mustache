@@ -1,0 +1,99 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.userAuthorizations{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-shield-lock fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}heading.userAuthorizations{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.userAuthorizationsDesc{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-3">{{#i18n}}heading.userAuthorizationNew{{/i18n}}</h2>
+        <form method="post" action="{{contextPath}}/user-authorization" id="userAuthorizationForm">
+          <input type="hidden" name="toRemove" value="false">
+          <input type="hidden" name="scopeType" value="GLOBAL">
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="email">{{#i18n}}payment.email{{/i18n}}</label>
+              <input class="form-control" type="email" id="email" name="email" autocomplete="email" placeholder="utilisateur@exemple.fr" required>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="role">{{#i18n}}label.role{{/i18n}}</label>
+              <select class="form-select" id="role" name="role" required>
+                {{#roleOptions}}<option value="{{value}}">{{label}}</option>{{/roleOptions}}
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="validUntil">{{#i18n}}label.validUntil{{/i18n}}</label>
+              <input class="form-control" type="datetime-local" id="validUntil" name="validUntil">
+              <div class="form-text">{{#i18n}}help.userAuthorization.validUntil{{/i18n}}</div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end mt-4">
+            <button type="submit" class="btn btn-success">
+              <i class="bi bi-plus-lg me-1"></i>{{#i18n}}action.createGeneric{{/i18n}}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+          <h2 class="h5 mb-0">{{#i18n}}heading.userAuthorizationsList{{/i18n}}</h2>
+          <span class="badge bg-secondary">{{authorizationCount}}</span>
+        </div>
+        {{#hasAuthorizations}}
+          <table class="table table-striped align-middle mb-0 mt-3">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">{{#i18n}}payment.email{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.role{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.validUntil{{/i18n}}</th>
+                <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#safeAuthorizations}}<tr>
+                <td>{{id}}</td>
+                <td><code class="text-body">{{email}}</code></td>
+                <td>{{roleLabel}}</td>
+                <td>
+                  {{#hasValidUntil}}{{validUntilFormatted}}{{/hasValidUntil}}
+                  {{^hasValidUntil}}<span class="badge text-bg-success">{{#i18n}}userAuthorization.permanent{{/i18n}}</span>{{/hasValidUntil}}
+                </td>
+                <td>
+                  <form method="post" action="{{contextPath}}/user-authorization" class="m-0">
+                    <input type="hidden" name="id" value="{{id}}">
+                    <input type="hidden" name="toRemove" value="true">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{#i18n}}sub.confirmDelete{{/i18n}}');">
+                      {{#i18n}}action.remove{{/i18n}}
+                    </button>
+                  </form>
+                </td>
+              </tr>{{/safeAuthorizations}}
+            </tbody>
+          </table>
+        {{/hasAuthorizations}}
+        {{^hasAuthorizations}}
+          <p class="text-body-secondary mb-0">{{#i18n}}info.noData{{/i18n}}</p>
+        {{/hasAuthorizations}}
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

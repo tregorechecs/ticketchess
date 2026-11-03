@@ -15,7 +15,6 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import java.lang.reflect.Field;
 import java.net.URI;
-import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
 class LogoutApiTest {
@@ -42,7 +41,6 @@ class LogoutApiTest {
         inject(api, "config", config);
         inject(api, "activeLoggedUsers", activeLoggedUsers);
         inject(api, "uriInfo", uriInfo);
-        inject(api, "properties", new Properties());
 
         Response response = api.logout();
 
@@ -71,7 +69,6 @@ class LogoutApiTest {
         inject(api, "config", config);
         inject(api, "activeLoggedUsers", mock(ActiveLoggedUsers.class));
         inject(api, "uriInfo", uriInfo);
-        inject(api, "properties", new Properties());
 
         Response response = api.logout();
 

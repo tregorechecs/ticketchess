@@ -1,0 +1,89 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/membership{{membershipListHref}}">{{#i18n}}breadcrumb.memberships{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.membershipMail{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-envelope fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.membershipMail{{/i18n}}</h1>
+          </div>
+        </div>
+      </div>
+
+      {{#sent}}<div class="alert alert-success" role="alert">{{sentMessageText}}</div>{{/sent}}
+
+      <div class="admin-table-panel mb-4">
+        <form method="get" action="{{contextPath}}/membership/mail" class="row g-2 align-items-end mb-3">
+          {{> platform/seasonFilter}}
+          <div class="col-12 col-md-auto">
+            <label for="membership_mail_status" class="form-label mb-0">{{#i18n}}label.status{{/i18n}}</label>
+            <select id="membership_mail_status" name="status" class="form-select" onchange="this.form.submit()">
+              <option value="">{{#i18n}}membership.mail.selectStatus{{/i18n}}</option>
+              {{#statusChoices}}{{#selected}}
+                <option value="{{value}}" selected>{{label}}</option>
+              {{/selected}}{{^selected}}
+                <option value="{{value}}">{{label}}</option>
+              {{/selected}}{{/statusChoices}}
+            </select>
+          </div>
+        </form>
+
+        {{^hasStatus}}
+          <p class="text-body-secondary mb-0">{{#i18n}}membership.mail.selectStatusHelp{{/i18n}}</p>
+        {{/hasStatus}}
+        {{#hasStatus}}
+          <p class="text-muted mb-2">{{#i18n}}mail.subject{{/i18n}} : <strong>Votre préinscription a bien été enregistrée</strong></p>
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}mail.preview{{/i18n}}</label>
+            {{#previewMembershipId}}
+              <iframe id="membershipBulkMailPreview" title="{{#i18n}}mail.preview{{/i18n}}" class="border rounded w-100" style="min-height:400px;background:#f4f6f8;" src="{{contextPath}}/membership/{{previewMembershipId}}/mail-preview"></iframe>
+            {{/previewMembershipId}}
+            {{^previewMembershipId}}
+              <div class="border rounded p-3 text-body-secondary">{{#i18n}}mail.recipients.none{{/i18n}}</div>
+            {{/previewMembershipId}}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}mail.recipients{{/i18n}} ({{recipientCount}})</label>
+            <div class="border rounded p-2" style="max-height:220px;overflow:auto;">
+              {{^hasRecipients}}
+                <div class="text-body-secondary small">{{#i18n}}mail.recipients.none{{/i18n}}</div>
+              {{/hasRecipients}}
+              {{#hasRecipients}}
+                <ul class="list-unstyled mb-0">
+                  {{#recipientRows}}<li class="mb-1">
+                    {{#hasDisplayName}}{{displayName}} — {{/hasDisplayName}}{{email}}
+                  </li>{{/recipientRows}}
+                </ul>
+              {{/hasRecipients}}
+            </div>
+          </div>
+          <form method="post" action="{{contextPath}}/membership/mail" accept-charset="UTF-8">
+            {{#seasonId}}<input type="hidden" name="seasonId" value="{{seasonId}}">{{/seasonId}}
+            <input type="hidden" name="status" value="{{selectedStatus}}">
+            <div class="d-flex gap-2 justify-content-end">
+              <a class="btn btn-secondary" href="{{contextPath}}/membership{{membershipListHref}}">{{#i18n}}action.cancel{{/i18n}}</a>
+              {{^hasRecipients}}
+                <button type="submit" class="btn btn-primary" disabled>&#9993; {{#i18n}}mail.send{{/i18n}}</button>
+              {{/hasRecipients}}
+              {{#hasRecipients}}
+                <button type="submit" class="btn btn-primary">&#9993; {{#i18n}}mail.send{{/i18n}}</button>
+              {{/hasRecipients}}
+            </div>
+          </form>
+        {{/hasStatus}}
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

@@ -14,7 +14,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class EventAdminApiTest {
 
@@ -44,9 +44,9 @@ class EventAdminApiTest {
         inject(api, "eventGroupDao", eventGroupDao);
         inject(api, "clubSeasonFilter", clubSeasonFilter);
 
-        JteHtml html = api.page(null);
+        MustacheHtml html = api.page(null);
 
-        assertEquals("event/eventAdminTree.jte", html.getTemplate());
+        assertEquals("event/eventAdminTree.mustache", html.getTemplate());
         verify(eventDao).fillNbSubscriptions(List.of(event));
         verify(eventDao).detachAll(List.of(event));
     }

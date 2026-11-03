@@ -4,7 +4,7 @@ import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.auth.RoleCode;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -29,7 +29,7 @@ public class EventAdminApi {
     private final EventAdminTreeBuilder treeBuilder = new EventAdminTreeBuilder();
 
     @GET
-    public JteHtml page(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml page(@QueryParam("seasonId") Integer seasonId) {
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
         List<Event> events = eventDao.findAllForAdmin(scope);
         eventDao.fillNbSubscriptions(events);
@@ -38,6 +38,6 @@ public class EventAdminApi {
         Map<String, Object> model = new HashMap<>();
         model.put("groups", treeBuilder.build(eventGroupDao.all(), events));
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "event/eventAdminTree.jte");
+        return new MustacheHtml(model, "event/eventAdminTree.mustache");
     }
 }

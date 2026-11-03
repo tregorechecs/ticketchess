@@ -1,0 +1,38 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+  <main class="container flex-fill mt-3">
+    <div class="bg-body p-3 rounded mb-3">
+      <h2>{{#i18n}}selectEventCollectionVariant.heading{{/i18n}}</h2>
+      <p class="mb-1"><strong>{{eventCollection.name}}</strong></p>
+      <p>{{#i18n}}selectEventCollectionVariant.description{{/i18n}}</p>
+    </div>
+
+    <div class="bg-body p-3 rounded mb-3">
+      <form method="post" action="{{contextPath}}/event/my/{{playerSubscription.id}}/eventcollection/{{eventCollection.id}}">
+        <div class="mb-3">
+          <label class="form-label">{{#i18n}}selectEventCollectionVariant.selectEvent{{/i18n}}</label>
+          <div>
+            {{#eventChoices}}
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="eventId" id="event_{{id}}" value="{{id}}"
+                {{#checked}}checked{{/checked}}
+                {{#disabled}}disabled{{/disabled}}>
+              <label class="form-check-label" for="event_{{id}}">{{name}}</label>
+            </div>
+            {{/eventChoices}}
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">{{#i18n}}action.change{{/i18n}}</button>
+          <a href="{{contextPath}}/event/my" class="btn btn-secondary">{{#i18n}}action.cancel{{/i18n}}</a>
+        </div>
+      </form>
+    </div>
+  </main>
+  {{> platform/footer}}
+</body>
+</html>

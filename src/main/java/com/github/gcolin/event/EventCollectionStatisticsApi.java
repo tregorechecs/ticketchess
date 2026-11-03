@@ -17,7 +17,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("eventcollection/{id:\\d+}/statistics")
 @RequireRole(RoleCode.EVENT_ADMIN)
@@ -36,7 +36,7 @@ public class EventCollectionStatisticsApi {
     private EventPaymentsReportService eventPaymentsReportService;
 
     @GET
-    public JteHtml show(@PathParam("id") Integer eventCollectionId) {
+    public MustacheHtml show(@PathParam("id") Integer eventCollectionId) {
         EventCollection eventCollection = eventCollectionDao.find(eventCollectionId);
         if (eventCollection == null) {
             throw new NotFoundException();
@@ -44,7 +44,7 @@ public class EventCollectionStatisticsApi {
 
         List<PlayerSubscription> subscriptions = playerSubscriptionDao.findByEventCollection(eventCollectionId);
         StatisticsReport report = statisticsReportService.computeForEventCollection(subscriptions);
-        return new JteHtml(report.toEventCollectionModel(eventCollection), "event/eventCollectionStatistics.jte");
+        return new MustacheHtml(report.toEventCollectionModel(eventCollection), "event/eventCollectionStatistics.mustache");
     }
 
     @GET

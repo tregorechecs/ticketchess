@@ -25,7 +25,7 @@ import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("event/{id:\\d+}/register/{subId:\\d+}/option")
 @RequireRole(RoleCode.EVENT_ADMIN)
@@ -45,13 +45,14 @@ public class PlayerSubscriptionOptionApi {
 
     @GET
     @Path("new")
-    public JteHtml createForm(@PathParam("id") Integer eventId, @PathParam("subId") Integer subId) {
+    public MustacheHtml createForm(@PathParam("id") Integer eventId, @PathParam("subId") Integer subId) {
         PlayerSubscription sub = requireSubscription(eventId, subId);
         Map<String, Object> model = new HashMap<>();
         model.put("sub", sub);
         model.put("option", null);
         model.put("isNew", true);
-        return new JteHtml(model, "registration/subOptionEdit.jte");
+        model.put("status", PlayerSubscriptionOptionStatus.NOT_PAID.name());
+        return new MustacheHtml(model, "registration/subOptionEdit.mustache");
     }
 
     @POST
@@ -80,7 +81,7 @@ public class PlayerSubscriptionOptionApi {
 
     @GET
     @Path("{optionId:\\d+}")
-    public JteHtml editForm(
+    public MustacheHtml editForm(
             @PathParam("id") Integer eventId,
             @PathParam("subId") Integer subId,
             @PathParam("optionId") Integer optionId) {
@@ -90,7 +91,10 @@ public class PlayerSubscriptionOptionApi {
         model.put("sub", sub);
         model.put("option", option);
         model.put("isNew", false);
-        return new JteHtml(model, "registration/subOptionEdit.jte");
+        if (option.getStatus() != null) {
+            model.put("status", option.getStatus().name());
+        }
+        return new MustacheHtml(model, "registration/subOptionEdit.mustache");
     }
 
     @POST

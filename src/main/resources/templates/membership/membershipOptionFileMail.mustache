@@ -1,0 +1,107 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}{{filesBackHref}}">{{#i18n}}page.membershipOptionFiles{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.membershipOptionFileMail{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-envelope fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.membershipOptionFileMail{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.membershipOptionFileMail{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      {{#sent}}<div class="alert alert-success" role="alert">{{sentMessageText}}</div>{{/sent}}
+
+      <div class="admin-table-panel mb-4">
+        <p class="text-body-secondary mb-3">
+          <span class="fw-semibold">{{file.originalName}}</span>
+          <span class="text-muted">— {{optionLabel}}</span>
+        </p>
+        <form method="post" action="{{contextPath}}/membership-option-files/{{file.id}}/mail" accept-charset="UTF-8">
+          {{#seasonId}}<input type="hidden" name="seasonId" value="{{seasonId}}">{{/seasonId}}
+          <div class="mb-3">
+            <label for="subject" class="form-label">{{#i18n}}mail.subject{{/i18n}}</label>
+            <input type="text" id="subject" name="subject" class="form-control" value="{{defaultSubjectValue}}" required>
+          </div>
+          <div class="mb-3">
+            <label for="body" class="form-label">{{#i18n}}mail.body{{/i18n}} (Markdown)</label>
+            <textarea id="body" name="body" class="form-control" rows="12" required>{{defaultBodyValue}}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}mail.preview{{/i18n}}</label>
+            <iframe id="mail-preview" class="border rounded w-100" style="min-height:400px;background:#f4f6f8;" frameborder="0" title="{{#i18n}}mail.preview{{/i18n}}"></iframe>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}mail.recipients{{/i18n}} ({{recipientCount}})</label>
+            <div class="border rounded p-2" style="max-height:220px;overflow:auto;">
+              {{^hasRecipients}}
+                <div class="text-body-secondary small">{{#i18n}}mail.recipients.none{{/i18n}}</div>
+              {{/hasRecipients}}
+              {{#hasRecipients}}
+                <ul class="list-unstyled mb-0">
+                  {{#recipientRows}}<li class="mb-1">
+                    {{#hasDisplayName}}{{displayName}} — {{/hasDisplayName}}{{email}}
+                  </li>{{/recipientRows}}
+                </ul>
+              {{/hasRecipients}}
+            </div>
+          </div>
+          <div class="d-flex gap-2 justify-content-end">
+            <a class="btn btn-secondary" href="{{contextPath}}{{filesBackHref}}">{{#i18n}}action.cancel{{/i18n}}</a>
+            {{^hasRecipients}}
+              <button type="submit" class="btn btn-primary" disabled>&#9993; {{#i18n}}mail.send{{/i18n}}</button>
+            {{/hasRecipients}}
+            {{#hasRecipients}}
+              <button type="submit" class="btn btn-primary">&#9993; {{#i18n}}mail.send{{/i18n}}</button>
+            {{/hasRecipients}}
+          </div>
+        </form>
+      </div>
+    </main>
+    {{> platform/footer}}
+    <script>
+      (function () {
+        var bodyEl = document.getElementById('body');
+        var previewFrame = document.getElementById('mail-preview');
+        if (!bodyEl || !previewFrame) {
+          return;
+        }
+        var timer = null;
+        function updatePreview() {
+          var formData = new URLSearchParams();
+          formData.append('body', bodyEl.value || '');
+          fetch('{{contextPath}}/membership-option-files/{{file.id}}/mail/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: formData
+          })
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            var doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+            doc.open();
+            doc.write(html);
+            doc.close();
+          });
+        }
+        function scheduleUpdate() {
+          clearTimeout(timer);
+          timer = setTimeout(updatePreview, 400);
+        }
+        bodyEl.addEventListener('input', scheduleUpdate);
+        updatePreview();
+      })();
+    </script>
+  </body>
+</html>

@@ -68,7 +68,7 @@ import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.player.Player;
 
 @Path("event")
@@ -137,7 +137,7 @@ public class EventApi {
     private static final Logger logger = LoggerFactory.getLogger(EventApi.class);
 
     @GET
-    public JteHtml events(
+    public MustacheHtml events(
             @QueryParam("status") @DefaultValue("ACTIVE") String status,
             @QueryParam("seasonId") Integer seasonId)
             throws IOException {
@@ -147,7 +147,7 @@ public class EventApi {
     @GET
     @LoggedOnly
     @Path("my")
-    public JteHtml myevents(
+    public MustacheHtml myevents(
             @QueryParam("success") String success,
             @QueryParam("display") String display)
             throws IOException {
@@ -160,7 +160,7 @@ public class EventApi {
         for (PlayerSubscription s : subs) {
             Event event = null;
             for (Event evt : events) {
-                if (evt.getId() == s.getEvent().getId()) {
+                if (evt.getId().equals(s.getEvent().getId())) {
                     event = evt;
                     break;
                 }
@@ -215,7 +215,7 @@ public class EventApi {
         for (PlayerPendingSubscription pending : pendingSubs) {
             Event event = null;
             for (Event evt : pendingEvents) {
-                if (evt.getId() == pending.getEvent().getId()) {
+                if (evt.getId().equals(pending.getEvent().getId())) {
                     event = evt;
                     break;
                 }
@@ -293,7 +293,7 @@ public class EventApi {
         model.put("success", success);
         model.put("paidPayments", paymentDao.findAllPaidNotFreeByUser(loggerUser.getEmail()));
 
-        return new JteHtml(model, "event/myevents.jte");
+        return new MustacheHtml(model, "event/myevents.mustache");
     }
 
     private Integer resolvePendingQueueAhead(
@@ -351,7 +351,7 @@ public class EventApi {
     @GET
     @LoggedOnly
     @Path("my/{playersubscriptionId}/eventcollection/{eventCollectionId}")
-    public JteHtml selectEventCollectionVariant(
+    public MustacheHtml selectEventCollectionVariant(
             @PathParam("playersubscriptionId") Integer playersubscriptionId,
             @PathParam("eventCollectionId") Integer eventCollectionId) {
 
@@ -458,7 +458,7 @@ public class EventApi {
         model.put("canSelectEvent", canSelectEvent);
         model.put("ineligibleReason", ineligibleReason);
 
-        return new JteHtml(model, "event/selectEventCollectionVariant.jte");
+        return new MustacheHtml(model, "event/selectEventCollectionVariant.mustache");
     }
 
     @POST
@@ -502,7 +502,7 @@ public class EventApi {
 
     @GET
     @Path("{id:\\d+}")
-    public JteHtml event(@PathParam("id") Integer id, @QueryParam("success") String success) throws IOException {
+    public MustacheHtml event(@PathParam("id") Integer id, @QueryParam("success") String success) throws IOException {
 
         EventCache cached = caches.getEvent().getIfPresent(id.toString());
 
@@ -518,20 +518,23 @@ public class EventApi {
         model.put("missingPlayers", cached.missingPlayerCodes);
         model.put("eventInfo", cached.eventInfo);
         model.put("success", success);
+        if (cached.event != null && cached.event.getName() != null && !cached.event.getName().isBlank()) {
+            model.put("title", cached.event.getName());
+        }
 
-        return new JteHtml(model, "event/event.jte");
+        return new MustacheHtml(model, "event/event.mustache");
     }
 
     @GET
     @Path("new")
     @RequireRole(RoleCode.EVENT_ADMIN)
-    public JteHtml newE(@PathParam("id") Integer id) {
+    public MustacheHtml newE(@PathParam("id") Integer id) {
         return edit(null, null);
     }
 
     @GET
     @Path("{group}")
-    public JteHtml events(
+    public MustacheHtml events(
             @QueryParam("status") @DefaultValue("ACTIVE") String statusString,
             @PathParam("group") String group,
             @QueryParam("seasonId") Integer seasonId)
@@ -564,6 +567,7 @@ public class EventApi {
 
         Map<String, Object> model = new HashMap<String, Object>();
         model.put("page", "events");
+        model.put("titleKey", "events.title");
         model.put("status", statusString);
         model.put("events", eventsCache.events);
         model.put("eventGroup", eventsCache.group);
@@ -574,13 +578,13 @@ public class EventApi {
         } else {
             model.put("filterUrl", "/event");
         }
-        return new JteHtml(model, "event/events.jte");
+        return new MustacheHtml(model, "event/events.mustache");
     }
 
     @GET
     @Path("{id:\\d+}/edit")
     @RequireRole(RoleCode.ARBITRE)
-    public JteHtml edit(@PathParam("id") Integer id, @QueryParam("success") String success) {
+    public MustacheHtml edit(@PathParam("id") Integer id, @QueryParam("success") String success) {
         Map<String, Object> model = new HashMap<String, Object>();
         boolean canEdit = loggerUser.hasRole(RoleCode.EVENT_ADMIN);
         model.put("readOnly", !canEdit);
@@ -602,7 +606,7 @@ public class EventApi {
         model.put("eventGroups", eventGroupService.all());
         model.put("eventCollections", eventCollectionService.allOrdered());
         model.put("success", success);
-        return new JteHtml(model, "event/eventEdit.jte");
+        return new MustacheHtml(model, "event/eventEdit.mustache");
     }
 
     @POST

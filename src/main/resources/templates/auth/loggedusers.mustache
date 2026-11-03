@@ -1,0 +1,60 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.loggedUsers{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-person-lines-fill fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}heading.loggedUsers{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.loggedUsersDesc{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+          <h2 class="h5 mb-0">{{#i18n}}heading.loggedUsers{{/i18n}}</h2>
+          <span class="text-body-secondary">{{sessionCountText}}</span>
+        </div>
+        {{#hasSessions}}
+          <table class="table table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">{{#i18n}}payment.email{{/i18n}}</th>
+                <th scope="col">{{#i18n}}logas.displayName{{/i18n}}</th>
+                <th scope="col">{{#i18n}}loggedUsers.lastSeen{{/i18n}}</th>
+                <th scope="col">{{#i18n}}loggedUsers.session{{/i18n}}</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#safeSessions}}<tr>
+                <td>{{email}}</td>
+                <td>{{username}}</td>
+                <td>{{lastSeen}}</td>
+                <td><code>{{sessionIdShort}}</code></td>
+                <td>
+                  {{#admin}}<span class="badge bg-secondary">{{#i18n}}menu.admin{{/i18n}}</span>{{/admin}}
+                </td>
+              </tr>{{/safeSessions}}
+            </tbody>
+          </table>
+        {{/hasSessions}}
+        {{^hasSessions}}
+          <p class="text-body-secondary mb-0">{{#i18n}}loggedUsers.none{{/i18n}}</p>
+        {{/hasSessions}}
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

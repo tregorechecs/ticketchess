@@ -1,0 +1,67 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}breadcrumb.organisations{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      {{#successIsCreated}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}organisations.success.created{{/i18n}}</div>
+      {{/successIsCreated}}
+      {{#successIsUpdated}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}organisations.success.updated{{/i18n}}</div>
+      {{/successIsUpdated}}
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-building fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.organisations{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.organisations{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <div class="mb-3">
+          <a class="btn btn-success" href="{{contextPath}}/admin/organisations/new">{{#i18n}}action.addOrganisation{{/i18n}}</a>
+        </div>
+        <table class="table table-striped align-middle mb-0 mt-3">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{{#i18n}}label.slug{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.orgName{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.baseUrl{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.superUserEmail{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.active{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#organisations}}
+            <tr>
+              <td>{{id}}</td>
+              <td>{{slug}}</td>
+              <td>{{name}}</td>
+              <td>{{baseUrl}}</td>
+              <td>{{superUserEmail}}</td>
+              <td>{{#active}}{{#i18n}}label.yes{{/i18n}}{{/active}}{{^active}}{{#i18n}}label.no{{/i18n}}{{/active}}</td>
+              <td>
+                <a class="btn btn-sm btn-outline-primary" href="{{contextPath}}/admin/organisations/{{id}}">{{#i18n}}action.edit{{/i18n}}</a>
+              </td>
+            </tr>
+            {{/organisations}}
+          </tbody>
+        </table>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

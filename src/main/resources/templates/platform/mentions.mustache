@@ -1,0 +1,85 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<body class="d-flex flex-column min-vh-100">
+{{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+    <div class="container my-5">
+    <h1 class="mb-4">{{#i18n}}legal.title{{/i18n}}</h1>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.publisher.title{{/i18n}}</h3>
+        <p>{{publisherText}}</p>
+        <p>{{#i18n}}legal.contactEmail{{/i18n}}{{#hasOrgEmail}} <a href="mailto:{{pageConfig.orgEmail}}">{{pageConfig.orgEmail}}</a>{{/hasOrgEmail}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.hosting.title{{/i18n}}</h3>
+        <p>{{hostingText}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.purpose.title{{/i18n}}</h3>
+        <p>{{purposeText}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.payment.title{{/i18n}}</h3>
+        <p>{{#i18n}}legal.payment.online{{/i18n}}</p>
+        <p>{{#i18n}}legal.payment.transfer{{/i18n}}</p>
+        <p>{{#i18n}}legal.payment.dispute{{/i18n}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.users.title{{/i18n}}</h3>
+        <p>{{#i18n}}legal.users.google{{/i18n}}</p>
+        <p>{{#i18n}}legal.users.auth{{/i18n}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.data.title{{/i18n}}</h3>
+        <p>{{#i18n}}legal.data.collected{{/i18n}}</p>
+        <ul>
+            <li>{{#i18n}}legal.data.item.license{{/i18n}}</li>
+            <li>{{#i18n}}legal.data.item.email{{/i18n}}</li>
+            <li>{{#i18n}}legal.data.item.registration{{/i18n}}</li>
+        </ul>
+        <p>{{#i18n}}legal.data.source{{/i18n}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.cookies.title{{/i18n}}</h3>
+        <p>{{#i18n}}legal.cookies.text{{/i18n}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.rights.title{{/i18n}}</h3>
+        <p>{{#i18n}}legal.rights.text{{/i18n}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.ip.title{{/i18n}}</h3>
+        <p>{{ipText}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.liability.title{{/i18n}}</h3>
+        <p>{{liabilityText}}</p>
+    </section>
+
+    <section class="mb-4">
+        <h3>{{#i18n}}legal.software.title{{/i18n}}</h3>
+        <p>{{#i18n}}legal.software.text{{/i18n}}</p>
+        {{#hasSourceUrl}}
+          <p>
+            <a href="{{pageConfig.sourceUrl}}" target="_blank" rel="noopener noreferrer">{{#i18n}}legal.software.link{{/i18n}}</a>
+            —
+            <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">{{#i18n}}footer.license{{/i18n}}</a>
+          </p>
+        {{/hasSourceUrl}}
+    </section>
+</div>
+    </main>
+    {{> platform/footer}}
+</body>
+</html>

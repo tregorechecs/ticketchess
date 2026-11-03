@@ -11,6 +11,7 @@ import com.github.gcolin.membership.LicensePrice;
 import com.github.gcolin.membership.MembershipOption;
 import com.github.gcolin.membership.MembershipOptionAccessRule;
 import com.github.gcolin.membership.MembershipOptionType;
+import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.event.EventStatus;
 import com.github.gcolin.membership.LicensePriceCalculator;
@@ -35,8 +36,15 @@ public class DbInit {
         this.emf = emf;
     }
 
-    public void initEvents() {
+    /** EM with org filter disabled — required for License/ClubSeason {@code @AdditionalCriteria}. */
+    private EntityManager createEm() {
         EntityManager em = emf.createEntityManager();
+        OrgScope.disableFilter(em);
+        return em;
+    }
+
+    public void initEvents() {
+        EntityManager em = createEm();
         Long count = em.createQuery("select count(e) from Event e", Long.class).getSingleResult();
 
         if (count == 0) {
@@ -56,6 +64,7 @@ public class DbInit {
                 event1.setStartDate(LocalDate.now().atStartOfDay().plus(1L, ChronoUnit.DAYS));
                 event1.setEndDate(LocalDate.now().atStartOfDay().plus(1L, ChronoUnit.DAYS));
                 event1.setPriceCents(1000L);
+                event1.setYoungPriceCents(0L);
                 event1.setStatus(EventStatus.ACTIVE);
                 if (i % 3 == 0) {
                     event1.setEventType(com.github.gcolin.event.EventType.RAPID);
@@ -83,6 +92,7 @@ public class DbInit {
                 }
 
                 em.persist(event1);
+                em.flush(); // assign IDENTITY ids in loop order (Sample Event N -> id N)
 
                 if (i == 1) {
                     EventOption maxSubsOption = new EventOption();
@@ -96,16 +106,17 @@ public class DbInit {
             for (int i = 0; i < 10; i++) {
                 CustomPlayer player = new CustomPlayer();
                 player.setBirthDate("2010-10-10");
-                player.setCreationUser("test@test.com");
+                player.setCreationUser("seed@test.com");
                 player.setElo("1000N");
                 player.setFirstname("John" + (i + 1));
                 player.setGender(true);
                 player.setLicence("12345" + i);
                 player.setName("Doe");
                 em.persist(player);
+                em.flush(); // IDENTITY id required for nrFfe "@{id}"
 
                 PlayerSubscription sub = new PlayerSubscription();
-                sub.setCreationUser("test@test.com");
+                sub.setCreationUser("seed@test.com");
                 sub.setEvent(evt);
                 sub.setNrFfe("@" + player.getId());
                 sub.setAmountCents(1000L);
@@ -115,7 +126,7 @@ public class DbInit {
             }
             {
                 PlayerSubscription sub = new PlayerSubscription();
-                sub.setCreationUser("test@test.com");
+                sub.setCreationUser("seed@test.com");
                 sub.setEvent(evt2);
                 sub.setNrFfe("X82897");
                 sub.setAmountCents(1000L);
@@ -124,7 +135,7 @@ public class DbInit {
             }
             for (int i = 0; i < 3; i++) {
                 PlayerSubscription sub = new PlayerSubscription();
-                sub.setCreationUser("test@test.com");
+                sub.setCreationUser("seed@test.com");
                 sub.setEvent(evt9);
                 sub.setNrFfe("@" + players.get(i).getId());
                 sub.setAmountCents(1000L);
@@ -137,7 +148,7 @@ public class DbInit {
     }
 
     public void initMembershipOptions() {
-        EntityManager em = emf.createEntityManager();
+        EntityManager em = createEm();
         Long count = em.createQuery("select count(m) from MembershipOption m", Long.class).getSingleResult();
 
         if (count == 0) {
@@ -232,7 +243,7 @@ public class DbInit {
     }
 
     public void initClubSeason() {
-        EntityManager em = emf.createEntityManager();
+        EntityManager em = createEm();
         Long count = em.createQuery("select count(s) from ClubSeason s", Long.class).getSingleResult();
         if (count == 0) {
             em.getTransaction().begin();
@@ -249,7 +260,7 @@ public class DbInit {
     }
 
     public void initLicenses() {
-        EntityManager em = emf.createEntityManager();
+        EntityManager em = createEm();
         Long count = em.createQuery("select count(l) from License l", Long.class).getSingleResult();
 
         if (count == 0) {

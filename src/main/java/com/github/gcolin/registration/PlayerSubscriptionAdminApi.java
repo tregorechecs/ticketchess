@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("playersubscription-admin")
 @RequireRole(RoleCode.EVENT_ADMIN)
@@ -58,13 +58,13 @@ public class PlayerSubscriptionAdminApi {
     private UriInfo uriInfo;
 
     @GET
-    public JteHtml page(@jakarta.ws.rs.QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml page(@jakarta.ws.rs.QueryParam("seasonId") Integer seasonId) {
         return page(null, null, null, null, seasonId);
     }
 
     @GET
     @Path("result")
-    public JteHtml pageResult(
+    public MustacheHtml pageResult(
             @jakarta.ws.rs.QueryParam("replaced") Integer replaced,
             @jakarta.ws.rs.QueryParam("failed") Integer failed,
             @jakarta.ws.rs.QueryParam("deleted") Integer deleted,
@@ -148,7 +148,7 @@ public class PlayerSubscriptionAdminApi {
         return Response.seeOther(uriBuilder.build()).build();
     }
 
-    private JteHtml page(Integer replaced, Integer failed, Integer deleted, Integer deleteFailed, Integer seasonId) {
+    private MustacheHtml page(Integer replaced, Integer failed, Integer deleted, Integer deleteFailed, Integer seasonId) {
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
         List<Map<String, Object>> rows = new ArrayList<>();
         List<Map<String, Object>> pendingRows = new ArrayList<>();
@@ -206,7 +206,7 @@ public class PlayerSubscriptionAdminApi {
         model.put("deleted", deleted);
         model.put("deleteFailed", deleteFailed);
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "registration/playersubscriptionAdmin.jte");
+        return new MustacheHtml(model, "registration/playersubscriptionAdmin.mustache");
     }
 
     private IPlayer resolvePlayer(String nrFfe) {

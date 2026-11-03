@@ -8,7 +8,7 @@ import java.util.Collections;
 public class MentionApi {
 
     @GET
-    public JteHtml get() {
-        return new JteHtml(Collections.emptyMap(), "platform/mentions.jte");
+    public MustacheHtml get() {
+        return new MustacheHtml(Collections.emptyMap(), "platform/mentions.mustache");
     }
 }

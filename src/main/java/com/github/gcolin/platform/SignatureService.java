@@ -1,5 +1,7 @@
 package com.github.gcolin.platform;
 
+import com.github.gcolin.organisation.OrganisationFiles;
+
 import jakarta.ws.rs.WebApplicationException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +25,7 @@ public class SignatureService {
     }
 
     public Path getSignatureFile() {
-        Path dir = Path.of(config.getConfigDir());
+        Path dir = OrganisationFiles.currentDir(config);
         for (String name : NAMES) {
             Path candidate = dir.resolve(name);
             if (Files.isRegularFile(candidate)) {
@@ -60,7 +62,7 @@ public class SignatureService {
             throw new WebApplicationException("Signature file must be a PNG, JPEG or WebP image", 400);
         }
 
-        Path dir = Path.of(config.getConfigDir());
+        Path dir = OrganisationFiles.currentDir(config);
         Files.createDirectories(dir);
         String fileName = "signature." + extension;
         Path target = dir.resolve(fileName);
@@ -82,7 +84,7 @@ public class SignatureService {
     }
 
     public void delete() throws IOException {
-        Path dir = Path.of(config.getConfigDir());
+        Path dir = OrganisationFiles.currentDir(config);
         for (String name : NAMES) {
             Files.deleteIfExists(dir.resolve(name));
         }

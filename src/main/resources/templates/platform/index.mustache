@@ -1,0 +1,19 @@
+    
+
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+    <html>
+
+    <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+
+{{> platform/menubar}}
+        <main class="container flex-fill mt-3"> <div class="bg-body p-5 rounded">
+        <h1>{{#i18n}}home.title{{/i18n}}</h1> <p class="lead">{{#i18n}}home.description{{/i18n}}</p>
+        <a class="btn btn-lg btn-primary" href="{{contextPath}}/event" role="button">{{#i18n}}home.button{{/i18n}} »</a>
+        </div> </main>
+
+		{{> platform/footer}}
+    </body>
+
+    </html>

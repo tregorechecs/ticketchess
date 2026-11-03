@@ -54,7 +54,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class EventApiTest {
 
@@ -78,11 +78,11 @@ class EventApiTest {
         inject(api, "eventGroupFilter", eventGroupFilter);
         inject(api, "clubSeasonFilter", clubSeasonFilter);
 
-        JteHtml first = api.events("ACTIVE", null);
-        JteHtml second = api.events("ACTIVE", null);
+        MustacheHtml first = api.events("ACTIVE", null);
+        MustacheHtml second = api.events("ACTIVE", null);
 
-        assertEquals("event/events.jte", first.getTemplate());
-        assertEquals("event/events.jte", second.getTemplate());
+        assertEquals("event/events.mustache", first.getTemplate());
+        assertEquals("event/events.mustache", second.getTemplate());
         verify(eventDao, times(1)).findByStatus(eq(EventStatus.ACTIVE), any(SeasonScope.class));
         verify(eventDao, times(1)).detachAll(anyList());
     }
@@ -105,11 +105,11 @@ class EventApiTest {
         inject(api, "caches", caches);
         inject(api, "eventService", eventDao);
 
-        JteHtml first = api.event(33, "ok");
-        JteHtml second = api.event(33, "ok");
+        MustacheHtml first = api.event(33, "ok");
+        MustacheHtml second = api.event(33, "ok");
 
-        assertEquals("event/event.jte", first.getTemplate());
-        assertEquals("event/event.jte", second.getTemplate());
+        assertEquals("event/event.mustache", first.getTemplate());
+        assertEquals("event/event.mustache", second.getTemplate());
         assertEquals(event, first.getModel().get("event"));
         assertEquals(List.of(), first.getModel().get("missingPlayers"));
         verify(eventDao, times(1)).buildCache(33);
@@ -140,9 +140,9 @@ class EventApiTest {
         inject(api, "caches", caches);
         inject(api, "eventService", eventDao);
 
-        JteHtml html = api.event(44, null);
+        MustacheHtml html = api.event(44, null);
 
-        assertEquals("event/event.jte", html.getTemplate());
+        assertEquals("event/event.mustache", html.getTemplate());
         assertEquals(event, html.getModel().get("event"));
     }
 
@@ -183,10 +183,10 @@ class EventApiTest {
         when(loggedUser.hasRole(RoleCode.EVENT_ADMIN)).thenReturn(true);
         inject(api, "loggerUser", loggedUser);
 
-        JteHtml html = api.edit(5, "save");
+        MustacheHtml html = api.edit(5, "save");
         Map<String, Object> model = html.getModel();
 
-        assertEquals("event/eventEdit.jte", html.getTemplate());
+        assertEquals("event/eventEdit.mustache", html.getTemplate());
         assertEquals(event, model.get("event"));
         assertEquals(info, model.get("eventInfo"));
         assertEquals("save", model.get("success"));
@@ -214,9 +214,9 @@ class EventApiTest {
             throw new RuntimeException(ex);
         }
 
-        JteHtml html = api.edit(null, null);
+        MustacheHtml html = api.edit(null, null);
 
-        assertEquals("event/eventEdit.jte", html.getTemplate());
+        assertEquals("event/eventEdit.mustache", html.getTemplate());
         assertTrue(html.getModel().get("event") instanceof Event);
     }
 
@@ -405,9 +405,9 @@ class EventApiTest {
         inject(api, "properties", new java.util.Properties());
         inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?display=all")));
 
-        JteHtml html = api.myevents(null, "all");
+        MustacheHtml html = api.myevents(null, "all");
 
-        assertEquals("event/myevents.jte", html.getTemplate());
+        assertEquals("event/myevents.mustache", html.getTemplate());
         @SuppressWarnings("unchecked")
         List<Event> pendingEvents = (List<Event>) html.getModel().get("pendingEvents");
         assertEquals(1, pendingEvents.size());
@@ -480,7 +480,7 @@ class EventApiTest {
         inject(api, "properties", new java.util.Properties());
         inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?display=all")));
 
-        JteHtml html = api.myevents(null, "all");
+        MustacheHtml html = api.myevents(null, "all");
 
         @SuppressWarnings("unchecked")
         List<Event> pendingEvents = (List<Event>) html.getModel().get("pendingEvents");

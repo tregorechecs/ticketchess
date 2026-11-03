@@ -1,0 +1,67 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/license-admin">{{#i18n}}menu.licenses{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#licenseIsEdit}}{{#i18n}}page.licenseEdit{{/i18n}}{{/licenseIsEdit}}{{^licenseIsEdit}}{{#i18n}}page.licenseNew{{/i18n}}{{/licenseIsEdit}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <h1 class="h3 mb-0">{{#licenseIsEdit}}{{#i18n}}page.licenseEdit{{/i18n}}{{/licenseIsEdit}}{{^licenseIsEdit}}{{#i18n}}page.licenseNew{{/i18n}}{{/licenseIsEdit}}</h1>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <form method="post" action="{{contextPath}}/license-admin">
+          {{#licenseIsEdit}}<input type="hidden" name="id" value="{{license.id}}">{{/licenseIsEdit}}
+          <div class="mb-3">
+            <label for="name" class="form-label">{{#i18n}}label.name{{/i18n}}</label>
+            <input type="text" class="form-control" id="name" name="name" value="{{license.name}}" required>
+          </div>
+          <div class="mb-3">
+            <label for="accessRule" class="form-label">{{#i18n}}label.accessibility{{/i18n}}</label>
+            <select class="form-select" id="accessRule" name="accessRule" required>
+              {{#accessRuleChoices}}{{#selected}}
+                <option value="{{value}}" selected>{{label}}</option>
+              {{/selected}}{{^selected}}
+                <option value="{{value}}">{{label}}</option>
+              {{/selected}}{{/accessRuleChoices}}
+            </select>
+          </div>
+          {{#licenseIsEdit}}
+            <div class="mb-3">
+              <a href="{{contextPath}}/license-admin/{{license.id}}/price" class="btn btn-secondary">{{#i18n}}action.managePrices{{/i18n}}</a>
+            </div>
+          {{/licenseIsEdit}}
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">{{#i18n}}action.save{{/i18n}}</button>
+            {{#licenseIsEdit}}
+              <button type="button" class="btn btn-outline-danger" onclick="removeLicense({{license.id}})">{{#i18n}}action.delete{{/i18n}}</button>
+            {{/licenseIsEdit}}
+            <a href="{{contextPath}}/license-admin" class="btn btn-secondary">{{#i18n}}action.cancel{{/i18n}}</a>
+          </div>
+        </form>
+      </div>
+    </main>
+    {{> platform/footer}}
+    <script type="text/javascript">
+      function removeLicense(id) {
+        if (!confirm('{{#i18n}}license.confirmDelete{{/i18n}}')) {
+          return;
+        }
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = '{{contextPath}}/license-admin';
+        form.innerHTML = '<input type="hidden" name="id" value="' + id + '">' +
+                         '<input type="hidden" name="toRemove" value="true">';
+        document.body.appendChild(form);
+        form.submit();
+      }
+    </script>
+  </body>
+</html>

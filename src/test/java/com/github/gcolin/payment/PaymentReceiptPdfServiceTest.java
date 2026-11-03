@@ -21,6 +21,10 @@ class PaymentReceiptPdfServiceTest {
         assertEquals("vingt-cinq euros et cinquante centimes", PaymentReceiptPdfService.amountToFrenchWords(25.50));
         assertEquals("cent euros", PaymentReceiptPdfService.amountToFrenchWords(100));
         assertEquals("soixante et onze euros", PaymentReceiptPdfService.amountToFrenchWords(71));
+        assertEquals("zéro euro", PaymentReceiptPdfService.amountToFrenchWords(0));
+        assertEquals("deux euros et un centime", PaymentReceiptPdfService.amountToFrenchWords(2.01));
+        assertEquals("quatre-vingt-dix-neuf euros et quatre-vingt-dix-neuf centimes",
+                PaymentReceiptPdfService.amountToFrenchWords(99.99));
     }
 
     @Test
@@ -89,6 +93,21 @@ class PaymentReceiptPdfServiceTest {
         assertTrue(text.contains("Ada Lovelace"), text);
         assertTrue(text.contains("Reglement de creance") || text.contains("Règlement de créance"), text);
         assertFalse(text.contains("Attestation de don"), text);
+    }
+
+    @Test
+    void donationUsesAmountCentsAndFallbackDonorAndDefaults() throws Exception {
+        PaymentReceiptPdfService service = new PaymentReceiptPdfService();
+        service.setProperties(new Properties());
+        Payment payment = new Payment();
+        payment.setId(11L);
+        payment.setAmountCents(1234L);
+        payment.setUserEmail("fallback@example.com");
+        payment.setType(PaymentType.BANK_TRANSFER);
+        payment.setUpdatedAt(LocalDateTime.of(2026, 5, 1, 8, 0));
+        byte[] pdf = service.generateDonationAttestation(payment);
+        assertTrue(new String(pdf, 0, Math.min(8, pdf.length)).startsWith("%PDF"));
+        assertTrue(extractPdfText(pdf).contains("fallback@example.com"));
     }
 
     private static String extractPdfText(byte[] pdf) throws Exception {

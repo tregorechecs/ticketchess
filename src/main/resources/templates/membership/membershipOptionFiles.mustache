@@ -1,0 +1,146 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.membershipOptionFiles{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-folder fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.membershipOptionFiles{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}help.membershipOptionFiles{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      {{#hasError}}<div class="alert alert-danger" role="alert">{{errorMessageText}}</div>{{/hasError}}
+      {{#sent}}<div class="alert alert-success" role="alert">{{sentMessageText}}</div>{{/sent}}
+
+      <div class="admin-table-panel mb-4">
+        <form method="get" action="{{contextPath}}/membership-option-files" class="d-flex flex-wrap align-items-end gap-3 mb-0 w-100">
+          {{> platform/seasonFilter}}
+          <div>
+            <label for="optionId" class="form-label mb-1">{{#i18n}}membership.files.option{{/i18n}}</label>
+            {{^hasOptions}}
+              <select id="optionId" name="optionId" class="form-select" disabled>
+                <option value="">{{#i18n}}membership.files.noOptionsAvailable{{/i18n}}</option>
+              </select>
+            {{/hasOptions}}
+            {{#hasOptions}}
+              <select id="optionId" name="optionId" class="form-select" onchange="this.form.submit()">
+                {{#optionChoices}}{{#selected}}
+                  <option value="{{id}}" selected>{{label}}</option>
+                {{/selected}}{{^selected}}
+                  <option value="{{id}}">{{label}}</option>
+                {{/selected}}{{/optionChoices}}
+              </select>
+            {{/hasOptions}}
+          </div>
+        </form>
+
+        {{^showOptionPanel}}
+          <p class="text-muted mb-0 mt-3">{{#i18n}}membership.files.noOptionsAvailable{{/i18n}}</p>
+        {{/showOptionPanel}}
+        {{#showOptionPanel}}
+          <div class="border rounded p-3 mb-4 mt-3">
+            <h2 class="h6 mb-3">{{#i18n}}membership.files.uploadTitle{{/i18n}}</h2>
+            <div class="row g-3 align-items-end">
+              <div class="col-12 col-md-8">
+                <label for="upload_file" class="form-label">{{#i18n}}membership.files.file{{/i18n}}</label>
+                <input id="upload_file" type="file" class="form-control" required>
+              </div>
+              <div class="col-12 col-md-4">
+                <button type="button" class="btn btn-primary w-100" id="upload_submit">{{#i18n}}action.upload{{/i18n}}</button>
+              </div>
+            </div>
+            <div class="form-text mt-2">{{#i18n}}membership.files.uploadHint{{/i18n}}</div>
+          </div>
+          {{^hasFiles}}
+            <p class="text-muted mb-0">{{#i18n}}membership.files.empty{{/i18n}}</p>
+          {{/hasFiles}}
+          {{#hasFiles}}
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>{{#i18n}}membership.files.name{{/i18n}}</th>
+                  <th class="d-none d-md-table-cell">{{#i18n}}membership.files.size{{/i18n}}</th>
+                  <th class="d-none d-md-table-cell">{{#i18n}}membership.files.uploadedBy{{/i18n}}</th>
+                  <th>{{#i18n}}label.action{{/i18n}}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#fileRows}}<tr>
+                  <td><a href="{{contextPath}}/membership-option-files/{{id}}/download">{{originalName}}</a></td>
+                  <td class="d-none d-md-table-cell">{{#hasSize}}{{sizeLabel}}{{/hasSize}}</td>
+                  <td class="d-none d-md-table-cell">{{uploadedBy}}</td>
+                  <td>
+                    <div class="d-flex gap-2">
+                      <a class="btn btn-sm btn-outline-primary" href="{{contextPath}}/membership-option-files/{{id}}/mail{{#seasonId}}?seasonId={{seasonId}}{{/seasonId}}">{{#i18n}}action.sendMail{{/i18n}}</a>
+                      <form method="post" class="m-0" action="{{contextPath}}/membership-option-files/{{id}}/delete" onsubmit="return confirm('{{#i18n}}sub.confirmDelete{{/i18n}}')">
+                        <input type="hidden" name="optionId" value="{{selectedOptionId}}">
+                        {{#seasonId}}<input type="hidden" name="seasonId" value="{{seasonId}}">{{/seasonId}}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">{{#i18n}}action.delete{{/i18n}}</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>{{/fileRows}}
+              </tbody>
+            </table>
+          {{/hasFiles}}
+        {{/showOptionPanel}}
+      </div>
+    </main>
+    {{> platform/footer}}
+    <script>
+      (function () {
+        var submit = document.getElementById('upload_submit');
+        var fileInput = document.getElementById('upload_file');
+        var optionId = {{selectedOptionIdJs}};
+        if (!submit || !fileInput || optionId == null) {
+          return;
+        }
+        submit.addEventListener('click', async function () {
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) {
+            alert("{{#i18n}}membership.files.error.invalidFile{{/i18n}}");
+            return;
+          }
+          submit.disabled = true;
+          try {
+            var url = '{{contextPath}}/membership-option-files/upload'
+              + '?optionId=' + encodeURIComponent(optionId)
+              + '&filename=' + encodeURIComponent(file.name)
+              + '{{seasonQuery}}';
+            var res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': file.type || 'application/octet-stream' },
+              body: file,
+              redirect: 'follow'
+            });
+            if (res.redirected) {
+              window.location.href = res.url;
+              return;
+            }
+            if (!res.ok) {
+              alert("{{#i18n}}membership.files.error.uploadFailed{{/i18n}}");
+              submit.disabled = false;
+              return;
+            }
+            window.location.reload();
+          } catch (e) {
+            alert("{{#i18n}}membership.files.error.uploadFailed{{/i18n}}");
+            submit.disabled = false;
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

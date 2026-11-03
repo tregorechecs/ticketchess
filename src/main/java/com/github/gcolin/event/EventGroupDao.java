@@ -21,7 +21,6 @@ public class EventGroupDao extends AbstractDao<EventGroup> {
     public EventGroup findDetachedForEdit(int id) {
         EventGroup eventGroup = find(id);
         eventGroup.setEvents(detachAll(eventGroup.getEvents()));
-        eventGroup.setNotifications(detachAll(eventGroup.getNotifications()));
         return detach(eventGroup);
     }
 }

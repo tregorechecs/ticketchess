@@ -1,0 +1,84 @@
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="robots" content="none">
+<title>{{title}}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script type="text/javascript"
+	src="{{contextPath}}/js/bootstrap.bundle.min.js"></script>
+<link rel="stylesheet" type="text/css"
+	href="{{contextPath}}/css/theme.css" />
+<link rel="stylesheet" type="text/css"
+    href="{{contextPath}}/css/bootstrap-icons.min.css" />
+{{#pageConfig.googleFontHref}}
+<link rel="stylesheet" href="{{{pageConfig.googleFontHref}}}" />
+{{/pageConfig.googleFontHref}}
+<link rel="icon" type="image/x-icon"
+	href="{{contextPath}}/favicon.ico" />
+
+<style type="text/css">
+        :root {
+          --bs-primary: {{pageConfig.primaryColor}};
+          --bs-primary-rgb: {{pageConfig.primaryRgb}};
+          --bs-secondary: {{pageConfig.secondaryColor}};
+          --bs-secondary-rgb: {{pageConfig.secondaryRgb}};
+          --bs-link-color: {{pageConfig.primaryColor}};
+          --bs-link-color-rgb: {{pageConfig.primaryRgb}};
+          --bs-link-hover-color: {{pageConfig.primaryHover}};
+          {{#pageConfig.customFont}}
+          --bs-font-sans-serif: {{{pageConfig.fontFamily}}};
+          --bs-body-font-family: {{{pageConfig.fontFamily}}};
+          {{/pageConfig.customFont}}
+        }
+        {{#pageConfig.customFont}}
+        body, .btn, .form-control, .form-select, .navbar, .dropdown-menu, .nav-link {
+          font-family: {{{pageConfig.fontFamily}}};
+        }
+        {{/pageConfig.customFont}}
+        .btn-primary {
+          --bs-btn-bg: {{pageConfig.primaryColor}};
+          --bs-btn-border-color: {{pageConfig.primaryColor}};
+          --bs-btn-hover-bg: {{pageConfig.primaryHover}};
+          --bs-btn-hover-border-color: {{pageConfig.primaryHover}};
+          --bs-btn-active-bg: {{pageConfig.primaryHover}};
+          --bs-btn-active-border-color: {{pageConfig.primaryHover}};
+          --bs-btn-disabled-bg: {{pageConfig.primaryColor}};
+          --bs-btn-disabled-border-color: {{pageConfig.primaryColor}};
+        }
+        .btn-outline-primary {
+          --bs-btn-color: {{pageConfig.primaryColor}};
+          --bs-btn-border-color: {{pageConfig.primaryColor}};
+          --bs-btn-hover-bg: {{pageConfig.primaryColor}};
+          --bs-btn-hover-border-color: {{pageConfig.primaryColor}};
+          --bs-btn-active-bg: {{pageConfig.primaryColor}};
+          --bs-btn-active-border-color: {{pageConfig.primaryColor}};
+          --bs-btn-disabled-color: {{pageConfig.primaryColor}};
+          --bs-btn-disabled-border-color: {{pageConfig.primaryColor}};
+        }
+        .btn-secondary {
+          --bs-btn-bg: {{pageConfig.secondaryColor}};
+          --bs-btn-border-color: {{pageConfig.secondaryColor}};
+          --bs-btn-hover-bg: {{pageConfig.secondaryHover}};
+          --bs-btn-hover-border-color: {{pageConfig.secondaryHover}};
+          --bs-btn-active-bg: {{pageConfig.secondaryHover}};
+          --bs-btn-active-border-color: {{pageConfig.secondaryHover}};
+          --bs-btn-disabled-bg: {{pageConfig.secondaryColor}};
+          --bs-btn-disabled-border-color: {{pageConfig.secondaryColor}};
+        }
+        .nav-pills {
+          --bs-nav-pills-link-active-bg: {{pageConfig.primaryColor}};
+        }
+        .pagination {
+          --bs-pagination-active-bg: {{pageConfig.primaryColor}};
+          --bs-pagination-active-border-color: {{pageConfig.primaryColor}};
+        }
+        table th {
+          background: {{pageConfig.primaryColor}} !important;
+        }
+        .card-tournament {
+          border-left-color: {{pageConfig.primaryColor}};
+        }
+        .bg-chess-overlay {
+          background: url('{{contextPath}}{{backgroundUrl}}') center / cover no-repeat fixed;
+        }
+      </style>
+</head>

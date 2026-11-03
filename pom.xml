@@ -33,9 +33,11 @@
 		<angus-mail.version>2.0.5</angus-mail.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<mockito.version>5.23.0</mockito.version>
+		<eclipselink.version>5.0.2</eclipselink.version>
+		<eclipselink-maven-plugin.version>4.0.2</eclipselink-maven-plugin.version>
 		<playwright.version>1.63.0</playwright.version>
 		<caffeine.version>3.2.4</caffeine.version>
-		<jte.version>3.2.4</jte.version>
+		<mustache.version>0.9.14</mustache.version>
 		<maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
 		<excludedGroups>integration,manual-screenshots</excludedGroups>
@@ -194,9 +196,9 @@
 			<artifactId>jersey-hk2</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.hibernate.orm</groupId>
-			<artifactId>hibernate-core</artifactId>
-			<version>7.4.6.Final</version>
+			<groupId>org.eclipse.persistence</groupId>
+			<artifactId>eclipselink</artifactId>
+			<version>${eclipselink.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>
@@ -204,9 +206,9 @@
 			<version>${caffeine.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>gg.jte</groupId>
-			<artifactId>jte</artifactId>
-			<version>${jte.version}</version>
+			<groupId>com.github.spullara.mustache.java</groupId>
+			<artifactId>compiler</artifactId>
+			<version>${mustache.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.jetty.ee11.websocket</groupId>
@@ -400,24 +402,6 @@
 		</resources>
 		<plugins>
 			<plugin>
-				<groupId>gg.jte</groupId>
-				<artifactId>jte-maven-plugin</artifactId>
-				<version>${jte.version}</version>
-				<configuration>
-					<sourceDirectory>${project.basedir}/src/main/jte</sourceDirectory>
-					<contentType>Html</contentType>
-				</configuration>
-				<executions>
-					<execution>
-						<id>jte-generate</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>generate</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.15.0</version>
@@ -425,6 +409,25 @@
 					<source>25</source>
 					<target>25</target>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>com.ethlo.persistence.tools</groupId>
+				<artifactId>eclipselink-maven-plugin</artifactId>
+				<version>${eclipselink-maven-plugin.version}</version>
+				<configuration>
+					<basePackage>com.github.gcolin</basePackage>
+					<!-- Keep META-INF/persistence.xml as the source of truth. -->
+					<updatePersistenceXml>false</updatePersistenceXml>
+				</configuration>
+				<executions>
+					<execution>
+						<id>weave</id>
+						<phase>process-classes</phase>
+						<goals>
+							<goal>weave</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

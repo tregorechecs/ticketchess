@@ -9,7 +9,12 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import org.eclipse.jetty.ee11.webapp.WebAppContext;
 import org.eclipse.jetty.server.Server;
 import org.junit.jupiter.api.AfterEach;
@@ -26,6 +31,7 @@ public abstract class PlaywrightBaseTest {
     private String previousConfigDir;
     private String previousTestProperty;
     private String previousLoadtestProperty;
+    private Path tempConfigDir;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -34,9 +40,13 @@ public abstract class PlaywrightBaseTest {
         System.setProperty("test", "true");
         System.setProperty("loadtest", "true");
         previousConfigDir = System.getProperty("CONFIG_DIR");
-        System.setProperty(
-                "CONFIG_DIR",
-                Path.of("src/test/resources").toAbsolutePath().normalize().toString());
+        // Isolate CONFIG_DIR: OrganisationBootstrap migrates club/stripe keys out of params.properties.
+        // A temp copy keeps src/test/resources/params.properties intact across the suite.
+        tempConfigDir = Files.createTempDirectory("ticketchess-it-config");
+        Path sourceParams =
+                Path.of("src/test/resources/params.properties").toAbsolutePath().normalize();
+        Files.copy(sourceParams, tempConfigDir.resolve("params.properties"));
+        System.setProperty("CONFIG_DIR", tempConfigDir.toAbsolutePath().normalize().toString());
         server = new Server(8080);
         WebAppContext context = new WebAppContext();
         context.setContextPath("/");
@@ -98,6 +108,8 @@ public abstract class PlaywrightBaseTest {
         restoreProperty("CONFIG_DIR", previousConfigDir);
         restoreProperty("test", previousTestProperty);
         restoreProperty("loadtest", previousLoadtestProperty);
+        deleteRecursively(tempConfigDir);
+        tempConfigDir = null;
     }
 
     private static void restoreProperty(String key, String value) {
@@ -106,5 +118,24 @@ public abstract class PlaywrightBaseTest {
         } else {
             System.setProperty(key, value);
         }
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.deleteIfExists(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.deleteIfExists(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 }

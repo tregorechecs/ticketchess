@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("logged-users")
 @RequireRole(RoleCode.ADMIN)
@@ -27,7 +27,7 @@ public class LoggedUsersApi {
     private ActiveLoggedUsers activeLoggedUsers;
 
     @GET
-    public JteHtml page() {
+    public MustacheHtml page() {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (ActiveSession session : activeLoggedUsers.listActive()) {
             Map<String, Object> row = new HashMap<>();
@@ -45,7 +45,9 @@ public class LoggedUsersApi {
 
         Map<String, Object> model = new HashMap<>();
         model.put("sessions", rows);
-        model.put("sessionCount", rows.size());
-        return new JteHtml(model, "auth/loggedusers.jte");
+        AuthMustacheView.enrichLoggedUsers(model, rows);
+        model.put("titleKey", "page.loggedUsers");
+        model.put("activePageTitleKey", "page.loggedUsers");
+        return new MustacheHtml(model, "auth/loggedusers.mustache");
     }
 }

@@ -1,0 +1,99 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/payment">{{#i18n}}breadcrumb.payments{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}breadcrumb.audit{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-shield-check fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.paymentAudit{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}paymentAudit.heading{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <form method="get" action="{{contextPath}}/payment/audit" class="d-flex align-items-center mb-0">
+          <div class="input-group w-auto">
+            <label for="audit_season" class="input-group-text">{{#i18n}}label.season{{/i18n}}</label>
+            <select id="audit_season" name="seasonId" class="form-select w-auto" onchange="this.form.submit()">
+              {{#seasons}}{{#selected}}<option value="{{value}}" selected>{{label}}</option>{{/selected}}{{^selected}}<option value="{{value}}">{{label}}</option>{{/selected}}{{/seasons}}
+            </select>
+          </div>
+        </form>
+      </div>
+
+      {{^auditRowsEmpty}}
+      <div class="admin-table-panel mb-4">
+        <h2 class="h5 mb-3">{{mismatchCountText}}</h2>
+        <table class="table table-striped align-middle mb-0">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{{#i18n}}payment.email{{/i18n}}</th>
+              <th scope="col">{{#i18n}}paymentAudit.paymentAmount{{/i18n}}</th>
+              <th scope="col">{{#i18n}}paymentAudit.expectedSum{{/i18n}}</th>
+              <th scope="col">{{#i18n}}paymentAudit.currentSum{{/i18n}}</th>
+              <th scope="col">{{#i18n}}paymentAudit.gap{{/i18n}}</th>
+              <th scope="col">{{#i18n}}paymentAudit.subscriptions{{/i18n}}</th>
+              <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#auditRows}}
+            <tr>
+              <td>
+                {{#hasPayment}}<a href="{{contextPath}}/payment/{{paymentId}}/edit">{{paymentId}}</a>{{/hasPayment}}
+              </td>
+              <td>{{userEmail}}</td>
+              <td>{{paymentAmountFormatted}} €</td>
+              <td>{{expectedAmountFormatted}} €</td>
+              <td>{{sumAmountFormatted}} €</td>
+              {{#gapIsHigher}}<td class="text-danger">{{gapAmountFormatted}} € {{#i18n}}paymentAudit.paymentHigher{{/i18n}}</td>{{/gapIsHigher}}
+              {{#gapIsLower}}<td class="text-warning">{{gapAmountFormatted}} € {{#i18n}}paymentAudit.paymentLower{{/i18n}}</td>{{/gapIsLower}}
+              {{#gapIsMissingAmount}}<td class="text-warning">{{gapAmountFormatted}} € {{#i18n}}paymentAudit.missingAmounts{{/i18n}}</td>{{/gapIsMissingAmount}}
+              {{#gapIsConsistent}}<td class="text-muted">{{gapAmountFormatted}} € {{#i18n}}paymentAudit.consistent{{/i18n}}</td>{{/gapIsConsistent}}
+              <td>
+                {{#hasSubs}}
+                <ul class="mb-0 ps-3">
+                  {{#subs}}
+                  <li>{{licence}} – {{#hasEvent}}{{eventName}}{{/hasEvent}}{{^hasEvent}}?{{/hasEvent}} –
+                    {{#hasAmount}}{{amountFormatted}} €{{/hasAmount}}
+                    {{^hasAmount}}<em>{{#i18n}}paymentAudit.undefinedAmount{{/i18n}}</em>{{/hasAmount}}
+                  </li>
+                  {{/subs}}
+                </ul>
+                {{/hasSubs}}
+                {{^hasSubs}}<em class="text-muted">{{#i18n}}paymentAudit.noSubs{{/i18n}}</em>{{/hasSubs}}
+              </td>
+              <td>
+                {{#showFixForm}}
+                <form method="post" action="{{contextPath}}/payment/audit/fix/{{paymentId}}">
+                  {{#seasonId}}<input type="hidden" name="seasonId" value="{{seasonId}}">{{/seasonId}}
+                  <button type="submit" class="btn btn-sm btn-outline-warning">{{#i18n}}action.fix{{/i18n}}</button>
+                </form>
+                {{/showFixForm}}
+              </td>
+            </tr>
+            {{/auditRows}}
+          </tbody>
+        </table>
+      </div>
+      {{/auditRowsEmpty}}
+      {{#auditRowsEmpty}}
+      <div class="alert alert-success">{{#i18n}}paymentAudit.allOk{{/i18n}}</div>
+      {{/auditRowsEmpty}}
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

@@ -151,7 +151,8 @@ public class EventDao extends AbstractDao<Event> {
         Event event = find(eventId);
         fillSubscriptionLimits(event);
         cached.event = event;
-        List<PlayerSubscription> subscriptions = event.getSubscriptions();
+        List<PlayerSubscription> subscriptions = playerSubscriptionDao.get().findByEvent(event);
+        event.setSubscriptions(subscriptions);
         List<DisplayPlayer> players = new ArrayList<>();
         List<String> missingPlayerCodes = new ArrayList<>();
         for (PlayerSubscription sub : subscriptions) {
@@ -304,6 +305,7 @@ public class EventDao extends AbstractDao<Event> {
         }
         if (event.getId() == null) {
             persist(event);
+            flush();
         } else {
             merge(event);
         }

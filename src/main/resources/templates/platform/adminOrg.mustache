@@ -1,0 +1,154 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.adminOrg{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      {{#successIsConfigSaved}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.configSaved{{/i18n}}</div>
+      {{/successIsConfigSaved}}
+      {{#errorIsConfigSaveFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.configSaveFailed{{/i18n}}</div>
+      {{/errorIsConfigSaveFailed}}{{#errorIsConfigInvalid}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.configInvalid{{/i18n}}</div>
+      {{/errorIsConfigInvalid}}
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-bank fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.adminOrg{{/i18n}}</h1>
+          <p class="text-body-secondary mb-0">{{#i18n}}help.adminOrg{{/i18n}}</p>
+          {{#currentOrgName}}
+          <p class="text-body-secondary mb-0 mt-1"><span class="badge text-bg-secondary">{{currentOrgName}}{{#currentOrgSlug}} ({{currentOrgSlug}}){{/currentOrgSlug}}</span></p>
+          {{/currentOrgName}}
+          {{#currentOrgId}}
+          <p class="mb-0 mt-2"><a href="{{contextPath}}/admin/organisations/{{currentOrgId}}?tab=club">{{#i18n}}admin.tab.club{{/i18n}} / {{#i18n}}admin.tab.invoice{{/i18n}} / {{#i18n}}admin.tab.files{{/i18n}} / {{#i18n}}admin.tab.stripe{{/i18n}}</a></p>
+          {{/currentOrgId}}
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+      <ul class="nav nav-tabs rounded-top-2" id="org-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link {{#tabIsoauth}}active{{/tabIsoauth}}" id="oauth-tab" data-bs-toggle="tab" data-bs-target="#oauth" type="button" role="tab">{{#i18n}}admin.tab.oauth{{/i18n}}</button>
+        </li>
+        {{#showSystemTab}}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link {{#tabIssystem}}active{{/tabIssystem}}" id="system-tab" data-bs-toggle="tab" data-bs-target="#system" type="button" role="tab">{{#i18n}}admin.tab.system{{/i18n}}</button>
+        </li>
+        {{/showSystemTab}}
+      </ul>
+
+      <div class="tab-content rounded-bottom p-3 border border-top-0">
+        <div class="tab-pane fade {{#tabIsoauth}}show active{{/tabIsoauth}}" id="oauth" role="tabpanel">
+          <form method="post" action="{{contextPath}}/admin/org/config">
+            <input type="hidden" name="tab" value="oauth">
+            <p class="text-body-secondary">{{#i18n}}help.adminOauth{{/i18n}}</p>
+            <div class="alert alert-info py-2 mb-3 small">{{#i18n}}help.adminOauthKeycloak{{/i18n}}</div>
+            <div class="alert alert-info py-2 mb-3 small">{{#i18n}}help.adminOauthGoogle{{/i18n}}</div>
+            <div class="alert alert-info py-2 mb-3 small">{{#i18n}}help.adminOauthMicrosoft{{/i18n}}</div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthClientId{{/i18n}}</label>
+              <input class="form-control" name="oauth.clientId" value="{{cfgu.oauth_clientId}}" placeholder="{{#i18n}}admin.placeholder.oauthClientId{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthClientSecret{{/i18n}}</label>
+              {{#oauthClientSecretConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/oauthClientSecretConfigured}}{{^oauthClientSecretConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/oauthClientSecretConfigured}}
+              <input class="form-control" type="password" name="oauth.clientSecret" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthAuthorizationUrl{{/i18n}}</label>
+              <input class="form-control" name="oauth.authorizationUrl" value="{{cfgu.oauth_authorizationUrl}}" placeholder="{{#i18n}}admin.placeholder.oauthAuthorizationUrl{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthTokenUrl{{/i18n}}</label>
+              <input class="form-control" name="oauth.tokenUrl" value="{{cfgu.oauth_tokenUrl}}" placeholder="{{#i18n}}admin.placeholder.oauthTokenUrl{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthScope{{/i18n}}</label>
+              <input class="form-control" name="oauth.scope" value="{{cfgu.oauth_scope}}" placeholder="openid email profile"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthLogoutUrl{{/i18n}}</label>
+              <input class="form-control" name="oauth.logoutUrl" value="{{cfgu.oauth_logoutUrl}}" placeholder="{{#i18n}}admin.placeholder.oauthLogoutUrl{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthAccountUrl{{/i18n}}</label>
+              <input class="form-control" name="oauth.accountUrl" value="{{cfgu.oauth_accountUrl}}" placeholder="{{#i18n}}admin.placeholder.oauthAccountUrl{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.oauthUserinfoUrl{{/i18n}}</label>
+              <input class="form-control" name="oauth.userinfoUrl" value="{{cfgu.oauth_userinfoUrl}}" placeholder="{{#i18n}}admin.placeholder.oauthUserinfoUrl{{/i18n}}"></div>
+            <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+          </form>
+        </div>
+
+        {{#showSystemTab}}
+        <div class="tab-pane fade {{#tabIssystem}}show active{{/tabIssystem}}" id="system" role="tabpanel">
+          <form method="post" action="{{contextPath}}/admin/org/config">
+            <input type="hidden" name="tab" value="system">
+            <div class="alert alert-warning">{{#i18n}}admin.dbRestartWarning{{/i18n}}</div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.platformBaseurl{{/i18n}}</label>
+              <input class="form-control" name="baseurl" value="{{cfgu.baseurl}}">
+              <div class="form-text">{{#i18n}}help.adminField.platformBaseurl{{/i18n}}</div></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.jwtKey{{/i18n}}</label>
+              {{#jwtKeyConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/jwtKeyConfigured}}{{^jwtKeyConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/jwtKeyConfigured}}
+              <input class="form-control" type="password" name="jwt.key" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.dbHost{{/i18n}}</label>
+              <input class="form-control" name="db.host" value="{{cfgu.db_host}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.dbName{{/i18n}}</label>
+              <input class="form-control" name="db.name" value="{{cfgu.db_name}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.dbUser{{/i18n}}</label>
+              <input class="form-control" name="db.user" value="{{cfgu.db_user}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.dbPass{{/i18n}}</label>
+              {{#dbPassConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/dbPassConfigured}}{{^dbPassConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/dbPassConfigured}}
+              <input class="form-control" type="password" name="db.pass" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}"></div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.dbType{{/i18n}}</label>
+              <select class="form-select" name="db.type">
+                {{^dbTypePostgres}}
+                <option value="h2" selected>h2</option>
+                {{/dbTypePostgres}}{{#dbTypePostgres}}
+                <option value="h2">h2</option>
+                {{/dbTypePostgres}}
+                {{#dbTypePostgres}}
+                <option value="postgres" selected>postgres</option>
+                {{/dbTypePostgres}}{{^dbTypePostgres}}
+                <option value="postgres">postgres</option>
+                {{/dbTypePostgres}}
+              </select>
+            </div>
+            <div class="form-check mb-3">
+              {{#dbH2LoadPostgresDump}}
+              <input class="form-check-input" type="checkbox" name="db.h2.loadPostgresDump" value="true" id="db.h2.loadPostgresDump" checked>
+              {{/dbH2LoadPostgresDump}}{{^dbH2LoadPostgresDump}}
+              <input class="form-check-input" type="checkbox" name="db.h2.loadPostgresDump" value="true" id="db.h2.loadPostgresDump">
+              {{/dbH2LoadPostgresDump}}
+              <label class="form-check-label" for="db.h2.loadPostgresDump">{{#i18n}}admin.field.dbH2LoadDump{{/i18n}}</label>
+            </div>
+            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.dbH2DumpFile{{/i18n}}</label>
+              <input class="form-control" name="db.h2.postgresDumpFile" value="{{cfgu.db_h2_postgresDumpFile}}"></div>
+            <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+          </form>
+        </div>
+        {{/showSystemTab}}
+      </div>
+      </div>
+  
+    </main>
+    {{> platform/footer}}
+
+    <script type="text/javascript">
+      const hash = (window.location.hash || '').replace('#', '');
+      if (hash) {
+        const trigger = document.querySelector('[data-bs-target="#' + hash + '"]');
+        if (trigger && window.bootstrap) {
+          window.bootstrap.Tab.getOrCreateInstance(trigger).show();
+        }
+      }
+      document.querySelectorAll('#org-tabs button[data-bs-toggle="tab"]').forEach((btn) => {
+        btn.addEventListener('shown.bs.tab', (event) => {
+          const target = event.target.getAttribute('data-bs-target');
+          if (target) {
+            history.replaceState(null, '', target);
+          }
+        });
+      });
+    </script>
+  
+  </body>
+</html>

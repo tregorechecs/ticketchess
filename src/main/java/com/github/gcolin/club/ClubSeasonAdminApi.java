@@ -2,7 +2,7 @@ package com.github.gcolin.club;
 
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.auth.RequireRole;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -31,33 +31,40 @@ public class ClubSeasonAdminApi {
     UriInfo uriInfo;
 
     @GET
-    public JteHtml list() {
+    public MustacheHtml list() {
         Map<String, Object> model = new HashMap<>();
-        model.put("seasons", clubSeasonDao.allOrderByStartDateDesc());
-        return new JteHtml(model, "club/seasonAdmin.jte");
+        List<ClubSeason> seasons = clubSeasonDao.allOrderByStartDateDesc();
+        model.put("seasons", seasons);
+        ClubMustacheView.enrichSeasonAdmin(model, seasons);
+        model.put("titleKey", "page.seasons");
+        model.put("activePageTitleKey", "breadcrumb.seasons");
+        return new MustacheHtml(model, "club/seasonAdmin.mustache");
     }
 
     @GET
     @Path("new")
-    public JteHtml createPage() {
+    public MustacheHtml createPage() {
         Map<String, Object> model = new HashMap<>();
-        model.put("season", new ClubSeason());
-        return new JteHtml(model, "club/seasonEdit.jte");
+        ClubSeason season = new ClubSeason();
+        model.put("season", season);
+        ClubMustacheView.enrichSeasonEdit(model, season);
+        return new MustacheHtml(model, "club/seasonEdit.mustache");
     }
 
     @GET
     @Path("{id}/edit")
-    public JteHtml editPage(@PathParam("id") Integer id) {
+    public MustacheHtml editPage(@PathParam("id") Integer id) {
         ClubSeason season = clubSeasonDao.find(id);
         if (season == null) {
-            return new JteHtml(Map.of(
+            return new MustacheHtml(Map.of(
                     "statusCode", 404,
                     "statusMessage", "Not Found",
-                    "errors", List.of()), "platform/error.jte");
+                    "errors", List.of()), "platform/error.mustache");
         }
         Map<String, Object> model = new HashMap<>();
         model.put("season", season);
-        return new JteHtml(model, "club/seasonEdit.jte");
+        ClubMustacheView.enrichSeasonEdit(model, season);
+        return new MustacheHtml(model, "club/seasonEdit.mustache");
     }
 
     @POST

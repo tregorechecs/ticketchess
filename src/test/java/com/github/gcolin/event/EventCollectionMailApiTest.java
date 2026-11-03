@@ -1,0 +1,146 @@
+package com.github.gcolin.event;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import com.github.gcolin.player.Find;
+import com.github.gcolin.player.IPlayer;
+import com.github.gcolin.platform.Config;
+import com.github.gcolin.platform.Page;
+import com.github.gcolin.platform.SendMail;
+import com.github.gcolin.registration.PlayerSubscription;
+import com.github.gcolin.registration.PlayerSubscriptionDao;
+import com.github.gcolin.registration.PlayerSubscriptionStatus;
+import io.jsonwebtoken.security.Keys;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.UriInfo;
+import java.lang.reflect.Field;
+import java.net.URI;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class EventCollectionMailApiTest {
+    @Test
+    void showFormAndPreview() throws Exception {
+        EventCollectionMailApi api = new EventCollectionMailApi();
+        EventCollectionDao dao = mock(EventCollectionDao.class);
+        EventCollection collection = collection(1, "Open, Cup");
+        when(dao.find(1)).thenReturn(collection);
+        inject(api, "eventCollectionService", dao);
+        assertEquals("event/eventcollectionMail.mustache", api.showForm(1, 7).getTemplate());
+        assertEquals(7, api.showForm(1, 7).getModel().get("sent"));
+
+        Config config = mock(Config.class);
+        Page page = new Page();
+        page.setOrgName("Chess Club");
+        when(config.getPage()).thenReturn(page);
+        inject(api, "config", config);
+        Response preview = api.preview(1, "**hello**", false);
+        assertEquals(200, preview.getStatus());
+        assertInstanceOf(String.class, preview.getEntity());
+        assertEquals(200, api.preview(1, null, true).getStatus());
+    }
+
+    @Test
+    void sendIndividualMailsAppliesStatusAndEloFilters() throws Exception {
+        EventCollectionMailApi api = configuredApi();
+        EventCollection c = collection(1, "Cup");
+        PlayerSubscription good = sub(1, "FFE1", "a@x", PlayerSubscriptionStatus.PAID);
+        PlayerSubscription cancelled = sub(2, "FFE2", "b@x", PlayerSubscriptionStatus.CANCELLED);
+        PlayerSubscription low = sub(3, "FFE3", "c@x", PlayerSubscriptionStatus.PAID);
+        when(get(api, "eventCollectionService", EventCollectionDao.class).find(1)).thenReturn(c);
+        PlayerSubscriptionDao subs = get(api, "playerSubscriptionService", PlayerSubscriptionDao.class);
+        when(subs.findByEventCollection(1)).thenReturn(List.of(good, cancelled, low));
+        Find find = get(api, "find", Find.class);
+        IPlayer goodPlayer = player("Good", "One", "1500");
+        IPlayer lowPlayer = player("Low", "One", "900");
+        when(find.player("FFE1", null)).thenReturn(goodPlayer);
+        when(find.player("FFE3", null)).thenReturn(lowPlayer);
+        Response response = api.sendMails(1, "S", "body", null, 1000, 1600, null);
+        assertEquals(303, response.getStatus());
+        verify(get(api, "sendMail", SendMail.class)).send(any(), eq("a@x"), eq("S"));
+    }
+
+    @Test
+    void sendBccMailsAndInvalidFilters() throws Exception {
+        EventCollectionMailApi api = configuredApi();
+        EventCollection c = collection(1, "Cup");
+        PlayerSubscription a = sub(1, "FFE1", "a@x", PlayerSubscriptionStatus.PAID);
+        PlayerSubscription b = sub(2, "FFE2", "", PlayerSubscriptionStatus.PAID);
+        when(get(api, "eventCollectionService", EventCollectionDao.class).find(1)).thenReturn(c);
+        when(get(api, "playerSubscriptionService", PlayerSubscriptionDao.class).findByEventCollection(1))
+                .thenReturn(List.of(a, b));
+        Response response = api.sendMails(1, "S", "body", "bad-status", null, null, "true");
+        assertEquals(303, response.getStatus());
+        verify(get(api, "sendMail", SendMail.class), never()).sendBcc(any(), anyList(), anyString());
+        response = api.sendMails(1, "S", "body", null, null, null, "true");
+        assertEquals(303, response.getStatus());
+        verify(get(api, "sendMail", SendMail.class)).sendBcc(any(), eq(List.of("a@x")), eq("S"));
+    }
+
+    @Test
+    void missingCollectionIsNotFound() throws Exception {
+        EventCollectionMailApi api = configuredApi();
+        when(get(api, "eventCollectionService", EventCollectionDao.class).find(9)).thenReturn(null);
+        org.junit.jupiter.api.Assertions.assertThrows(NotFoundException.class, () -> api.showForm(9, null));
+        org.junit.jupiter.api.Assertions.assertThrows(NotFoundException.class, () -> api.preview(9, "", false));
+    }
+
+    private static EventCollectionMailApi configuredApi() throws Exception {
+        EventCollectionMailApi api = new EventCollectionMailApi();
+        Config config = mock(Config.class);
+        when(config.getKeys()).thenReturn(Keys.hmacShaKeyFor("01234567890123456789012345678901".getBytes()));
+        Page page = new Page();
+        page.setOrgName("Club");
+        when(config.getPage()).thenReturn(page);
+        inject(api, "config", config);
+        inject(api, "eventCollectionService", mock(EventCollectionDao.class));
+        inject(api, "playerSubscriptionService", mock(PlayerSubscriptionDao.class));
+        inject(api, "find", mock(Find.class));
+        inject(api, "sendMail", mock(SendMail.class));
+        inject(api, "uriInfo", mockUriInfo());
+        return api;
+    }
+
+    private static EventCollection collection(int id, String name) {
+        EventCollection c = new EventCollection();
+        c.setId(id);
+        c.setName(name);
+        return c;
+    }
+
+    private static PlayerSubscription sub(int id, String ffe, String email, PlayerSubscriptionStatus status) {
+        PlayerSubscription s = new PlayerSubscription();
+        s.setId(id); s.setNrFfe(ffe); s.setCreationUser(email); s.setStatus(status);
+        return s;
+    }
+
+    private static IPlayer player(String name, String first, String rating) {
+        IPlayer p = mock(IPlayer.class);
+        when(p.getName()).thenReturn(name); when(p.getFirstname()).thenReturn(first);
+        when(p.getFullname()).thenReturn(first + " " + name); when(p.getRating()).thenReturn(rating);
+        return p;
+    }
+
+    private static UriInfo mockUriInfo() {
+        UriInfo info = mock(UriInfo.class); UriBuilder builder = mock(UriBuilder.class);
+        when(info.getBaseUri()).thenReturn(URI.create("http://localhost/"));
+        when(info.getBaseUriBuilder()).thenReturn(builder);
+        when(builder.path(anyString())).thenReturn(builder);
+        when(builder.queryParam(anyString(), anyInt())).thenReturn(builder);
+        when(builder.build(anyInt())).thenReturn(URI.create("http://localhost/eventcollection/1/mail?sent=1"));
+        return info;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T get(Object target, String name, Class<T> type) throws Exception {
+        Field f = target.getClass().getDeclaredField(name); f.setAccessible(true); return (T) f.get(target);
+    }
+    private static void inject(Object target, String name, Object value) throws Exception {
+        Field f = target.getClass().getDeclaredField(name); f.setAccessible(true); f.set(target, value);
+    }
+}

@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class EventRegisterApiTest {
 
@@ -64,10 +64,10 @@ class EventRegisterApiTest {
         inject(api, "loggerUser", user);
         inject(api, "find", mock(Find.class));
 
-        JteHtml html = api.register(1, "");
+        MustacheHtml html = api.register(1, "");
         Map<String, Object> model = html.getModel();
 
-        assertEquals("registration/register.jte", html.getTemplate());
+        assertEquals("registration/register.mustache", html.getTemplate());
         assertTrue(((List<?>) model.get("players")).isEmpty());
     }
 
@@ -120,7 +120,7 @@ class EventRegisterApiTest {
         inject(api, "luceneDb", luceneDb);
         inject(api, "find", mock(Find.class));
 
-        JteHtml html = api.register(2, "abc");
+        MustacheHtml html = api.register(2, "abc");
         Map<String, Object> model = html.getModel();
 
         assertEquals("abc", model.get("query"));
@@ -175,7 +175,7 @@ class EventRegisterApiTest {
         inject(api, "luceneDb", luceneDb);
         inject(api, "find", mock(Find.class));
 
-        JteHtml html = api.register(2, "abc");
+        MustacheHtml html = api.register(2, "abc");
         Map<String, Object> model = html.getModel();
 
         @SuppressWarnings("unchecked")
@@ -316,9 +316,9 @@ class EventRegisterApiTest {
         inject(api, "playerSubscriptionOptionService", optionDao);
         inject(api, "find", find);
 
-        JteHtml html = api.registeredit(1, 7);
+        MustacheHtml html = api.registeredit(1, 7);
 
-        assertEquals("registration/subEdit.jte", html.getTemplate());
+        assertEquals("registration/subEdit.mustache", html.getTemplate());
         assertEquals(sub, html.getModel().get("sub"));
     }
 

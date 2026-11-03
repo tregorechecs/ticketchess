@@ -26,7 +26,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class CustomPlayerApiTest {
 
@@ -43,10 +43,10 @@ class CustomPlayerApiTest {
 
         inject(api, "customPlayerService", dao);
 
-        JteHtml html = api.players(1, 25);
+        MustacheHtml html = api.players(1, 25);
         Map<String, Object> model = html.getModel();
 
-        assertEquals("player/players.jte", html.getTemplate());
+        assertEquals("player/players.mustache", html.getTemplate());
         assertEquals(1, model.get("currentPage"));
         assertEquals(25, model.get("pageSize"));
         assertEquals(50L, model.get("totalItems"));
@@ -58,9 +58,9 @@ class CustomPlayerApiTest {
     void newplayerShouldReturnTemplateWithDefaultPlayer() throws Exception {
         CustomPlayerApi api = new CustomPlayerApi();
 
-        JteHtml html = api.newplayer(null);
+        MustacheHtml html = api.newplayer(null);
 
-        assertEquals("player/customplayer.jte", html.getTemplate());
+        assertEquals("player/customplayer.mustache", html.getTemplate());
         CustomPlayer player = (CustomPlayer) html.getModel().get("player");
         assertEquals("", player.getName());
         assertEquals("", player.getElo());
@@ -79,9 +79,9 @@ class CustomPlayerApiTest {
 
         inject(api, "customPlayerService", dao);
 
-        JteHtml html = api.edit(3, null);
+        MustacheHtml html = api.edit(3, null);
 
-        assertEquals("player/customplayer.jte", html.getTemplate());
+        assertEquals("player/customplayer.mustache", html.getTemplate());
         assertEquals(player, html.getModel().get("player"));
     }
 

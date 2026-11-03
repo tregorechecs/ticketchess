@@ -11,9 +11,9 @@ class MentionApiTest {
     void getShouldReturnMentionTemplate() {
         MentionApi api = new MentionApi();
 
-        JteHtml html = api.get();
+        MustacheHtml html = api.get();
 
-        assertEquals("platform/mentions.jte", html.getTemplate());
+        assertEquals("platform/mentions.mustache", html.getTemplate());
         assertTrue(html.getModel().isEmpty());
     }
 }

@@ -1,0 +1,359 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+
+
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+    <div class="container flex-fill">
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+                <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+                <li class="breadcrumb-item"><a href="{{contextPath}}/event">{{#i18n}}breadcrumb.events{{/i18n}}</a></li>
+                {{#eventHasId}}
+                <li class="breadcrumb-item"><a href="{{contextPath}}/event/{{event.id}}">{{eventDisplayName}}</a></li>
+                {{/eventHasId}}
+                <li class="breadcrumb-item active" aria-current="page">{{#eventHasId}}{{#i18n}}action.editEvent{{/i18n}}{{/eventHasId}}{{^eventHasId}}{{#i18n}}action.newEvent{{/i18n}}{{/eventHasId}}</li>
+            </ol>
+        </nav>
+        {{#readOnly}}
+        <div class="alert alert-info" role="status">{{#i18n}}event.readOnlyConfig{{/i18n}}</div>
+        {{/readOnly}}
+        <div class="bg-body p-3 rounded mb-3">
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="home-tab" data-bs-toggle="tab"
+                    data-bs-target="#general" type="button" role="tab" aria-controls="general"
+                    aria-selected="true">
+                    {{#i18n}}event.generalinfo{{/i18n}}
+                </button>
+            </li>
+            {{#eventHasId}}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="profile-tab" data-bs-toggle="tab"
+                    data-bs-target="#description" type="button" role="tab" aria-controls="description"
+                    aria-selected="false">
+                    {{#i18n}}event.descriptionlabel{{/i18n}}
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="options-tab" data-bs-toggle="tab"
+                    data-bs-target="#options" type="button" role="tab" aria-controls="options"
+                    aria-selected="false">
+                    {{#i18n}}event.optionslabel{{/i18n}}
+                </button>
+            </li>
+            {{/eventHasId}}
+        </ul>
+        <div class="tab-content" id="myTabContent">
+            <div class="tab-pane fade show active" id="general" role="tabpanel"
+                aria-labelledby="general-tab">
+                <div class="row justify-content-center mt-3">
+                    <form method="post" action="{{contextPath}}/event" class="js-event-edit-form" enctype="application/x-www-form-urlencoded">
+                        {{#successIsSave}}
+                        <div class="alert alert-success" role="alert" data-submit-success>
+                            {{#i18n}}message.saveSuccess{{/i18n}}
+                        </div>
+                        {{/successIsSave}}
+
+                        <!-- Event ID (hidden for edit) -->
+                        <input type="hidden" name="eventId" value="{{event.id}}">
+
+                        <!-- Event Name -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                {{#i18n}}event.name{{/i18n}}
+                            </label>
+                            <input id="event_name" type="text" name="name" value="{{event.name}}" class="form-control" maxlength="50" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">
+                                {{#i18n}}label.eventGroup{{/i18n}}
+                            </label>
+                            <select id="event_group" name="eventgroup" class="form-select">
+                                <option value="">-</option>
+                                {{#eventGroupOptions}}
+                                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+                                {{/eventGroupOptions}}
+                            </select>
+                            <small class="form-text text-body-secondary">{{#i18n}}help.eventGroupSelection{{/i18n}}</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">
+                                Event collection
+                            </label>
+                            <select id="event_eventcollection" name="eventcollection" class="form-select">
+                                <option value="">-</option>
+                                {{#eventCollectionOptions}}
+                                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+                                {{/eventCollectionOptions}}
+                            </select>
+                            <small class="form-text text-body-secondary">{{#i18n}}help.eventCollectionSelection{{/i18n}}</small>
+                        </div>
+
+                        <!-- Dates -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">
+                                    {{#i18n}}event.start{{/i18n}}
+                                </label>
+                                <input id="event_startdate" type="date" name="startDate" value="{{startDateIso}}" class="form-control" required>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">
+                                    {{#i18n}}event.end{{/i18n}}
+                                </label>
+                                <input id="event_enddate" type="date" name="endDate" value="{{endDateIso}}" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <!-- Event Type -->
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}event.type{{/i18n}}</label>
+                            <select id="event_type" name="eventType" class="form-select" required>
+                                <option value="STANDARD"{{#eventTypeIsSTANDARD}} selected{{/eventTypeIsSTANDARD}}>{{#i18n}}type.STANDARD{{/i18n}}</option>
+                                <option value="RAPID"{{#eventTypeIsRAPID}} selected{{/eventTypeIsRAPID}}>{{#i18n}}type.RAPID{{/i18n}}</option>
+                                <option value="BLITZ"{{#eventTypeIsBLITZ}} selected{{/eventTypeIsBLITZ}}>{{#i18n}}type.BLITZ{{/i18n}}</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}event.price{{/i18n}}</label>
+                            <input id="event_price" type="number" step="0.01" name="price"
+                                   class="form-control" value="{{priceValue}}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}event.youngPrice{{/i18n}}</label>
+                            <input id="event_price_young" type="number" step="0.01" name="youngprice"
+                                   class="form-control" value="{{youngPriceValue}}" required>
+                        </div>
+
+                        <!-- Event Status -->
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}event.status{{/i18n}}</label>
+                            <select id="event_status" name="status" class="form-select" required>
+                                <option value="DRAFT"{{#eventStatusIsDRAFT}} selected{{/eventStatusIsDRAFT}}>{{#i18n}}status.DRAFT{{/i18n}}</option>
+                                <option value="ACTIVE"{{#eventStatusIsACTIVE}} selected{{/eventStatusIsACTIVE}}>{{#i18n}}status.ACTIVE{{/i18n}}</option>
+                                <option value="ONGOING"{{#eventStatusIsONGOING}} selected{{/eventStatusIsONGOING}}>{{#i18n}}status.ONGOING{{/i18n}}</option>
+                                <option value="COMPLETED"{{#eventStatusIsCOMPLETED}} selected{{/eventStatusIsCOMPLETED}}>{{#i18n}}status.COMPLETED{{/i18n}}</option>
+                            </select>
+                        </div>
+
+                        <!-- PAPI Fields -->
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">{{#i18n}}event.rondes{{/i18n}}</label>
+                                <input id="event_rondes" type="number" name="rondes"
+                                       value="{{roundsValue}}"
+                                       class="form-control">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">{{#i18n}}event.cadence{{/i18n}}</label>
+                                <input id="event_cadence" type="text" name="cadence"
+                                       value="{{eventOptions.CADENCE}}" class="form-control"
+                                       placeholder="ex: 1h30+30s">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label" for="event_pairing">{{#i18n}}event.pairing{{/i18n}}</label>
+                                <select id="event_pairing" name="pairing" class="form-select">
+                                    <option value="Standard"{{#pairingIsStandard}} selected{{/pairingIsStandard}}>{{#i18n}}event.pairing.Standard{{/i18n}}</option>
+                                    <option value="Haley"{{#pairingIsHaley}} selected{{/pairingIsHaley}}>{{#i18n}}event.pairing.Haley{{/i18n}}</option>
+                                    <option value="HaleySoft"{{#pairingIsHaleySoft}} selected{{/pairingIsHaleySoft}}>{{#i18n}}event.pairing.HaleySoft{{/i18n}}</option>
+                                    <option value="SAD"{{#pairingIsSAD}} selected{{/pairingIsSAD}}>{{#i18n}}event.pairing.SAD{{/i18n}}</option>
+                                    <option value="Nicois"{{#pairingIsNicois}} selected{{/pairingIsNicois}}>{{#i18n}}event.pairing.Nicois{{/i18n}}</option>
+                                    <option value="Berger"{{#pairingIsBerger}} selected{{/pairingIsBerger}}>{{#i18n}}event.pairing.Berger{{/i18n}}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">{{#i18n}}event.maxSubscriptions{{/i18n}}</label>
+                                <input id="event_maxsubscriptions" type="number" name="maxSubscriptions"
+                                       value="{{eventOptions.MAX_SUBSCRIPTIONS}}" class="form-control" min="1">
+                            </div>
+                        </div>
+
+                        <!-- Submit -->
+                        {{^readOnly}}
+                        <div class="d-flex justify-content-end">
+                            <button id="event_submit" type="submit" class="btn btn-primary">
+                                &#128190; {{#i18n}}action.save{{/i18n}}
+                            </button>
+                        </div>
+                        {{/readOnly}}
+
+                    </form>
+                </div>
+            </div>
+            {{#eventHasId}}
+            <div class="tab-pane fade" id="description" role="tabpanel"
+                aria-labelledby="description-tab">
+                <div class="row justify-content-center mt-3">
+                    <form method="post" action="{{contextPath}}/event" class="js-event-edit-form" enctype="application/x-www-form-urlencoded">
+
+                        <div class="alert alert-danger d-none" role="alert" data-submit-error>
+                            {{#i18n}}error.serverError{{/i18n}}
+                        </div>
+                        <div class="alert alert-success d-none" role="alert" data-submit-success>
+                            {{#i18n}}message.saveSuccess{{/i18n}}
+                        </div>
+
+                        <!-- Event ID (hidden for edit) -->
+                        <input type="hidden" name="eventId" value="{{event.id}}">
+                        <input type="hidden" name="descriptionOnly" value="true">
+                        <!-- Event Description -->
+                        <div class="row mb-3">
+                            <div class="col-lg-6 mb-3 mb-lg-0">
+                                <label class="form-label" for="event_description">
+                                    {{#i18n}}event.description{{/i18n}}
+                                </label>
+                                <textarea id="event_description" name="description" class="form-control" rows="20"
+                                    placeholder="{{#i18n}}event.descriptionplaceholder{{/i18n}}">{{eventInfo.description}}</textarea>
+                            </div>
+                            <div class="col-lg-6">
+                                <label class="form-label" for="event_description_preview">
+                                    {{#i18n}}mail.preview{{/i18n}}
+                                </label>
+                                <div id="event_description_preview" class="border rounded p-3 bg-body-secondary" style="min-height: 420px; overflow: auto;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Submit -->
+                        {{^readOnly}}
+                        <div class="d-flex justify-content-end">
+                            <button id="event_description_submit" type="submit" class="btn btn-primary">
+                                &#128190; {{#i18n}}action.save{{/i18n}}
+                            </button>
+                        </div>
+                        {{/readOnly}}
+
+                    </form>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="options" role="tabpanel"
+                aria-labelledby="options-tab">
+                <div class="row justify-content-center mt-3">
+                    <form method="post" action="{{contextPath}}/event" class="js-event-edit-form" enctype="application/x-www-form-urlencoded">
+
+                        <div class="alert alert-danger d-none" role="alert" data-submit-error>
+                            {{#i18n}}error.serverError{{/i18n}}
+                        </div>
+                        <div class="alert alert-success d-none" role="alert" data-submit-success>
+                            {{#i18n}}message.saveSuccess{{/i18n}}
+                        </div>
+
+                        <input type="hidden" name="eventId" value="{{event.id}}">
+                        <input type="hidden" name="optionsOnly" value="true">
+                       
+                        <div class="mb-3">
+                            <label class="form-label">MIN_ELO</label>
+                            <input id="event_min_elo" type="number" name="minElo"
+                                   value="{{eventOptions.MIN_ELO}}" class="form-control">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">MAX_ELO</label>
+                            <input id="event_max_elo" type="number" name="maxElo"
+                                   value="{{eventOptions.MAX_ELO}}" class="form-control">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}event.ffeId{{/i18n}}</label>
+                            <div class="input-group">
+                              <input id="event_ffe_id" type="text" name="ffeId"
+                                     value="{{eventOptions.FFE_ID}}" class="form-control">
+                              {{#hasFfeId}}
+                                <a id="ffe-link" class="btn  btn-secondary"
+                                   href="{{ffeEditUrl}}"
+                                   target="_blank" rel="noopener noreferrer"
+                                   title="{{#i18n}}event.ffeLink{{/i18n}}">
+                                  <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                              {{/hasFfeId}}
+                            </div>
+                        </div>
+
+                        {{^readOnly}}
+                        <div class="mb-3">
+                            <label class="form-label">{{#i18n}}event.ffePassword{{/i18n}}</label>
+                            <input id="event_ffe_password" type="text" name="ffePassword"
+                                   value="{{eventOptions.FFE_PASSWORD}}" class="form-control" autocomplete="new-password">
+                        </div>
+                        {{/readOnly}}
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="event_pointage"
+                                   name="pointage" value="1"{{#pointageChecked}} checked{{/pointageChecked}}>
+                            <label class="form-check-label" for="event_pointage">{{#i18n}}event.pointage{{/i18n}}</label>
+                        </div>
+
+                        {{^readOnly}}
+                        <div class="d-flex justify-content-end">
+                            <button id="event_options_submit" type="submit" class="btn btn-primary">
+                                &#128190; {{#i18n}}action.save{{/i18n}}
+                            </button>
+                        </div>
+                        {{/readOnly}}
+
+                    </form>
+                </div>
+            </div>
+            {{/eventHasId}}
+         </div>
+    </div>
+</div>
+{{> platform/footer}}
+{{#readOnly}}
+<script>
+document.querySelectorAll('.js-event-edit-form input, .js-event-edit-form select, .js-event-edit-form textarea, .js-event-edit-form button').forEach(function (el) {
+  el.disabled = true;
+});
+</script>
+{{/readOnly}}
+{{#eventHasId}}
+<script>
+(function () {
+  var descriptionEl = document.getElementById('event_description');
+  var previewEl = document.getElementById('event_description_preview');
+  if (!descriptionEl || !previewEl) {
+    return;
+  }
+
+  var timer = null;
+
+  function updatePreview() {
+    var formData = new URLSearchParams();
+    formData.append('description', descriptionEl.value || '');
+
+    fetch('{{contextPath}}/event/{{event.id}}/description/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString()
+    })
+    .then(function (response) { return response.text(); })
+    .then(function (html) {
+      previewEl.innerHTML = html;
+    });
+  }
+
+  function scheduleUpdate() {
+    clearTimeout(timer);
+    timer = setTimeout(updatePreview, 400);
+  }
+
+  descriptionEl.addEventListener('input', scheduleUpdate);
+
+  var descriptionTab = document.getElementById('profile-tab');
+  if (descriptionTab) {
+    descriptionTab.addEventListener('shown.bs.tab', updatePreview);
+  }
+
+  updatePreview();
+})();
+</script>
+{{/eventHasId}}
+</body>
+</html>

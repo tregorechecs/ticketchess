@@ -24,9 +24,9 @@ import com.github.gcolin.membership.MembershipDao;
 import com.github.gcolin.membership.MembershipOptionDao;
 import com.github.gcolin.membership.MembershipOptionFileDao;
 import com.github.gcolin.membership.MembershipOptionSubscriptionDao;
-import com.github.gcolin.notification.NotificationDao;
-import com.github.gcolin.notification.Notifications;
-import com.github.gcolin.membership.MembershipDao;
+import com.github.gcolin.organisation.Organisation;
+import com.github.gcolin.organisation.OrganisationDao;
+import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.payment.DebtService;
 import com.github.gcolin.payment.PaymentDao;
 import com.github.gcolin.player.CustomPlayerDao;
@@ -48,6 +48,10 @@ public final class RequestContext {
     private HttpServletRequest request;
     private EntityManager em;
     private boolean readOnly;
+    private Organisation organisation;
+    /** {@code /o/{slug}} when the tenant was resolved from the path; otherwise {@code null}. */
+    private String orgPathPrefix;
+    private OrganisationDao organisationDao;
 
     private ClubSeasonDao clubSeasonDao;
     private ClubSeasonFilter clubSeasonFilter;
@@ -69,13 +73,11 @@ public final class RequestContext {
     private PlayerSubscriptionOptionDao playerSubscriptionOptionDao;
     private PlayerPendingSubscriptionDao playerPendingSubscriptionDao;
     private PaymentDao paymentDao;
-    private NotificationDao notificationDao;
     private Find find;
     private LoggedUser loggedUserOverride;
     private DebtService debtService;
     private RegisterService registerService;
     private StateService stateService;
-    private Notifications notifications;
     private EventGroupFilter eventGroupFilter;
     private PapiService papiService;
     private PapiUlploadService papiUlploadService;
@@ -187,12 +189,56 @@ public final class RequestContext {
         }
     }
 
+    public static RequestContext current() {
+        return CURRENT.get();
+    }
+
     public static RequestContext require() {
         RequestContext ctx = CURRENT.get();
         if (ctx == null) {
             throw new IllegalStateException("No active request context");
         }
         return ctx;
+    }
+
+    public Organisation organisation() {
+        return organisation;
+    }
+
+    public Integer orgId() {
+        return organisation == null ? null : organisation.getId();
+    }
+
+    public void setOrganisation(Organisation organisation) {
+        this.organisation = organisation;
+    }
+
+    public String orgPathPrefix() {
+        return orgPathPrefix;
+    }
+
+    public void setOrgPathPrefix(String orgPathPrefix) {
+        this.orgPathPrefix = orgPathPrefix;
+    }
+
+    /**
+     * Servlet context path plus optional {@code /o/{slug}} prefix used for links and login/OAuth return URLs.
+     */
+    public String effectiveContextPath() {
+        String base = request != null ? request.getContextPath() : "";
+        if (base == null) {
+            base = "";
+        }
+        return orgPathPrefix == null || orgPathPrefix.isBlank() ? base : base + orgPathPrefix;
+    }
+
+    public OrganisationDao organisationDao() {
+        touchEm();
+        if (organisationDao == null) {
+            organisationDao = new OrganisationDao();
+            organisationDao.setEm(em);
+        }
+        return organisationDao;
     }
 
     public static void run(Runnable action) {
@@ -456,17 +502,6 @@ public final class RequestContext {
         return paymentDao;
     }
 
-    public NotificationDao notificationDao() {
-        touchEm();
-        if (notificationDao == null) {
-            notificationDao = new NotificationDao();
-            notificationDao.setEm(em);
-            notificationDao.setEventDao(eventDao());
-            notificationDao.setEventGroupDao(eventGroupDao());
-        }
-        return notificationDao;
-    }
-
     public Find find() {
         if (find == null) {
             find = new Find();
@@ -515,15 +550,6 @@ public final class RequestContext {
             stateService.setConfig(AppContext.get().config());
         }
         return stateService;
-    }
-
-    public Notifications notifications() {
-        if (notifications == null) {
-            notifications = new Notifications();
-            notifications.setCaches(AppContext.get().caches());
-            notifications.setNotificationDao(notificationDao());
-        }
-        return notifications;
     }
 
     public EventGroupFilter eventGroupFilter() {

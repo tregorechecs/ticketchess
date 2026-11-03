@@ -1,0 +1,98 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.adminMail{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-envelope fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.adminMail{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.mailDesc{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-lg-6">
+          <div class="admin-table-panel mb-4">
+            <h2 class="h5 mb-3">{{#i18n}}mail.send{{/i18n}}</h2>
+            <form method="post" action="{{contextPath}}/admin/mail">
+              <div class="row g-3">
+                <div class="col-12">
+                  <label for="to" class="form-label">{{#i18n}}mail.recipientEmail{{/i18n}}</label>
+                  <input type="email" class="form-control" id="to" name="to" required>
+                </div>
+                <div class="col-12">
+                  <label for="subject" class="form-label">{{#i18n}}mail.subject{{/i18n}}</label>
+                  <input type="text" class="form-control" id="subject" name="subject" required>
+                </div>
+                <div class="col-12">
+                  <label for="template" class="form-label">{{#i18n}}mail.template{{/i18n}}</label>
+                  <select class="form-select" id="template" name="template" required>
+                    {{#templates}}
+                      <option value="{{.}}">{{.}}</option>
+                    {{/templates}}
+                  </select>
+                </div>
+                <div class="col-sm-6">
+                  <label for="name" class="form-label">{{#i18n}}mail.name{{/i18n}}</label>
+                  <input type="text" class="form-control" id="name" name="name">
+                </div>
+                <div class="col-sm-6">
+                  <label for="eventName" class="form-label">{{#i18n}}mail.eventName{{/i18n}}</label>
+                  <input type="text" class="form-control" id="eventName" name="eventName">
+                </div>
+                <div class="col-sm-6">
+                  <label for="evenDate" class="form-label">{{#i18n}}mail.eventDate{{/i18n}}</label>
+                  <input type="text" class="form-control" id="evenDate" name="evenDate">
+                </div>
+                <div class="col-sm-6">
+                  <label for="amount" class="form-label">{{#i18n}}mail.amount{{/i18n}}</label>
+                  <input type="text" class="form-control" id="amount" name="amount">
+                </div>
+                <div class="col-sm-6">
+                  <label for="reference" class="form-label">{{#i18n}}mail.reference{{/i18n}}</label>
+                  <input type="text" class="form-control" id="reference" name="reference">
+                </div>
+                <div class="col-sm-6">
+                  <label for="baseUrl" class="form-label">{{#i18n}}mail.baseUrl{{/i18n}}</label>
+                  <input type="text" class="form-control" id="baseUrl" name="baseUrl">
+                </div>
+              </div>
+              <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-send me-1"></i>{{#i18n}}mail.send{{/i18n}}
+                </button>
+                <button
+                  type="submit"
+                  class="btn btn-secondary"
+                  formaction="{{contextPath}}/admin/mail/preview"
+                  formtarget="mailPreviewFrame"
+                  formnovalidate
+                >
+                  <i class="bi bi-eye me-1"></i>{{#i18n}}mail.preview{{/i18n}}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="admin-table-panel mb-4">
+            <h2 class="h5 mb-3">{{#i18n}}mail.preview{{/i18n}}</h2>
+            <iframe name="mailPreviewFrame" title="{{#i18n}}mail.preview{{/i18n}}" class="border rounded w-100" style="min-height:480px;background:#f4f6f8;"></iframe>
+          </div>
+        </div>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

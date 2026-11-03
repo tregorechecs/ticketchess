@@ -1,0 +1,223 @@
+
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+
+
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+
+{{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <div class="bg-body p-3 rounded mb-3">
+        <h2>{{event.name}} &mdash; {{#i18n}}mail.sendToAll{{/i18n}}</h2>
+
+        {{#sent}}<div class="alert alert-success" role="alert">{{sentMessageText}}</div>{{/sent}}
+
+        <form method="post" action="{{contextPath}}/event/{{event.id}}/mail" accept-charset="UTF-8">
+
+          <div class="mb-3">
+            <label for="subject" class="form-label">{{#i18n}}mail.subject{{/i18n}}</label>
+            <input type="text" id="subject" name="subject" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label for="body" class="form-label">{{#i18n}}mail.body{{/i18n}}</label>
+            <textarea id="body" name="body" class="form-control" rows="15" required></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}mail.preview{{/i18n}}</label>
+            <iframe id="mail-preview" class="border rounded w-100" style="min-height:400px;background:#f4f6f8;" frameborder="0"></iframe>
+          </div>
+
+          <div class="mb-3">
+            <label for="subscriptionStatus" class="form-label">{{#i18n}}mail.subscriptionStatus{{/i18n}}</label>
+            <select id="subscriptionStatus" name="subscriptionStatus" class="form-control">
+              <option value="" selected>{{#i18n}}mail.subscriptionStatus.all{{/i18n}}</option>
+              <option value="NOT_PAID">{{#i18n}}playerStatus.NOT_PAID{{/i18n}}</option>
+              <option value="PAID">{{#i18n}}playerStatus.PAID{{/i18n}}</option>
+              <option value="CANCELLED">{{#i18n}}playerStatus.CANCELLED{{/i18n}}</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <div class="form-check mb-2">
+              <input type="checkbox" class="form-check-input" id="recipientFilterEnabled" name="recipientFilterEnabled" value="true">
+              <label class="form-check-label" for="recipientFilterEnabled">{{#i18n}}mail.recipients.enable{{/i18n}}</label>
+            </div>
+
+            <div id="recipientFilterPanel" class="d-none">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label mb-0">{{#i18n}}mail.recipients{{/i18n}}</label>
+                <button type="button" id="toggleRecipients" class="btn btn-sm  btn-secondary">{{#i18n}}mail.recipients.unselectAll{{/i18n}}</button>
+              </div>
+              <div id="recipient-list" class="border rounded p-2 mt-2" style="max-height:220px;overflow:auto;">
+                {{#hasRecipients}}
+                    {{#recipients}}<div class="form-check mb-1">
+                      <input class="form-check-input recipient-checkbox" type="checkbox" name="selectedSubscriptions" value="{{id}}" id="recipient-{{id}}" data-status="{{statusName}}">
+                      <label class="form-check-label" for="recipient-{{id}}">
+                        {{lastname}} {{firstname}} - {{email}} ({{#statusMessageKey}}{{#i18n}}{{statusMessageKey}}{{/i18n}}{{/statusMessageKey}})
+                      </label>
+                    </div>
+                  {{/recipients}}
+                {{/hasRecipients}}
+                {{^hasRecipients}}
+                  <div class="text-body-secondary small">{{#i18n}}mail.recipients.none{{/i18n}}</div>
+                {{/hasRecipients}}
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="sendAsBcc" name="sendAsBcc" value="true">
+            <label class="form-check-label" for="sendAsBcc">{{#i18n}}mail.sendAsBcc{{/i18n}}</label>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="sendInBatches" name="sendInBatches" value="true">
+            <label class="form-check-label" for="sendInBatches">{{#i18n}}mail.sendInBatches{{/i18n}}</label>
+            <div class="form-text">{{#i18n}}mail.sendInBatches.help{{/i18n}}</div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <a class="btn btn-secondary" href="{{contextPath}}/event/{{event.id}}">{{#i18n}}action.cancel{{/i18n}}</a>
+            <button type="submit" class="btn btn-primary">&#9993; {{#i18n}}mail.send{{/i18n}}</button>
+          </div>
+        </form>
+      </div>
+    </main>
+{{> platform/footer}}
+<script>
+(function () {
+  var bodyEl = document.getElementById('body');
+  var previewFrame = document.getElementById('mail-preview');
+  var subscriptionStatusEl = document.getElementById('subscriptionStatus');
+  var recipientFilterEnabledEl = document.getElementById('recipientFilterEnabled');
+  var recipientFilterPanelEl = document.getElementById('recipientFilterPanel');
+  var sendAsBcc = document.getElementById('sendAsBcc');
+  var sendInBatches = document.getElementById('sendInBatches');
+  var recipientCheckboxes = document.querySelectorAll('.recipient-checkbox');
+  var toggleRecipientsButton = document.getElementById('toggleRecipients');
+  var timer = null;
+
+  function updatePreview() {
+    var formData = new FormData();
+    formData.append('body', bodyEl.value || '');
+    formData.append('bcc', (sendAsBcc.checked || (sendInBatches && sendInBatches.checked)) ? "true" : "false");
+    if (recipientFilterEnabledEl && recipientFilterEnabledEl.checked) {
+      formData.append('recipientFilterEnabled', 'true');
+      recipientCheckboxes.forEach(function (checkbox) {
+        if (checkbox.checked) {
+          formData.append('selectedSubscriptions', checkbox.value);
+        }
+      });
+    }
+
+    fetch('{{contextPath}}/event/{{event.id}}/mail/preview', {
+      method: 'POST',
+      body: new URLSearchParams(formData)
+    })
+    .then(function(r) { return r.text(); })
+    .then(function(html) {
+      var doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+      doc.open();
+      doc.write(html);
+      doc.close();
+    });
+  }
+
+  function scheduleUpdate() {
+    clearTimeout(timer);
+    timer = setTimeout(updatePreview, 400);
+  }
+
+  function updateRecipientPanelVisibility() {
+    if (!recipientFilterEnabledEl || !recipientFilterPanelEl) {
+      return;
+    }
+    if (recipientFilterEnabledEl.checked) {
+      recipientFilterPanelEl.classList.remove('d-none');
+    } else {
+      recipientFilterPanelEl.classList.add('d-none');
+    }
+  }
+
+  function syncSelectionWithStatus() {
+    var selectedStatus = subscriptionStatusEl ? subscriptionStatusEl.value : '';
+    recipientCheckboxes.forEach(function (checkbox) {
+      checkbox.checked = !selectedStatus || checkbox.dataset.status === selectedStatus;
+    });
+  }
+
+  bodyEl.addEventListener('input', scheduleUpdate);
+  if (subscriptionStatusEl) {
+    subscriptionStatusEl.addEventListener('change', function () {
+      if (recipientFilterEnabledEl && recipientFilterEnabledEl.checked) {
+        syncSelectionWithStatus();
+      }
+      refreshToggleButtonLabel();
+      updatePreview();
+    });
+  }
+  if (recipientFilterEnabledEl) {
+    recipientFilterEnabledEl.addEventListener('change', function () {
+      updateRecipientPanelVisibility();
+      if (recipientFilterEnabledEl.checked) {
+        syncSelectionWithStatus();
+      }
+      refreshToggleButtonLabel();
+      updatePreview();
+    });
+  }
+  sendAsBcc.addEventListener('change', updatePreview);
+  if (sendInBatches) {
+    sendInBatches.addEventListener('change', function () {
+      if (sendInBatches.checked) {
+        sendAsBcc.checked = true;
+      }
+      updatePreview();
+    });
+  }
+  recipientCheckboxes.forEach(function (checkbox) {
+    checkbox.addEventListener('change', updatePreview);
+  });
+
+  function areAllRecipientsSelected() {
+    if (recipientCheckboxes.length === 0) {
+      return false;
+    }
+    return Array.prototype.every.call(recipientCheckboxes, function (checkbox) { return checkbox.checked; });
+  }
+
+  function refreshToggleButtonLabel() {
+    if (!toggleRecipientsButton) {
+      return;
+    }
+    toggleRecipientsButton.textContent = areAllRecipientsSelected()
+      ? "{{#i18n}}mail.recipients.unselectAll{{/i18n}}"
+      : "{{#i18n}}mail.recipients.selectAll{{/i18n}}";
+  }
+
+  if (toggleRecipientsButton) {
+    toggleRecipientsButton.addEventListener('click', function () {
+      var selectAll = !areAllRecipientsSelected();
+      recipientCheckboxes.forEach(function (checkbox) {
+        checkbox.checked = selectAll;
+      });
+      refreshToggleButtonLabel();
+      updatePreview();
+    });
+  }
+
+  recipientCheckboxes.forEach(function (checkbox) {
+    checkbox.addEventListener('change', refreshToggleButtonLabel);
+  });
+
+  updateRecipientPanelVisibility();
+  refreshToggleButtonLabel();
+  updatePreview();
+})();
+</script>
+</body>
+</html>

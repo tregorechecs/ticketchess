@@ -123,9 +123,11 @@ public class CreateUpdateEventTest extends PlaywrightBaseTest {
 
         assertTrue(descriptionsubmit.isVisible());
         descriptionsubmit.click();
+        page.waitForLoadState();
 
-        assertTrue(events.isVisible());
-        events.click();
+        Locator eventsNav = page.locator("#events");
+        assertTrue(eventsNav.isVisible());
+        eventsNav.click();
 
         assertTrue(filter.isVisible());
         filter.click();

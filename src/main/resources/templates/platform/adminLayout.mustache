@@ -1,0 +1,20 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      {{#adminHub}}
+        {{> platform/adminBreadcrumb}}
+      {{/adminHub}}
+      {{^adminHub}}
+        {{#activePageTitle}}
+          {{> platform/adminBreadcrumb}}
+        {{/activePageTitle}}
+      {{/adminHub}}
+      {{{alerts}}}
+      {{{content}}}
+    </main>
+    {{> platform/footer}}
+    {{{scripts}}}
+  </body>
+</html>

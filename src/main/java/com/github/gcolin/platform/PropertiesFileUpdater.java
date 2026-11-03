@@ -46,6 +46,37 @@ public final class PropertiesFileUpdater {
         Files.write(file, lines, StandardCharsets.UTF_8);
     }
 
+    /** Deletes assignment lines for the given keys (used when settings move to the organisation table). */
+    public static void removeKeys(Path file, Set<String> keys) throws IOException {
+        if (keys == null || keys.isEmpty() || file == null || !Files.exists(file)) {
+            return;
+        }
+        List<String> lines = new ArrayList<>(Files.readAllLines(file, StandardCharsets.UTF_8));
+        List<String> kept = new ArrayList<>(lines.size());
+        for (String line : lines) {
+            String key = propertyKey(line);
+            if (key == null || !keys.contains(key)) {
+                kept.add(line);
+            }
+        }
+        Files.write(file, kept, StandardCharsets.UTF_8);
+    }
+
+    private static String propertyKey(String line) {
+        if (line == null) {
+            return null;
+        }
+        String trimmed = line.trim();
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+            return null;
+        }
+        int eq = trimmed.indexOf('=');
+        if (eq <= 0) {
+            return null;
+        }
+        return trimmed.substring(0, eq).trim();
+    }
+
     private static boolean replaceExisting(List<String> lines, String key, String value) {
         Pattern pattern = Pattern.compile("^(\\s*#?\\s*)" + Pattern.quote(key) + "(\\s*=\\s*)(.*)$");
         for (int i = 0; i < lines.size(); i++) {

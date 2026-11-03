@@ -1,0 +1,22 @@
+<div class="dropdown">
+  <button class="btn btn-sm btn-link text-body-secondary text-decoration-none border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{#i18n}}label.action{{/i18n}}" title="{{#i18n}}label.action{{/i18n}}">
+    <i class="bi bi-three-dots-vertical"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" href="{{contextPath}}/payment/{{payment.id}}/edit">{{#i18n}}action.edit{{/i18n}}</a></li>
+    {{#isPaid}}
+      <li>
+        <a class="dropdown-item" href="{{contextPath}}/payment/{{payment.id}}/invoice">
+          {{#payment.donation}}{{#i18n}}action.downloadDonationAttestation{{/i18n}}{{/payment.donation}}{{^payment.donation}}{{#i18n}}action.downloadInvoice{{/i18n}}{{/payment.donation}}
+        </a>
+      </li>
+      <li>
+        <form method="post" action="{{contextPath}}/payment/{{payment.id}}/send-receipt" class="m-0">
+          <button type="submit" class="dropdown-item">
+            {{#payment.donation}}{{#i18n}}action.sendDonationAttestation{{/i18n}}{{/payment.donation}}{{^payment.donation}}{{#i18n}}action.sendInvoice{{/i18n}}{{/payment.donation}}
+          </button>
+        </form>
+      </li>
+    {{/isPaid}}
+  </ul>
+</div>

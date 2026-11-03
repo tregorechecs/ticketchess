@@ -7,7 +7,7 @@ import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.platform.BroadcastMail;
 import com.github.gcolin.platform.Config;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.MailTemplate;
 import com.github.gcolin.platform.SendMail;
 import io.jsonwebtoken.Jwts;
@@ -81,7 +81,7 @@ public class MembershipOptionFileAdminApi {
     UriInfo uriInfo;
 
     @GET
-    public JteHtml page(
+    public MustacheHtml page(
             @QueryParam("optionId") Integer optionId,
             @QueryParam("seasonId") Integer seasonId,
             @QueryParam("error") String error,
@@ -90,19 +90,19 @@ public class MembershipOptionFileAdminApi {
         List<MembershipOption> options = membershipOptionDao.all(scope);
         MembershipOption selected = resolveSelectedOption(options, optionId);
 
+        List<MembershipOptionFile> files = selected != null && selected.getId() != null
+                ? membershipOptionFileDao.findByOptionId(selected.getId())
+                : Collections.emptyList();
         Map<String, Object> model = new HashMap<>();
         model.put("options", options);
         model.put("selectedOption", selected);
-        model.put(
-                "files",
-                selected != null && selected.getId() != null
-                        ? membershipOptionFileDao.findByOptionId(selected.getId())
-                        : Collections.emptyList());
+        model.put("files", files);
         model.put("error", error);
         model.put("sent", sent);
         model.put("seasonId", clubSeasonFilter.effectiveSeasonId(seasonId));
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "membership/membershipOptionFiles.jte");
+        MembershipMustacheView.enrichOptionFilesPage(model, options, selected, files, error);
+        return new MustacheHtml(model, "membership/membershipOptionFiles.mustache");
     }
 
     @POST
@@ -211,7 +211,7 @@ public class MembershipOptionFileAdminApi {
 
     @GET
     @Path("{fileId}/mail")
-    public JteHtml mailPage(
+    public MustacheHtml mailPage(
             @PathParam("fileId") Integer fileId,
             @QueryParam("seasonId") Integer seasonId,
             @QueryParam("sent") Integer sent) {
@@ -230,7 +230,8 @@ public class MembershipOptionFileAdminApi {
             model.put("sent", sent);
         }
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "membership/membershipOptionFileMail.jte");
+        MembershipMustacheView.enrichOptionFileMailPage(model, file, option, recipients);
+        return new MustacheHtml(model, "membership/membershipOptionFileMail.mustache");
     }
 
     @POST

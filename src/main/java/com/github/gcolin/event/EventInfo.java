@@ -14,6 +14,9 @@ import jakarta.persistence.Table;
 public class EventInfo {
 
     @Id
+    @Column(name = "eventid")
+    private Integer id;
+
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
     @JoinColumn(name = "eventid")
@@ -22,10 +25,11 @@ public class EventInfo {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    // =========================
-    // Constructeurs
-    // =========================
     public EventInfo() {}
+
+    public Integer getId() {
+        return id;
+    }
 
     public Event getEvent() {
         return event;
@@ -33,6 +37,7 @@ public class EventInfo {
 
     public void setEvent(Event event) {
         this.event = event;
+        this.id = event == null ? null : event.getId();
     }
 
     public String getDescription() {
@@ -48,11 +53,11 @@ public class EventInfo {
         if (this == o) return true;
         if (!(o instanceof EventInfo)) return false;
         EventInfo that = (EventInfo) o;
-        return event != null && event.getId().equals(that.event.getId());
+        return id != null && id.equals(that.id);
     }
 
     @Override
     public int hashCode() {
-        return event != null ? event.getId().hashCode() : 0;
+        return id != null ? id.hashCode() : 0;
     }
 }

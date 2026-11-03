@@ -73,7 +73,6 @@ class EventGroupServiceTest {
         EventGroup eventGroup = new EventGroup();
         eventGroup.setId(42);
         eventGroup.setEvents(List.of());
-        eventGroup.setNotifications(List.of());
 
         TypedQuery<EventGroup> query = mock(TypedQuery.class);
 

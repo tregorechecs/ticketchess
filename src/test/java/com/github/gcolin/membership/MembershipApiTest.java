@@ -36,7 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class MembershipApiTest {
 
@@ -63,10 +63,10 @@ class MembershipApiTest {
         inject(api, "membershipOptionDao", membershipOptionDao);
         inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        JteHtml html = api.list(null);
+        MustacheHtml html = api.list(null);
         Map<String, Object> model = html.getModel();
 
-        assertEquals("membership/membership.jte", html.getTemplate());
+        assertEquals("membership/membership.mustache", html.getTemplate());
         @SuppressWarnings("unchecked")
         List<Membership> memberships = (List<Membership>) model.get("memberships");
         // sorted descending by id: 5, 1
@@ -96,7 +96,7 @@ class MembershipApiTest {
         inject(api, "membershipOptionDao", membershipOptionDao);
         inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        JteHtml html = api.list(null);
+        MustacheHtml html = api.list(null);
         @SuppressWarnings("unchecked")
         Map<String, List<MembershipOptionSubscription>> subscriptionsByMembership =
                 (Map<String, List<MembershipOptionSubscription>>) html.getModel().get("membershipSubscriptions");
@@ -119,10 +119,10 @@ class MembershipApiTest {
         inject(api, "licenseDao", licenseDao);
         inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        JteHtml html = api.createPage(null);
+        MustacheHtml html = api.createPage(null);
         Map<String, Object> model = html.getModel();
 
-        assertEquals("membership/membershipNew.jte", html.getTemplate());
+        assertEquals("membership/membershipNew.mustache", html.getTemplate());
         assertTrue(model.get("membership") instanceof Membership);
         MembershipStatus[] statuses = (MembershipStatus[]) model.get("statuses");
         assertEquals(MembershipStatus.values().length, statuses.length);
@@ -248,10 +248,10 @@ class MembershipApiTest {
         inject(api, "clubSeasonDao", mockClubSeasonDao());
         inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        JteHtml html = api.editPage(10);
+        MustacheHtml html = api.editPage(10);
         Map<String, Object> model = html.getModel();
 
-        assertEquals("membership/membershipEdit.jte", html.getTemplate());
+        assertEquals("membership/membershipEdit.mustache", html.getTemplate());
         assertEquals(m, model.get("membership"));
     }
 

@@ -1,0 +1,32 @@
+{{#showEventActionsMenu}}
+<div class="dropdown">
+  <button class="btn btn-sm btn-link text-body-secondary text-decoration-none border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{#i18n}}label.action{{/i18n}}" title="{{#i18n}}label.action{{/i18n}}">
+    <i class="bi bi-three-dots-vertical"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    {{#user.canViewEventConfig}}
+    <li><a class="dropdown-item" id="edit" href="{{contextPath}}/event/{{event.id}}/edit">{{#user.canManageEvents}}{{#i18n}}action.edit{{/i18n}}{{/user.canManageEvents}}{{^user.canManageEvents}}{{#i18n}}action.viewConfig{{/i18n}}{{/user.canManageEvents}}</a></li>
+    {{/user.canViewEventConfig}}
+    {{#showView}}
+    <li><a class="dropdown-item" href="{{contextPath}}/event/{{event.id}}">{{#i18n}}action.view{{/i18n}}</a></li>
+    {{/showView}}
+    {{#user.admin}}
+    <li><a class="dropdown-item" id="statistics" href="{{contextPath}}/event/{{event.id}}/statistics">{{#i18n}}event.statistics{{/i18n}}</a></li>
+    {{/user.admin}}
+    {{#user.canViewEventConfig}}
+    <li><a class="dropdown-item" id="desk" href="{{contextPath}}/event/{{event.id}}/desk">{{#i18n}}event.desk.title{{/i18n}}</a></li>
+    <li><a class="dropdown-item" id="exportPapi" href="{{contextPath}}/event/{{event.id}}/papi">{{#i18n}}action.exportPapi{{/i18n}}</a></li>
+    <li><a class="dropdown-item" id="exportCsv" href="{{contextPath}}/event/{{event.id}}/csv">{{#i18n}}action.exportCsv{{/i18n}}</a></li>
+    <li><a class="dropdown-item" id="licenceCheck" href="{{contextPath}}/event/{{event.id}}/licencecheck">{{#i18n}}action.licenceCheck{{/i18n}}</a></li>
+    {{/user.canViewEventConfig}}
+    {{#user.canManageEvents}}
+    <li><a class="dropdown-item" id="sendMail" href="{{contextPath}}/event/{{event.id}}/mail">{{#i18n}}mail.sendToAll{{/i18n}}</a></li>
+    {{/user.canManageEvents}}
+    {{#showUploadPapi}}
+    {{#user.canManageEvents}}
+    <li><button type="button" class="dropdown-item" id="uploadPapi">{{#i18n}}action.uploadPapi{{/i18n}}</button></li>
+    {{/user.canManageEvents}}
+    {{/showUploadPapi}}
+  </ul>
+</div>
+{{/showEventActionsMenu}}

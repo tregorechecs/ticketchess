@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("club-register")
 public class ClubRegisterApi {
@@ -126,8 +126,12 @@ public class ClubRegisterApi {
     UriInfo uriInfo;
 
     @GET
-    public JteHtml page(@QueryParam("query") String query, @QueryParam("success") String success) {
+    public MustacheHtml page(@QueryParam("query") String query, @QueryParam("success") String success) {
         Map<String, Object> model = new HashMap<>();
+        model.put("page", "clubregister");
+        model.put("titleKey", "page.clubRegister");
+        model.put("clubRegisterTitleKey", "clubRegister.title");
+        model.put("clubRegisterDescriptionKey", "clubRegister.description");
         model.put("query", query);
         model.put("success", success);
         ClubSeason currentSeason = clubSeasonDao.findCurrent();
@@ -181,7 +185,7 @@ public class ClubRegisterApi {
             }
         }
 
-        return new JteHtml(model, "registration/clubRegister.jte");
+        return new MustacheHtml(model, "registration/clubRegister.mustache");
     }
 
     @POST
@@ -195,7 +199,7 @@ public class ClubRegisterApi {
     @GET
     @Path("membership-options")
     @LoggedOnly
-    public JteHtml membershipOptionsPage(
+    public MustacheHtml membershipOptionsPage(
             @QueryParam("nrffe") String nrffe,
             @QueryParam("error") String error,
             @QueryParam("licenseType") String selectedLicenseType,
@@ -272,7 +276,7 @@ public class ClubRegisterApi {
         if (manualPlayer) {
             model.put("category", calculateCategory(birthdate));
         }
-        return new JteHtml(model, "registration/clubMembershipOptions.jte");
+        return new MustacheHtml(model, "registration/clubMembershipOptions.mustache");
     }
 
     @POST
@@ -547,6 +551,11 @@ public class ClubRegisterApi {
     }
 
     private void notifyMembershipSubmission(Membership membership, String licenseType, List<MembershipOption> selectedOptions) {
+        notifyMembershipAdmins(membership, licenseType, selectedOptions);
+        notifyMembershipRegistrant(membership);
+    }
+
+    private void notifyMembershipAdmins(Membership membership, String licenseType, List<MembershipOption> selectedOptions) {
         List<String> recipients = getMembershipNotificationEmails();
         if (recipients.isEmpty()) {
             return;
@@ -562,6 +571,48 @@ public class ClubRegisterApi {
         } catch (Exception e) {
             logger.error(
                     "Failed to send membership notification mail for membership {}: {}",
+                    membership.getId(),
+                    e.getMessage());
+        }
+    }
+
+    private void notifyMembershipRegistrant(Membership membership) {
+        String recipient = membership.getUser() == null ? "" : membership.getUser().trim();
+        if (recipient.isEmpty()) {
+            return;
+        }
+
+        String firstname = membership.getFirstname() == null ? "" : membership.getFirstname().trim();
+        String greeting = firstname.isEmpty() ? "Bonjour" : "Bonjour " + escapeHtml(firstname);
+        String baseUrl = properties.getProperty("baseurl", "");
+        if (baseUrl == null) {
+            baseUrl = "";
+        }
+
+        StringBuilder body = new StringBuilder();
+        body.append("<p>").append(greeting).append(",</p>");
+        body.append("<p>Votre demande d'adhésion au club a bien été enregistrée.</p>");
+        body.append(
+                "<p>Merci d'attendre la confirmation du club avant de procéder au paiement."
+                        + " Vous pourrez régler une fois votre inscription validée.</p>");
+
+        BroadcastMail mail = new BroadcastMail();
+        mail.setEventName("Demande d'adhésion enregistrée");
+        mail.setName(buildMembershipName(membership));
+        mail.setBody(body.toString());
+        mail.setHeaderBackgroundColor("#0f766e");
+        mail.setHeaderTextColor("#ffffff");
+        mail.setHeaderIcon("♟️");
+        if (!baseUrl.isBlank()) {
+            mail.setLoginUrl(baseUrl + "/club-register");
+            mail.setButtonText("Voir mon inscription");
+        }
+
+        try {
+            sendMail.send(mail, recipient, "Votre demande d'adhésion a bien été enregistrée");
+        } catch (Exception e) {
+            logger.error(
+                    "Failed to send membership registrant mail for membership {}: {}",
                     membership.getId(),
                     e.getMessage());
         }

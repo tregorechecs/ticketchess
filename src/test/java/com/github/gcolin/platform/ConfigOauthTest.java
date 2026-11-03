@@ -5,9 +5,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.gcolin.organisation.Organisation;
+import jakarta.persistence.EntityManager;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class ConfigOauthTest {
+
+    @AfterEach
+    void tearDown() {
+        RequestContext.close();
+    }
 
     @Test
     void shouldUseOauthKeysWhenPresent() {
@@ -59,6 +69,82 @@ class ConfigOauthTest {
         config.applyRuntime();
         assertFalse(config.isOauthEnabled());
         assertTrue(config.getLoginUrl().contains("auth-sim?"));
+    }
+
+    @Test
+    void loginAndOauthRedirectUseCurrentOrganisationBaseUrl() {
+        Config config = new Config();
+        config.getProperties().setProperty("baseurl", "http://localhost:8080");
+        config.applyRuntime();
+
+        RequestContext.openForTest((EntityManager) null);
+        Organisation org = new Organisation();
+        org.setBaseUrl("https://club.example.org/");
+        org.setOauthClientId("cid");
+        org.setOauthAuthorizationUrl("https://accounts.google.com/o/oauth2/v2/auth");
+        org.setOauthTokenUrl("https://oauth2.googleapis.com/token");
+        RequestContext.require().setOrganisation(org);
+
+        assertEquals("https://club.example.org", config.getPublicBaseUrl());
+        assertEquals("https://club.example.org/oauth-callback", config.getOauthRedirectUri());
+        String loginUrl = config.getLoginUrl();
+        assertTrue(loginUrl.contains("accounts.google.com"));
+        assertTrue(loginUrl.contains("redirect_uri="
+                + URLEncoder.encode("https://club.example.org/oauth-callback", StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void authSimLoginUsesCurrentOrganisationBaseUrl() {
+        Config config = new Config();
+        config.getProperties().setProperty("baseurl", "http://localhost:8080");
+        config.applyRuntime();
+
+        RequestContext.openForTest((EntityManager) null);
+        Organisation org = new Organisation();
+        org.setBaseUrl("https://club.example.org");
+        RequestContext.require().setOrganisation(org);
+
+        assertEquals("/auth-sim?state=", config.getLoginUrl());
+    }
+
+    @Test
+    void authSimLoginKeepsOrgPathPrefix() {
+        Config config = new Config();
+        config.getProperties().setProperty("baseurl", "http://localhost:8080");
+        config.applyRuntime();
+
+        RequestContext.openForTest((EntityManager) null);
+        Organisation org = new Organisation();
+        org.setBaseUrl("http://localhost:8080");
+        RequestContext.require().setOrganisation(org);
+        RequestContext.require().setOrgPathPrefix("/o/demo");
+
+        assertEquals("/o/demo/auth-sim?state=", config.getLoginUrl());
+        assertEquals(
+                "http://localhost:8080/o/demo/keycloak-callback", config.getOauthRedirectUri());
+
+        org.setOauthClientId("cid");
+        assertEquals("http://localhost:8080/o/demo/oauth-callback", config.getOauthRedirectUri());
+    }
+
+    @Test
+    void orgFormValuesPreferCurrentOrganisationSettings() {
+        Config config = new Config();
+        config.getProperties().setProperty("title", "Platform Title");
+        config.getProperties().setProperty("org.name", "Platform Club");
+        config.applyRuntime();
+
+        RequestContext.openForTest((EntityManager) null);
+        Organisation org = new Organisation();
+        org.setName("Resolved Club");
+        org.setBaseUrl("https://club.example.org");
+        org.setSettingsJson("{\"title\":\"Club Title\",\"org.email\":\"club@example.org\"}");
+        RequestContext.require().setOrganisation(org);
+
+        var form = config.getOrgFormValues();
+        assertEquals("Club Title", form.get("title"));
+        assertEquals("Resolved Club", form.get("org.name"));
+        assertEquals("club@example.org", form.get("org.email"));
     }
 
     @Test

@@ -24,7 +24,7 @@ import java.lang.reflect.Field;
 import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class EventCollectionApiTest {
 
@@ -40,9 +40,9 @@ class EventCollectionApiTest {
         when(dao.allOrdered()).thenReturn(List.of(one));
         inject(api, "eventCollectionService", dao);
 
-        JteHtml html = api.page("1", null, null, null);
+        MustacheHtml html = api.page("1", null, null, null);
 
-        assertEquals("event/eventcollection.jte", html.getTemplate());
+        assertEquals("event/eventcollection.mustache", html.getTemplate());
         assertTrue((Boolean) html.getModel().get("created"));
         @SuppressWarnings("unchecked")
         List<EventCollection> events = (List<EventCollection>) html.getModel().get("eventCollections");
@@ -53,9 +53,9 @@ class EventCollectionApiTest {
     void createShouldReturnTemplateAndCreateMode() throws Exception {
         EventCollectionApi api = new EventCollectionApi();
 
-        JteHtml html = api.create(null);
+        MustacheHtml html = api.create(null);
 
-        assertEquals("event/eventcollectionEdit.jte", html.getTemplate());
+        assertEquals("event/eventcollectionEdit.mustache", html.getTemplate());
         assertTrue((Boolean) html.getModel().get("createMode"));
         assertTrue(html.getModel().get("eventCollection") instanceof EventCollection);
     }
@@ -173,9 +173,9 @@ class EventCollectionApiTest {
         inject(api, "eventCollectionService", dao);
         inject(api, "eventCollectionOptionService", optionDao);
 
-        JteHtml html = api.edit(6, "save", null);
+        MustacheHtml html = api.edit(6, "save", null);
 
-        assertEquals("event/eventcollectionEdit.jte", html.getTemplate());
+        assertEquals("event/eventcollectionEdit.mustache", html.getTemplate());
         assertEquals(event, html.getModel().get("eventCollection"));
         assertEquals("save", html.getModel().get("success"));
         assertEquals("slug", html.getModel().get("chessEventId"));

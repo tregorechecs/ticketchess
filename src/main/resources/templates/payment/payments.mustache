@@ -1,0 +1,169 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}breadcrumb.payments{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-credit-card fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#i18n}}page.payments{{/i18n}}</h1>
+            <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.paymentsDesc{{/i18n}}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+      <div class="d-flex justify-content-between align-items-center gap-2 mb-3 w-100">
+        <div class="d-flex gap-2">
+          <a class="btn btn-success" href="{{contextPath}}/payment/new">{{#i18n}}action.newPayment{{/i18n}}</a>
+          <a class="btn btn-outline-success" href="{{contextPath}}/payment/new?donation=true">{{#i18n}}action.newDonation{{/i18n}}</a>
+        </div>
+        {{> payment/paymentPageActionsMenu}}
+      </div>
+      <form method="get" action="{{contextPath}}/payment" class="row g-2 align-items-end mb-3">
+        <input type="hidden" name="page" value="0">
+        <input type="hidden" name="size" value="{{pageSize}}">
+        <div class="col-auto">
+          <div class="input-group w-auto">
+            <label for="payment_season" class="input-group-text">{{#i18n}}label.season{{/i18n}}</label>
+            <select id="payment_season" name="seasonId" class="form-select w-auto" onchange="this.form.submit()">
+              {{#seasons}}
+              {{#selected}}
+              <option value="{{value}}" selected>{{label}}</option>
+              {{/selected}}
+              {{^selected}}
+              <option value="{{value}}">{{label}}</option>
+              {{/selected}}
+              {{/seasons}}
+            </select>
+          </div>
+        </div>
+        <div class="col-12 col-lg">
+          <label for="paymentSearch" class="form-label mb-0">{{#i18n}}payment.search.label{{/i18n}}</label>
+          <input type="search" name="search" id="paymentSearch" class="form-control" placeholder="{{#i18n}}payment.search.placeholder{{/i18n}}" autocomplete="off" value="{{search}}">
+        </div>
+        <div class="col-12 col-sm-6 col-lg-auto">
+          <label for="paymentSort" class="form-label mb-0">{{#i18n}}payment.sort.label{{/i18n}}</label>
+          <select id="paymentSort" class="form-select">
+            <option value="id">{{#i18n}}payment.sort.idDesc{{/i18n}}</option>
+            <option value="name">{{#i18n}}payment.sort.nameAsc{{/i18n}}</option>
+          </select>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-auto">
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-outline-dark flex-grow-1">{{#i18n}}action.search{{/i18n}}</button>
+            {{#hasSearch}}
+              <a class="btn  btn-secondary" href="{{contextPath}}/payment?size={{pageSize}}{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}">{{#i18n}}action.clear{{/i18n}}</a>
+            {{/hasSearch}}
+          </div>
+        </div>
+      </form>
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="text-body-secondary">
+          {{paymentCountText}}
+        </div>
+        <div class="d-flex gap-2">
+          {{#hasPrev}}
+            {{#hasSearch}}
+              <a class="btn btn-outline-dark btn-sm" href="{{contextPath}}/payment?page={{prevPage}}&size={{pageSize}}&search={{searchEncoded}}{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}">{{#i18n}}pagination.previous{{/i18n}}</a>
+            {{/hasSearch}}
+            {{^hasSearch}}
+              <a class="btn btn-outline-dark btn-sm" href="{{contextPath}}/payment?page={{prevPage}}&size={{pageSize}}{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}">{{#i18n}}pagination.previous{{/i18n}}</a>
+            {{/hasSearch}}
+          {{/hasPrev}}
+          {{^hasPrev}}
+            <span class="btn  btn-secondary btn-sm disabled">{{#i18n}}pagination.previous{{/i18n}}</span>
+          {{/hasPrev}}
+          {{#hasNext}}
+            {{#hasSearch}}
+              <a class="btn btn-outline-dark btn-sm" href="{{contextPath}}/payment?page={{nextPage}}&size={{pageSize}}&search={{searchEncoded}}{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}">{{#i18n}}pagination.next{{/i18n}}</a>
+            {{/hasSearch}}
+            {{^hasSearch}}
+              <a class="btn btn-outline-dark btn-sm" href="{{contextPath}}/payment?page={{nextPage}}&size={{pageSize}}{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}">{{#i18n}}pagination.next{{/i18n}}</a>
+            {{/hasSearch}}
+          {{/hasNext}}
+          {{^hasNext}}
+            <span class="btn  btn-secondary btn-sm disabled">{{#i18n}}pagination.next{{/i18n}}</span>
+          {{/hasNext}}
+        </div>
+      </div>
+      <table class="table table-striped align-middle mb-0 mt-3" id="paymentsTable">
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">{{#i18n}}payment.email{{/i18n}}</th>
+            <th scope="col" class="d-none d-lg-table-cell">{{#i18n}}player.licence{{/i18n}}</th>
+            <th scope="col" class="d-none d-lg-table-cell">{{#i18n}}player.name{{/i18n}}</th>
+            <th scope="col">{{#i18n}}payment.status{{/i18n}}</th>
+            <th scope="col">{{#i18n}}payment.type{{/i18n}}</th>
+            <th scope="col">{{#i18n}}payment.amount{{/i18n}}</th>
+            <th scope="col">{{#i18n}}payment.created{{/i18n}}</th>
+            <th scope="col">{{#i18n}}payment.updated{{/i18n}}</th>
+            <th scope="col">{{#i18n}}label.action{{/i18n}}</th>
+          </tr>
+        </thead>
+        <tbody id="paymentsTableBody">
+          {{#paymentRows}}
+            <tr class="js-payment-row" data-id="{{payment.id}}" data-name="{{names}}">
+              <td>{{payment.id}}</td>
+              <td>{{payment.userEmail}}</td>
+              <td class="d-none d-lg-table-cell">{{licences}}</td>
+              <td class="d-none d-lg-table-cell">{{names}}</td>
+              <td>{{#statusMessageKey}}{{#i18n}}{{statusMessageKey}}{{/i18n}}{{/statusMessageKey}}</td>
+              <td>{{#typeMessageKey}}{{#i18n}}{{typeMessageKey}}{{/i18n}}{{/typeMessageKey}}{{#payment.donation}} · {{#i18n}}payment.nature.donation{{/i18n}}{{/payment.donation}}</td>
+              <td>{{amountFormatted}}</td>
+              <td>{{createdAtText}}</td>
+              <td>{{updatedAtText}}</td>
+              <td>
+                {{> payment/paymentRowActionsMenu}}
+              </td>
+            </tr>
+          {{/paymentRows}}
+          {{^paymentRows}}
+            <tr>
+              <td colspan="10" class="text-center text-body-secondary">{{#i18n}}info.noPayment{{/i18n}}</td>
+            </tr>
+          {{/paymentRows}}
+        </tbody>
+      </table>
+      </div>
+    </main>
+    {{> platform/footer}}
+    <script type="text/javascript">
+      function normalizePaymentSortValue(value) {
+        return (value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      }
+      function initPaymentsSort() {
+        const sortSelect = document.getElementById('paymentSort');
+        const tableBody = document.getElementById('paymentsTableBody');
+        const rows = Array.from(document.querySelectorAll('.js-payment-row'));
+        if (!sortSelect || !tableBody || rows.length === 0) return;
+        function sortRows() {
+          const mode = sortSelect.value;
+          rows.sort(function (a, b) {
+            if (mode === 'name') {
+              const nameA = normalizePaymentSortValue(a.getAttribute('data-name'));
+              const nameB = normalizePaymentSortValue(b.getAttribute('data-name'));
+              const compareByName = nameA.localeCompare(nameB, 'fr', { sensitivity: 'base' });
+              if (compareByName !== 0) return compareByName;
+            }
+            return Number(b.getAttribute('data-id') || '0') - Number(a.getAttribute('data-id') || '0');
+          });
+          for (const row of rows) tableBody.appendChild(row);
+        }
+        sortSelect.addEventListener('change', sortRows);
+        sortRows();
+      }
+      initPaymentsSort();
+    </script>
+  </body>
+</html>

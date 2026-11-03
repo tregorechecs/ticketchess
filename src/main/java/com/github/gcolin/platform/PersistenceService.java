@@ -56,14 +56,70 @@ public class PersistenceService {
     public void init() {
         initDatasource();
         //applySchemaPatches();
+        renameOrganisationTransferColumns();
         Map<String, Object> props = new HashMap<>();
         props.put("jakarta.persistence.nonJtaDataSource", dataSource);
-        props.put("hibernate.hbm2ddl.auto", "update");
+        // Closest EclipseLink equivalent of Hibernate hbm2ddl.auto=update.
+        props.put("eclipselink.ddl-generation", "create-or-extend-tables");
+        props.put("eclipselink.ddl-generation.output-mode", "database");
+        // Classes are statically woven by eclipselink-maven-plugin (process-classes).
+        props.put("eclipselink.weaving", "static");
 
         emf = Persistence.createEntityManagerFactory("myPU", props);
         //backfillMembershipTimestamps();
         initH2FromPostgresDumpIfNeeded();
+        dropOrganisationThemeColumn();
         //backfillMembershipSeasonIdsAfterBootstrap();
+    }
+
+    private void renameOrganisationTransferColumns() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "ORGANISATION")) {
+                return;
+            }
+            renameOrganisationColumn(
+                    connection, "stripe_transfer_events", "payment_transfer_events");
+            renameOrganisationColumn(
+                    connection, "stripe_transfer_memberships", "payment_transfer_memberships");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to rename organisation transfer columns", e);
+        }
+    }
+
+    private void renameOrganisationColumn(Connection connection, String oldName, String newName) throws SQLException {
+        boolean hasOld = columnExists(connection, "ORGANISATION", oldName);
+        boolean hasNew = columnExists(connection, "ORGANISATION", newName);
+        if (!hasOld || hasNew) {
+            return;
+        }
+        try (Statement st = connection.createStatement()) {
+            if (isH2()) {
+                st.execute("ALTER TABLE organisation ALTER COLUMN " + oldName + " RENAME TO " + newName);
+            } else {
+                st.execute("ALTER TABLE organisation RENAME COLUMN " + oldName + " TO " + newName);
+            }
+        }
+        tableColumnsCache.remove("ORGANISATION");
+        logger.info("Renamed organisation.{} to {}", oldName, newName);
+    }
+
+    private void dropOrganisationThemeColumn() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "ORGANISATION") || !columnExists(connection, "ORGANISATION", "THEME")) {
+                return;
+            }
+            try (Statement st = connection.createStatement()) {
+                if (isH2()) {
+                    st.execute("ALTER TABLE organisation DROP COLUMN theme");
+                } else {
+                    st.execute("ALTER TABLE organisation DROP COLUMN IF EXISTS theme");
+                }
+            }
+            tableColumnsCache.remove("ORGANISATION");
+            logger.info("Dropped obsolete organisation.theme column");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to drop organisation.theme column", e);
+        }
     }
 
     private void backfillMembershipSeasonIdsAfterBootstrap() {
@@ -137,10 +193,12 @@ public class PersistenceService {
 
                 Path dbFile = dbDir.resolve(dbName);
                 String dbFilePath = dbFile.toAbsolutePath().toString().replace('\\', '/');
-                databaseUrl = "jdbc:h2:file:" + dbFilePath;
+                // MODE=LEGACY: EclipseLink DDL still emits "INTEGER IDENTITY" / CALL IDENTITY().
+                databaseUrl = "jdbc:h2:file:" + dbFilePath + ";MODE=LEGACY";
                 logger.info("h2 using persistent database on disk at {}", dbFilePath);
             } else {
-                databaseUrl = "jdbc:h2:mem:" + dbName;
+                // MODE=LEGACY: EclipseLink DDL still emits "INTEGER IDENTITY" / CALL IDENTITY().
+                databaseUrl = "jdbc:h2:mem:" + dbName + ";MODE=LEGACY";
                 logger.info(
                         "h2 using in-memory database (set db.h2.persistent=true or DB_H2_PERSISTENT=true for disk persistence)");
             }

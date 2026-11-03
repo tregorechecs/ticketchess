@@ -1,0 +1,336 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}menu.admin{{/i18n}}</li>
+        </ol>
+      </nav>
+
+    {{#successIsCacheCleared}}
+      <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.cacheCleared{{/i18n}}</div>
+    {{/successIsCacheCleared}}
+  
+
+    <div class="admin-table-panel mb-4">
+        <h1 class="mb-2">{{#i18n}}page.admin{{/i18n}}</h1>
+          <p class="text-body-secondary mb-0">{{#i18n}}help.adminHub{{/i18n}}</p>
+      </div>
+
+    {{#adminSectionEvent}}
+      <div class="admin-table-panel mb-4">
+  <h2 class="h5 mb-2">{{#i18n}}admin.section.event{{/i18n}}</h2>
+        <div class="row g-3">
+          {{#user.canManageEvents}}
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/events">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-list-nested fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.adminEvents{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.adminEventsDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/playersubscription-admin">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-person-check fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.playerSubscriptionsAdmin{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.playerSubscriptionsDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+          {{/user.canManageEvents}}
+          {{#user.canManagePayments}}
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/payment">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-credit-card fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.payments{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.paymentsDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+          {{/user.canManagePayments}}
+          {{#user.canManageEvents}}
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/dashboard">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-speedometer2 fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.dashboard{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.dashboardDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+          {{/user.canManageEvents}}
+          {{#userCanViewStatistics}}
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/statistics">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-bar-chart fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.statistics{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.statisticsDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+          {{/userCanViewStatistics}}
+        </div>
+        </div>
+    {{/adminSectionEvent}}
+
+    {{#adminSectionUsers}}
+      <div class="admin-table-panel mb-4">
+  <h2 class="h5 mb-2">{{#i18n}}admin.section.users{{/i18n}}</h2>
+        <div class="row g-3">
+          {{#user.canManageEvents}}
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/customplayer">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-people fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.players{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.playersDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+          {{/user.canManageEvents}}
+          {{#user.admin}}
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/database/manual-players">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-person-plus fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.databasePlayers{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.databasePlayersDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/database">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-database fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.database{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.databaseDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/logged-users">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-person-lines-fill fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.loggedUsers{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.loggedUsersDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/user-authorization">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-shield-lock fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.userAuthorizations{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.userAuthorizationsDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/logas">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-incognito fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.logas{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.logasDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+          {{/user.admin}}
+        </div>
+        </div>
+    {{/adminSectionUsers}}
+
+    {{#user.canManageMemberships}}
+      <div class="admin-table-panel mb-4">
+  <h2 class="h5 mb-2">{{#i18n}}admin.section.membership{{/i18n}}</h2>
+        <div class="row g-3">
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/membership">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-person-vcard fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.memberships{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.membershipsDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/membership-option-admin">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-toggles fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.membershipOptions{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.membershipOptionsDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/membership-option-files">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-folder fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.membershipOptionFiles{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.membershipOptionFilesDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            {{#user.canManagePayments}}
+            <div class="col-12 col-md-6 col-xl-4">
+              <a class="card h-100 text-decoration-none" href="{{contextPath}}/license-admin">
+                <div class="card-body">
+                  <div class="d-flex align-items-start gap-3">
+                    <i class="bi bi-card-list fs-3 text-primary"></i>
+                    <div>
+                      <h3 class="h5 mb-1">{{#i18n}}menu.licenses{{/i18n}}</h3>
+                      <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.licensesDesc{{/i18n}}</p>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            {{/user.canManagePayments}}
+        </div>
+        </div>
+    {{/user.canManageMemberships}}
+
+    {{#user.admin}}
+      <div class="admin-table-panel mb-4">
+  <h2 class="h5 mb-2">{{#i18n}}admin.section.system{{/i18n}}</h2>
+        <div class="row g-3">
+          {{#user.platformAdmin}}
+          <div class="col-12 col-md-6 col-xl-4">
+            <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/organisations">
+              <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                  <i class="bi bi-building fs-3 text-primary"></i>
+                  <div>
+                    <h3 class="h5 mb-1">{{#i18n}}menu.organisations{{/i18n}}</h3>
+                    <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.organisationsDesc{{/i18n}}</p>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
+          {{/user.platformAdmin}}
+          <div class="col-12 col-md-6 col-xl-4">
+            <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/org">
+              <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                  <i class="bi bi-bank fs-3 text-primary"></i>
+                  <div>
+                    <h3 class="h5 mb-1">{{#i18n}}page.adminOrg{{/i18n}}</h3>
+                    <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.ribDesc{{/i18n}}</p>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
+          <div class="col-12 col-md-6 col-xl-4">
+            <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/clear-cache">
+              <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                  <i class="bi bi-arrow-clockwise fs-3 text-primary"></i>
+                  <div>
+                    <h3 class="h5 mb-1">{{#i18n}}action.clearCache{{/i18n}}</h3>
+                    <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.clearCacheDesc{{/i18n}}</p>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
+          <div class="col-12 col-md-6 col-xl-4">
+            <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/mail">
+              <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                  <i class="bi bi-envelope fs-3 text-primary"></i>
+                  <div>
+                    <h3 class="h5 mb-1">{{#i18n}}page.adminMail{{/i18n}}</h3>
+                    <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.mailDesc{{/i18n}}</p>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
+          <div class="col-12 col-md-6 col-xl-4">
+            <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/seasons">
+              <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                  <i class="bi bi-calendar-range fs-3 text-primary"></i>
+                  <div>
+                    <h3 class="h5 mb-1">{{#i18n}}page.seasons{{/i18n}}</h3>
+                    <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.seasonsDesc{{/i18n}}</p>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
+        </div>
+        </div>
+    {{/user.admin}}
+  
+    </main>
+    {{> platform/footer}}
+
+  </body>
+</html>
+

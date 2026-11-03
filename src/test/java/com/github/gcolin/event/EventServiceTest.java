@@ -34,6 +34,7 @@ class EventServiceTest {
     private Find finder;
     private EventInfoDao eventInfoService;
     private EventGroupDao eventGroupService;
+    private PlayerSubscriptionDao playerSubscriptionDao;
     private TestContext testContext;
 
     @BeforeEach
@@ -43,12 +44,14 @@ class EventServiceTest {
         finder = mock(Find.class);
         eventInfoService = mock(EventInfoDao.class);
         eventGroupService = mock(EventGroupDao.class);
+        playerSubscriptionDao = mock(PlayerSubscriptionDao.class);
         testContext = TestContext.open(em);
         eventService = TestContext.createDao(EventDao.class, em);
         eventService.setFinder(finder);
         eventService.setEventInfoDao(() -> eventInfoService);
         eventService.setEventGroupDao(() -> eventGroupService);
         eventService.setEventOptionDao(() -> eventOptionDao);
+        eventService.setPlayerSubscriptionDao(() -> playerSubscriptionDao);
     }
 
     @AfterEach
@@ -202,6 +205,7 @@ class EventServiceTest {
         EventInfo eventInfo = new EventInfo();
         eventInfo.setDescription("**Test** description");
         when(eventInfoService.find(event)).thenReturn(eventInfo);
+        when(playerSubscriptionDao.findByEvent(event)).thenReturn(event.getSubscriptions());
 
         doAnswer(invocation -> invocation.getArgument(0)).when(em).detach(any());
 
@@ -251,6 +255,7 @@ class EventServiceTest {
         when(finder.player("123", EventType.STANDARD)).thenReturn(player);
         when(finder.player("MISSING", EventType.STANDARD)).thenReturn(null);
         when(eventInfoService.find(event)).thenReturn(null);
+        when(playerSubscriptionDao.findByEvent(event)).thenReturn(event.getSubscriptions());
         doAnswer(invocation -> invocation.getArgument(0)).when(em).detach(any());
 
         EventCache cache = eventService.buildCache(1);

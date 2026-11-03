@@ -4,6 +4,8 @@ import com.github.gcolin.auth.LoggedOnly;
 import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.organisation.Organisation;
+import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.payment.RibService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -23,7 +25,6 @@ import jakarta.ws.rs.core.UriInfo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,48 +38,9 @@ public class AdminApi {
 
     private static final Logger logger = LoggerFactory.getLogger(AdminApi.class);
 
+    private static final Set<String> MOVED_ORG_TABS = Set.of("club", "invoice", "files", "stripe");
+
     static final Map<String, Set<String>> TAB_KEYS = Map.of(
-            "club",
-            Set.of(
-                    "title",
-                    "contact.url",
-                    "source.url",
-                    "org.name",
-                    "org.email",
-                    "org.address",
-                    "org.hosting.address",
-                    "membership.notif.emails"),
-            "invoice",
-            Set.of(
-                    "invoice.seller.name",
-                    "invoice.seller.address1",
-                    "invoice.seller.address2",
-                    "invoice.seller.zip",
-                    "invoice.seller.city",
-                    "invoice.seller.country",
-                    "invoice.seller.email",
-                    "invoice.seller.phone",
-                    "invoice.seller.website",
-                    "invoice.seller.siret",
-                    "invoice.seller.rna",
-                    "invoice.seller.prefecture",
-                    "invoice.number.prefix",
-                    "invoice.footer",
-                    "invoice.vat.notice",
-                    "invoice.donation.object",
-                    "invoice.donation.signatory",
-                    "invoice.donation.signatoryTitle",
-                    "invoice.donation.prefix"),
-            "stripe",
-            Set.of(
-                    "stripe.public",
-                    "stripe.secret",
-                    "stripe.keyprefix",
-                    "stripe.simuled",
-                    "stripe.card.events",
-                    "stripe.card.memberships",
-                    "stripe.transfer.events",
-                    "stripe.transfer.memberships"),
             "oauth",
             Set.of(
                     "oauth.clientId",
@@ -93,8 +55,6 @@ public class AdminApi {
             Set.of(
                     "baseurl",
                     "jwt.key",
-                    "mail.USER_NAME",
-                    "mail.PASSWORD",
                     "db.host",
                     "db.name",
                     "db.user",
@@ -103,13 +63,7 @@ public class AdminApi {
                     "db.h2.loadPostgresDump",
                     "db.h2.postgresDumpFile"));
 
-    static final Set<String> BOOLEAN_KEYS = Set.of(
-            "stripe.simuled",
-            "stripe.card.events",
-            "stripe.card.memberships",
-            "stripe.transfer.events",
-            "stripe.transfer.memberships",
-            "db.h2.loadPostgresDump");
+    static final Set<String> BOOLEAN_KEYS = Set.of("db.h2.loadPostgresDump");
 
     @Inject
     private LoggedUser user;
@@ -145,7 +99,12 @@ public class AdminApi {
         }
         Map<String, Object> model = new HashMap<>();
         model.put("success", success);
-        return Response.ok(new JteHtml(model, "platform/admin.jte"))
+        model.put(
+                "adminSectionEvent",
+                user.canManageEvents() || user.isAdmin() || user.canManagePayments());
+        model.put("adminSectionUsers", user.canManageEvents() || user.isAdmin());
+        model.put("userCanViewStatistics", user.canManagePayments() || user.canManageEvents());
+        return Response.ok(new MustacheHtml(model, "platform/admin.mustache"))
                 .build();
     }
 
@@ -157,7 +116,6 @@ public class AdminApi {
         caches.getRoleCache().invalidateAll();
         caches.getAllEvents().invalidateAll();
         caches.getEvent().invalidateAll();
-        caches.getNotifications().invalidateAll();
         caches.getEventGroups().invalidateAll();
 
         URI redirect = Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
@@ -184,41 +142,63 @@ public class AdminApi {
     @GET
     @Path("org")
     @RequireRole(RoleCode.ADMIN)
-    public JteHtml orgPage(
+    public Response orgPage(
             @QueryParam("success") @DefaultValue("") String success,
             @QueryParam("error") @DefaultValue("") String error,
-            @QueryParam("tab") @DefaultValue("club") String tab) {
+            @QueryParam("tab") @DefaultValue("oauth") String tab) {
+        String effectiveTab = tab;
+        if (MOVED_ORG_TABS.contains(effectiveTab)) {
+            Organisation current = OrgScope.currentOrg();
+            if (current != null && current.getId() != null) {
+                var builder = uriInfo.getBaseUriBuilder()
+                        .path("admin/organisations")
+                        .path(String.valueOf(current.getId()))
+                        .queryParam("tab", effectiveTab);
+                if (success != null && !success.isBlank()) {
+                    builder.queryParam("success", success);
+                }
+                if (error != null && !error.isBlank()) {
+                    builder.queryParam("error", error);
+                }
+                return Response.seeOther(Redirects.toSameOriginRelative(builder.fragment(effectiveTab).build()))
+                        .build();
+            }
+            effectiveTab = "oauth";
+        }
+        boolean platformAdmin = user != null && user.isPlatformAdmin();
+        if ("system".equals(effectiveTab) && !platformAdmin) {
+            effectiveTab = "oauth";
+        }
         Map<String, Object> model = new HashMap<>();
-        boolean ribAvailable = ribService.exists();
         model.put("success", success);
         model.put("error", error);
-        model.put("tab", tab);
-        model.put("ribAvailable", ribAvailable);
-        model.put("logoAvailable", logoService.exists());
-        model.put("signatureAvailable", signatureService.exists());
-        model.put("backgroundAvailable", backgroundService.exists());
+        model.put("tab", effectiveTab);
+        model.put("showSystemTab", platformAdmin);
+        model.put("titleKey", "page.adminOrg");
+        model.put("publicBaseUrl", config.getPublicBaseUrl());
+        var currentOrg = OrgScope.currentOrg();
+        if (currentOrg != null) {
+            model.put("currentOrgName", currentOrg.getName());
+            model.put("currentOrgSlug", currentOrg.getSlug());
+            model.put("currentOrgId", currentOrg.getId());
+        }
         Map<String, String> cfg = new LinkedHashMap<>(config.getOrgFormValues());
         for (Set<String> keys : TAB_KEYS.values()) {
             for (String key : keys) {
                 cfg.putIfAbsent(key, "");
             }
         }
+        if (platformAdmin) {
+            cfg.put("baseurl", config.platformProperty("baseurl", ""));
+        }
         model.put("cfg", cfg);
-        model.put("clubRegisterEnabled", config.getPage().isClubRegisterEnabled());
         Map<String, Boolean> secrets = new LinkedHashMap<>();
         for (String key : Config.SECRET_KEYS) {
             secrets.put(key, config.isSecretConfigured(key));
         }
         model.put("secretsConfigured", secrets);
-        if (ribAvailable) {
-            var ribFile = ribService.getRibFile();
-            try {
-                model.put("ribSize", ServiceUtils.readable(Files.size(ribFile)));
-            } catch (IOException e) {
-                logger.warn("cannot read RIB file size", e);
-            }
-        }
-        return new JteHtml(model, "platform/adminOrg.jte");
+        MustacheOrgConfigView.enrich(model);
+        return Response.ok(new MustacheHtml(model, "platform/adminOrg.mustache")).build();
     }
 
     @POST
@@ -228,7 +208,10 @@ public class AdminApi {
     public Response saveConfig(MultivaluedMap<String, String> form) {
         String tab = formValue(form, "tab");
         if (tab == null || !TAB_KEYS.containsKey(tab)) {
-            return redirectToOrg("error", "configInvalid", "club");
+            return redirectToOrg("error", "configInvalid", "oauth");
+        }
+        if ("system".equals(tab) && (user == null || !user.isPlatformAdmin())) {
+            return Response.status(Response.Status.FORBIDDEN).build();
         }
         Map<String, String> updates = new LinkedHashMap<>();
         for (String key : TAB_KEYS.get(tab)) {
@@ -240,10 +223,6 @@ public class AdminApi {
             }
         }
         try {
-            if ("stripe".equals(tab) && !ribService.exists()) {
-                updates.put("stripe.transfer.events", "false");
-                updates.put("stripe.transfer.memberships", "false");
-            }
             config.updateProperties(updates);
             if ("system".equals(tab) && sendMail != null) {
                 sendMail.reloadCredentials();
@@ -263,7 +242,7 @@ public class AdminApi {
     public Response uploadRib(InputStream file) {
         try {
             ribService.save(file);
-            return jsonRedirectToOrg("success", "ribUploaded", "files");
+            return jsonRedirectToOrgFiles("success", "ribUploaded");
         } catch (WebApplicationException e) {
             String error = "ribUploadFailed";
             String message = e.getMessage() == null ? "" : e.getMessage();
@@ -272,10 +251,10 @@ public class AdminApi {
             } else if (message.contains("too large")) {
                 error = "ribTooLarge";
             }
-            return jsonRedirectToOrg("error", error, "files");
+            return jsonRedirectToOrgFiles("error", error);
         } catch (IOException e) {
             logger.error("cannot save RIB file", e);
-            return jsonRedirectToOrg("error", "ribUploadFailed", "files");
+            return jsonRedirectToOrgFiles("error", "ribUploadFailed");
         }
     }
 
@@ -287,13 +266,13 @@ public class AdminApi {
         try {
             ribService.delete();
             Map<String, String> updates = new LinkedHashMap<>();
-            updates.put("stripe.transfer.events", "false");
-            updates.put("stripe.transfer.memberships", "false");
+            updates.put("payment.transfer.events", "false");
+            updates.put("payment.transfer.memberships", "false");
             config.updateProperties(updates);
-            return jsonRedirectToOrg("success", "ribDeleted", "files");
+            return jsonRedirectToOrgFiles("success", "ribDeleted");
         } catch (IOException e) {
             logger.error("cannot delete RIB file", e);
-            return jsonRedirectToOrg("error", "ribDeleteFailed", "files");
+            return jsonRedirectToOrgFiles("error", "ribDeleteFailed");
         }
     }
 
@@ -306,7 +285,7 @@ public class AdminApi {
         try {
             logoService.save(file);
             config.applyRuntime();
-            return jsonRedirectToOrg("success", "logoUploaded", "files");
+            return jsonRedirectToOrgFiles("success", "logoUploaded");
         } catch (WebApplicationException e) {
             String error = "logoUploadFailed";
             String message = e.getMessage() == null ? "" : e.getMessage();
@@ -315,10 +294,10 @@ public class AdminApi {
             } else if (message.contains("too large")) {
                 error = "logoTooLarge";
             }
-            return jsonRedirectToOrg("error", error, "files");
+            return jsonRedirectToOrgFiles("error", error);
         } catch (IOException e) {
             logger.error("cannot save logo file", e);
-            return jsonRedirectToOrg("error", "logoUploadFailed", "files");
+            return jsonRedirectToOrgFiles("error", "logoUploadFailed");
         }
     }
 
@@ -330,10 +309,10 @@ public class AdminApi {
         try {
             logoService.delete();
             config.applyRuntime();
-            return jsonRedirectToOrg("success", "logoDeleted", "files");
+            return jsonRedirectToOrgFiles("success", "logoDeleted");
         } catch (IOException e) {
             logger.error("cannot delete logo file", e);
-            return jsonRedirectToOrg("error", "logoDeleteFailed", "files");
+            return jsonRedirectToOrgFiles("error", "logoDeleteFailed");
         }
     }
 
@@ -345,7 +324,7 @@ public class AdminApi {
     public Response uploadSignature(InputStream file) {
         try {
             signatureService.save(file);
-            return jsonRedirectToOrg("success", "signatureUploaded", "files");
+            return jsonRedirectToOrgFiles("success", "signatureUploaded");
         } catch (WebApplicationException e) {
             String error = "signatureUploadFailed";
             String message = e.getMessage() == null ? "" : e.getMessage();
@@ -354,10 +333,10 @@ public class AdminApi {
             } else if (message.contains("too large")) {
                 error = "signatureTooLarge";
             }
-            return jsonRedirectToOrg("error", error, "files");
+            return jsonRedirectToOrgFiles("error", error);
         } catch (IOException e) {
             logger.error("cannot save signature file", e);
-            return jsonRedirectToOrg("error", "signatureUploadFailed", "files");
+            return jsonRedirectToOrgFiles("error", "signatureUploadFailed");
         }
     }
 
@@ -368,10 +347,10 @@ public class AdminApi {
     public Response deleteSignature() {
         try {
             signatureService.delete();
-            return jsonRedirectToOrg("success", "signatureDeleted", "files");
+            return jsonRedirectToOrgFiles("success", "signatureDeleted");
         } catch (IOException e) {
             logger.error("cannot delete signature file", e);
-            return jsonRedirectToOrg("error", "signatureDeleteFailed", "files");
+            return jsonRedirectToOrgFiles("error", "signatureDeleteFailed");
         }
     }
 
@@ -384,7 +363,7 @@ public class AdminApi {
         try {
             backgroundService.save(file);
             config.applyRuntime();
-            return jsonRedirectToOrg("success", "backgroundUploaded", "files");
+            return jsonRedirectToOrgFiles("success", "backgroundUploaded");
         } catch (WebApplicationException e) {
             String error = "backgroundUploadFailed";
             String message = e.getMessage() == null ? "" : e.getMessage();
@@ -393,10 +372,10 @@ public class AdminApi {
             } else if (message.contains("too large")) {
                 error = "backgroundTooLarge";
             }
-            return jsonRedirectToOrg("error", error, "files");
+            return jsonRedirectToOrgFiles("error", error);
         } catch (IOException e) {
             logger.error("cannot save background file", e);
-            return jsonRedirectToOrg("error", "backgroundUploadFailed", "files");
+            return jsonRedirectToOrgFiles("error", "backgroundUploadFailed");
         }
     }
 
@@ -408,10 +387,10 @@ public class AdminApi {
         try {
             backgroundService.delete();
             config.applyRuntime();
-            return jsonRedirectToOrg("success", "backgroundDeleted", "files");
+            return jsonRedirectToOrgFiles("success", "backgroundDeleted");
         } catch (IOException e) {
             logger.error("cannot delete background file", e);
-            return jsonRedirectToOrg("error", "backgroundDeleteFailed", "files");
+            return jsonRedirectToOrgFiles("error", "backgroundDeleteFailed");
         }
     }
 
@@ -419,9 +398,23 @@ public class AdminApi {
         return Response.seeOther(orgRedirectUri(queryName, queryValue, tab)).build();
     }
 
-    private Response jsonRedirectToOrg(String queryName, String queryValue, String tab) {
-        return Response.ok(Map.of("redirect", orgRedirectUri(queryName, queryValue, tab).toString()))
+    private Response jsonRedirectToOrgFiles(String queryName, String queryValue) {
+        return Response.ok(Map.of("redirect", orgFilesRedirectUri(queryName, queryValue).toString()))
                 .build();
+    }
+
+    private URI orgFilesRedirectUri(String queryName, String queryValue) {
+        Organisation current = OrgScope.currentOrg();
+        if (current != null && current.getId() != null) {
+            return Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+                    .path("admin/organisations")
+                    .path(String.valueOf(current.getId()))
+                    .queryParam(queryName, queryValue)
+                    .queryParam("tab", "files")
+                    .fragment("files")
+                    .build());
+        }
+        return orgRedirectUri(queryName, queryValue, "oauth");
     }
 
     private URI orgRedirectUri(String queryName, String queryValue, String tab) {

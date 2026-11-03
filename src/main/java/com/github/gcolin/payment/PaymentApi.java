@@ -70,7 +70,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.player.Player;
 
 @Path("payment")
@@ -125,7 +125,7 @@ public class PaymentApi {
 
     @GET
     @RequireRole(RoleCode.TRESORIER)
-    public JteHtml page(
+    public MustacheHtml page(
             @QueryParam("page") @DefaultValue("0") @Min(0) Integer page,
             @QueryParam("size") @DefaultValue("25") @Max(100) @Min(1) Integer size,
             @QueryParam("search") @DefaultValue("") String search,
@@ -193,13 +193,13 @@ public class PaymentApi {
         model.put("prevPage", Math.max(0, page - 2));
         model.put("nextPage", Math.min(totalPages, page));
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "payment/payments.jte");
+        return new MustacheHtml(model, "payment/payments.mustache");
     }
 
     @GET
     @Path("new")
     @RequireRole(RoleCode.TRESORIER)
-    public JteHtml newPayment(
+    public MustacheHtml newPayment(
             @QueryParam("donation") @DefaultValue("false") boolean donation,
             @QueryParam("membershipId") Integer membershipId) {
         if (membershipId != null && !donation) {
@@ -217,20 +217,20 @@ public class PaymentApi {
     @GET
     @Path("{id:\\d+}/edit")
     @RequireRole(RoleCode.TRESORIER)
-    public JteHtml editPayment(
+    public MustacheHtml editPayment(
             @PathParam("id") Integer id, @QueryParam("success") @DefaultValue("") String success) {
         return editPayment(id, false, success);
     }
 
-    private JteHtml editPayment(Integer id, boolean donationMode) {
+    private MustacheHtml editPayment(Integer id, boolean donationMode) {
         return editPayment(id, donationMode, "");
     }
 
-    private JteHtml editPayment(Integer id, boolean donationMode, String success) {
+    private MustacheHtml editPayment(Integer id, boolean donationMode, String success) {
         return editPayment(id, donationMode, success, null);
     }
 
-    private JteHtml editPayment(Integer id, boolean donationMode, String success, Integer membershipId) {
+    private MustacheHtml editPayment(Integer id, boolean donationMode, String success, Integer membershipId) {
         Payment payment;
         List<PlayerSubscription> currentSubs = List.of();
         List<PlayerSubscriptionOption> currentOptions = List.of();
@@ -340,7 +340,7 @@ public class PaymentApi {
         model.put("optionDisplays", optionDisplays);
         model.put("membershipDisplays", membershipDisplays);
         model.put("success", success == null ? "" : success);
-        return new JteHtml(model, "payment/paymentEdit.jte");
+        return new MustacheHtml(model, "payment/paymentEdit.mustache");
     }
 
     private String buildFullName(IPlayer player) {
@@ -466,6 +466,7 @@ public class PaymentApi {
 
         if (id == null) {
             paymentService.persist(payment);
+            paymentService.flush();
         } else {
             payment = paymentService.merge(payment);
         }
@@ -729,9 +730,9 @@ public class PaymentApi {
             existing.setStripeSessionId(simSession);
             paymentService.persist(existing);
         }
-        return Response.ok(new JteHtml(
+        return Response.ok(new MustacheHtml(
                         Map.of("simulationPath", "/payment/sim"),
-                        "payment/paymentStatus.jte"))
+                        "payment/paymentStatus.mustache"))
                 .build();
     }
 
@@ -890,9 +891,9 @@ public class PaymentApi {
             existing.setStripeSessionId(simSession);
             paymentService.persist(existing);
         }
-        return Response.ok(new JteHtml(
+        return Response.ok(new MustacheHtml(
                         Map.of("simulationPath", "/payment/membership/sim"),
-                        "payment/paymentStatus.jte"))
+                        "payment/paymentStatus.mustache"))
                 .build();
     }
 
@@ -1061,7 +1062,7 @@ public class PaymentApi {
     @Path("audit")
     @RequireRole(RoleCode.TRESORIER)
     @Transactional
-    public JteHtml audit(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml audit(@QueryParam("seasonId") Integer seasonId) {
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
         List<Payment> payments = paymentService.all(scope);
         List<Map<String, Object>> mismatches = new ArrayList<>();
@@ -1107,7 +1108,7 @@ public class PaymentApi {
         Map<String, Object> model = new HashMap<>();
         model.put("mismatches", mismatches);
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "payment/paymentAudit.jte");
+        return new MustacheHtml(model, "payment/paymentAudit.mustache");
     }
 
     @POST
@@ -1156,7 +1157,7 @@ public class PaymentApi {
     @GET
     @Path("{id:\\d+}/payer")
     @LoggedOnly
-    public JteHtml editPayer(
+    public MustacheHtml editPayer(
             @PathParam("id") Integer id,
             @QueryParam("returnTo") String returnTo,
             @QueryParam("success") String success) {
@@ -1172,7 +1173,7 @@ public class PaymentApi {
                         payment, subs, memberships, find, loggerUser.getUsername()));
         model.put("returnTo", defaultPayerReturnTo(returnTo, memberships));
         model.put("success", success == null ? "" : success);
-        return new JteHtml(model, "payment/paymentPayer.jte");
+        return new MustacheHtml(model, "payment/paymentPayer.mustache");
     }
 
     @POST

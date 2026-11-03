@@ -1,0 +1,618 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          {{#canEditIdentity}}
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin/organisations">{{#i18n}}breadcrumb.organisations{{/i18n}}</a></li>
+          {{/canEditIdentity}}
+          {{^canEditIdentity}}
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin/org">{{#i18n}}page.adminOrg{{/i18n}}</a></li>
+          {{/canEditIdentity}}
+          <li class="breadcrumb-item active" aria-current="page">{{title}}</li>
+        </ol>
+      </nav>
+
+      {{#identityError}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}organisations.error.{{identityError}}{{/i18n}}</div>
+      {{/identityError}}
+
+      {{#successIsRibUploaded}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.ribUploaded{{/i18n}}</div>
+      {{/successIsRibUploaded}}{{#successIsLogoUploaded}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.logoUploaded{{/i18n}}</div>
+      {{/successIsLogoUploaded}}{{#successIsSignatureUploaded}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.signatureUploaded{{/i18n}}</div>
+      {{/successIsSignatureUploaded}}{{#successIsBackgroundUploaded}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.backgroundUploaded{{/i18n}}</div>
+      {{/successIsBackgroundUploaded}}{{#successIsLogoDeleted}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.logoDeleted{{/i18n}}</div>
+      {{/successIsLogoDeleted}}{{#successIsSignatureDeleted}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.signatureDeleted{{/i18n}}</div>
+      {{/successIsSignatureDeleted}}{{#successIsBackgroundDeleted}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.backgroundDeleted{{/i18n}}</div>
+      {{/successIsBackgroundDeleted}}{{#successIsRibDeleted}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.ribDeleted{{/i18n}}</div>
+      {{/successIsRibDeleted}}{{#successIsConfigSaved}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}admin.configSaved{{/i18n}}</div>
+      {{/successIsConfigSaved}}{{#successIsUpdated}}
+        <div class="alert alert-success mb-3" role="alert">{{#i18n}}organisations.success.updated{{/i18n}}</div>
+      {{/successIsUpdated}}
+      {{#errorIsRibUploadFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.ribUploadFailed{{/i18n}}</div>
+      {{/errorIsRibUploadFailed}}{{#errorIsInvalidRib}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.ribInvalid{{/i18n}}</div>
+      {{/errorIsInvalidRib}}{{#errorIsRibTooLarge}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.ribTooLarge{{/i18n}}</div>
+      {{/errorIsRibTooLarge}}{{#errorIsLogoUploadFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.logoUploadFailed{{/i18n}}</div>
+      {{/errorIsLogoUploadFailed}}{{#errorIsInvalidLogo}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.logoInvalid{{/i18n}}</div>
+      {{/errorIsInvalidLogo}}{{#errorIsLogoTooLarge}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.logoTooLarge{{/i18n}}</div>
+      {{/errorIsLogoTooLarge}}{{#errorIsSignatureUploadFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.signatureUploadFailed{{/i18n}}</div>
+      {{/errorIsSignatureUploadFailed}}{{#errorIsInvalidSignature}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.signatureInvalid{{/i18n}}</div>
+      {{/errorIsInvalidSignature}}{{#errorIsSignatureTooLarge}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.signatureTooLarge{{/i18n}}</div>
+      {{/errorIsSignatureTooLarge}}{{#errorIsBackgroundUploadFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.backgroundUploadFailed{{/i18n}}</div>
+      {{/errorIsBackgroundUploadFailed}}{{#errorIsInvalidBackground}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.backgroundInvalid{{/i18n}}</div>
+      {{/errorIsInvalidBackground}}{{#errorIsBackgroundTooLarge}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.backgroundTooLarge{{/i18n}}</div>
+      {{/errorIsBackgroundTooLarge}}{{#errorIsLogoDeleteFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.logoDeleteFailed{{/i18n}}</div>
+      {{/errorIsLogoDeleteFailed}}{{#errorIsSignatureDeleteFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.signatureDeleteFailed{{/i18n}}</div>
+      {{/errorIsSignatureDeleteFailed}}{{#errorIsBackgroundDeleteFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.backgroundDeleteFailed{{/i18n}}</div>
+      {{/errorIsBackgroundDeleteFailed}}{{#errorIsRibDeleteFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.ribDeleteFailed{{/i18n}}</div>
+      {{/errorIsRibDeleteFailed}}{{#errorIsConfigSaveFailed}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.configSaveFailed{{/i18n}}</div>
+      {{/errorIsConfigSaveFailed}}{{#errorIsConfigInvalid}}
+        <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.configInvalid{{/i18n}}</div>
+      {{/errorIsConfigInvalid}}
+      <div id="rib-status" class="alert d-none mb-3" role="alert"></div>
+
+      <div class="admin-table-panel mb-4">
+        <h1 class="h3 mb-3">{{title}}</h1>
+
+        {{^editMode}}
+        <form method="post" action="{{contextPath}}/admin/organisations">
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="org_slug" class="form-label">{{#i18n}}label.slug{{/i18n}}</label>
+              <input id="org_slug" type="text" name="slug" class="form-control" value="{{organisation.slug}}" required maxlength="100" pattern="[a-z0-9][a-z0-9-]*">
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="org_name" class="form-label">{{#i18n}}label.orgName{{/i18n}}</label>
+              <input id="org_name" type="text" name="name" class="form-control" value="{{organisation.name}}" required maxlength="255">
+            </div>
+            <div class="col-12">
+              <label for="org_base_url" class="form-label">{{#i18n}}label.baseUrl{{/i18n}}</label>
+              <input id="org_base_url" type="url" name="base_url" class="form-control" value="{{organisation.baseUrl}}" required maxlength="500" placeholder="https://club.example.org">
+            </div>
+            <div class="col-12">
+              <label for="org_super_user_email" class="form-label">{{#i18n}}label.superUserEmail{{/i18n}}</label>
+              <input id="org_super_user_email" type="email" name="super_user_email" class="form-control" value="{{organisation.superUserEmail}}" required maxlength="320">
+            </div>
+            <div class="col-12">
+              <label for="org_clone" class="form-label">{{#i18n}}label.cloneFromOrganisation{{/i18n}}</label>
+              <select id="org_clone" name="cloneFromOrgId" class="form-select">
+                <option value="">{{#i18n}}label.none{{/i18n}}</option>
+                {{#organisations}}
+                  <option value="{{id}}" {{#cloneSelected}}selected{{/cloneSelected}}>{{name}} ({{slug}})</option>
+                {{/organisations}}
+              </select>
+              <div class="form-text">{{#i18n}}help.cloneFromOrganisation{{/i18n}}</div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <a class="btn btn-secondary" href="{{contextPath}}/admin/organisations">{{#i18n}}action.cancel{{/i18n}}</a>
+            <button type="submit" class="btn btn-primary">{{#i18n}}action.createOrganisation{{/i18n}}</button>
+          </div>
+        </form>
+        {{/editMode}}
+
+        {{#editMode}}
+        <ul class="nav nav-tabs rounded-top-2" id="org-tabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {{#tabIsclub}}active{{/tabIsclub}}" id="club-tab" data-bs-toggle="tab" data-bs-target="#club" type="button" role="tab">{{#i18n}}admin.tab.club{{/i18n}}</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {{#tabIsappearance}}active{{/tabIsappearance}}" id="appearance-tab" data-bs-toggle="tab" data-bs-target="#appearance" type="button" role="tab">{{#i18n}}admin.tab.appearance{{/i18n}}</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {{#tabIsinvoice}}active{{/tabIsinvoice}}" id="invoice-tab" data-bs-toggle="tab" data-bs-target="#invoice" type="button" role="tab">{{#i18n}}admin.tab.invoice{{/i18n}}</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {{#tabIsfiles}}active{{/tabIsfiles}}" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab">{{#i18n}}admin.tab.files{{/i18n}}</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {{#tabIsstripe}}active{{/tabIsstripe}}" id="stripe-tab" data-bs-toggle="tab" data-bs-target="#stripe" type="button" role="tab">{{#i18n}}admin.tab.stripe{{/i18n}}</button>
+          </li>
+        </ul>
+
+        <div class="tab-content rounded-bottom p-3 border border-top-0">
+          <div class="tab-pane fade {{#tabIsclub}}show active{{/tabIsclub}}" id="club" role="tabpanel">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
+              <input type="hidden" name="tab" value="club">
+              <div class="mb-3"><label class="form-label" for="title">{{#i18n}}admin.field.title{{/i18n}}</label>
+                <input class="form-control" id="title" name="title" value="{{cfgu.title}}"></div>
+              <div class="mb-3"><label class="form-label" for="org.name">{{#i18n}}admin.field.orgName{{/i18n}}</label>
+                <input class="form-control" id="org.name" name="org.name" value="{{cfgu.org_name}}"></div>
+              {{#canEditIdentity}}
+              <div class="mb-3">
+                <label for="org_base_url" class="form-label">{{#i18n}}label.baseUrl{{/i18n}}</label>
+                <input id="org_base_url" type="url" name="base_url" class="form-control" value="{{organisation.baseUrl}}" required maxlength="500" placeholder="https://club.example.org">
+              </div>
+              <div class="mb-3">
+                <label for="org_super_user_email" class="form-label">{{#i18n}}label.superUserEmail{{/i18n}}</label>
+                <input id="org_super_user_email" type="email" name="super_user_email" class="form-control" value="{{organisation.superUserEmail}}" required maxlength="320">
+              </div>
+              <div class="mb-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="org_active" name="active" value="true" {{#organisation.active}}checked{{/organisation.active}}>
+                  <label class="form-check-label" for="org_active">{{#i18n}}label.active{{/i18n}}</label>
+                </div>
+              </div>
+              {{/canEditIdentity}}
+              <div class="mb-3"><label class="form-label" for="contact.url">{{#i18n}}admin.field.contactUrl{{/i18n}}</label>
+                <input class="form-control" id="contact.url" name="contact.url" value="{{cfgu.contact_url}}"></div>
+              <div class="mb-3"><label class="form-label" for="source.url">{{#i18n}}admin.field.sourceUrl{{/i18n}}</label>
+                <input class="form-control" id="source.url" name="source.url" type="url" value="{{cfgu.source_url}}" placeholder="https://github.com/owner/ticketchess">
+                <div class="form-text">{{#i18n}}help.adminField.sourceUrl{{/i18n}}</div></div>
+              <div class="mb-3"><label class="form-label" for="org.email">{{#i18n}}admin.field.orgEmail{{/i18n}}</label>
+                <input class="form-control" id="org.email" name="org.email" type="email" value="{{cfgu.org_email}}"></div>
+              <div class="mb-3"><label class="form-label" for="org.address">{{#i18n}}admin.field.orgAddress{{/i18n}}</label>
+                <input class="form-control" id="org.address" name="org.address" value="{{cfgu.org_address}}"></div>
+              <div class="mb-3"><label class="form-label" for="org.hosting.address">{{#i18n}}admin.field.orgHosting{{/i18n}}</label>
+                <input class="form-control" id="org.hosting.address" name="org.hosting.address" value="{{cfgu.org_hosting_address}}"></div>
+              <div class="mb-3">
+                <label class="form-label" for="membership.notif.emails">{{#i18n}}admin.field.membershipNotifEmails{{/i18n}}</label>
+                {{#clubRegisterEnabled}}<span class="badge text-bg-success mb-1">{{#i18n}}admin.clubRegister.enabled{{/i18n}}</span>{{/clubRegisterEnabled}}{{^clubRegisterEnabled}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.clubRegister.disabled{{/i18n}}</span>{{/clubRegisterEnabled}}
+                <input class="form-control" id="membership.notif.emails" name="membership.notif.emails" value="{{cfgu.membership_notif_emails}}" placeholder="admin@club.fr, tresorier@club.fr">
+                <div class="form-text">{{#i18n}}help.adminField.membershipNotifEmails{{/i18n}}</div>
+              </div>
+              <div class="mb-3"><label class="form-label" for="mail.USER_NAME">{{#i18n}}admin.field.mailUser{{/i18n}}</label>
+                <input class="form-control" id="mail.USER_NAME" name="mail.USER_NAME" value="{{cfgu.mail_USER_NAME}}"></div>
+              <div class="mb-3"><label class="form-label" for="mail.PASSWORD">{{#i18n}}admin.field.mailPassword{{/i18n}}</label>
+                {{#mailPasswordConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/mailPasswordConfigured}}{{^mailPasswordConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/mailPasswordConfigured}}
+                <input class="form-control" id="mail.PASSWORD" type="password" name="mail.PASSWORD" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}"></div>
+              <div class="mb-3">
+                <label class="form-label">{{#i18n}}admin.field.publicBaseUrl{{/i18n}}</label>
+                <input class="form-control" value="{{publicBaseUrl}}" readonly>
+                <div class="form-text">{{#i18n}}help.adminField.publicBaseUrl{{/i18n}}</div>
+              </div>
+              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+            </form>
+          </div>
+
+          <div class="tab-pane fade {{#tabIsappearance}}show active{{/tabIsappearance}}" id="appearance" role="tabpanel">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config" id="org-appearance-form">
+              <input type="hidden" name="tab" value="appearance">
+              <p class="text-muted mb-3">{{#i18n}}help.adminField.appearance{{/i18n}}</p>
+              <div class="row g-3 mb-4">
+                <div class="col-12 col-md-4">
+                  <label class="form-label" for="ui_primaryColor">{{#i18n}}admin.field.primaryColor{{/i18n}}</label>
+                  <div class="input-group">
+                    <input type="color" class="form-control form-control-color" id="ui_primaryColor_picker" value="{{cfgu.ui_primaryColor}}" aria-label="{{#i18n}}admin.field.primaryColor{{/i18n}}">
+                    <input class="form-control" id="ui_primaryColor" name="ui.primaryColor" value="{{cfgu.ui_primaryColor}}" pattern="#[0-9A-Fa-f]{6}" maxlength="7" required>
+                  </div>
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label" for="ui_secondaryColor">{{#i18n}}admin.field.secondaryColor{{/i18n}}</label>
+                  <div class="input-group">
+                    <input type="color" class="form-control form-control-color" id="ui_secondaryColor_picker" value="{{cfgu.ui_secondaryColor}}" aria-label="{{#i18n}}admin.field.secondaryColor{{/i18n}}">
+                    <input class="form-control" id="ui_secondaryColor" name="ui.secondaryColor" value="{{cfgu.ui_secondaryColor}}" pattern="#[0-9A-Fa-f]{6}" maxlength="7" required>
+                  </div>
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label" for="ui_font">{{#i18n}}admin.field.font{{/i18n}}</label>
+                  <select class="form-select" id="ui_font" name="ui.font">
+                    {{#fontOptions}}
+                    <option value="{{id}}" {{#selected}}selected{{/selected}}>{{^id}}{{#i18n}}admin.font.default{{/i18n}}{{/id}}{{#id}}{{label}}{{/id}}</option>
+                    {{/fontOptions}}
+                  </select>
+                </div>
+              </div>
+              <div id="ui-appearance-preview" class="rounded border p-3 mb-4" style="background: color-mix(in srgb, var(--preview-secondary, {{cfgu.ui_secondaryColor}}) 35%, white);">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <strong id="ui-preview-title" style="color: var(--preview-primary, {{cfgu.ui_primaryColor}});">{{#i18n}}admin.appearance.preview{{/i18n}}</strong>
+                  <button type="button" class="btn btn-sm btn-primary" id="ui-preview-btn" style="background-color: var(--preview-primary, {{cfgu.ui_primaryColor}}); border-color: var(--preview-primary, {{cfgu.ui_primaryColor}});">{{#i18n}}action.save{{/i18n}}</button>
+                  <span class="badge" id="ui-preview-badge" style="background-color: var(--preview-secondary, {{cfgu.ui_secondaryColor}}); color: #2d1d15;">{{#i18n}}admin.tab.appearance{{/i18n}}</span>
+                </div>
+                <p class="mb-0 small" id="ui-preview-text">{{#i18n}}help.adminField.appearancePreview{{/i18n}}</p>
+              </div>
+              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+            </form>
+            <script>
+              (function () {
+                var primary = document.getElementById('ui_primaryColor');
+                var primaryPicker = document.getElementById('ui_primaryColor_picker');
+                var secondary = document.getElementById('ui_secondaryColor');
+                var secondaryPicker = document.getElementById('ui_secondaryColor_picker');
+                var font = document.getElementById('ui_font');
+                var preview = document.getElementById('ui-appearance-preview');
+                var previewText = document.getElementById('ui-preview-text');
+                var previewTitle = document.getElementById('ui-preview-title');
+                var previewBtn = document.getElementById('ui-preview-btn');
+                var previewBadge = document.getElementById('ui-preview-badge');
+                var fontStacks = {
+                  '': '',
+                  'system': 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                  'georgia': "Georgia, 'Times New Roman', serif",
+                  'inter': "'Inter', system-ui, sans-serif",
+                  'open-sans': "'Open Sans', system-ui, sans-serif",
+                  'source-sans-3': "'Source Sans 3', system-ui, sans-serif",
+                  'nunito': "'Nunito', system-ui, sans-serif",
+                  'lora': "'Lora', Georgia, serif",
+                  'playfair': "'Playfair Display', Georgia, serif"
+                };
+                function syncPair(text, picker) {
+                  if (!text || !picker) return;
+                  picker.addEventListener('input', function () { text.value = picker.value; applyPreview(); });
+                  text.addEventListener('input', function () {
+                    if (/^#[0-9A-Fa-f]{6}$/.test(text.value)) picker.value = text.value;
+                    applyPreview();
+                  });
+                }
+                function applyPreview() {
+                  if (!preview) return;
+                  preview.style.setProperty('--preview-primary', primary.value);
+                  preview.style.setProperty('--preview-secondary', secondary.value);
+                  previewBtn.style.backgroundColor = primary.value;
+                  previewBtn.style.borderColor = primary.value;
+                  previewTitle.style.color = primary.value;
+                  previewBadge.style.backgroundColor = secondary.value;
+                  var stack = fontStacks[font.value] || '';
+                  preview.style.fontFamily = stack || 'inherit';
+                  previewText.style.fontFamily = stack || 'inherit';
+                }
+                syncPair(primary, primaryPicker);
+                syncPair(secondary, secondaryPicker);
+                if (font) font.addEventListener('change', applyPreview);
+                applyPreview();
+              })();
+            </script>
+          </div>
+
+          <div class="tab-pane fade {{#tabIsinvoice}}show active{{/tabIsinvoice}}" id="invoice" role="tabpanel">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
+              <input type="hidden" name="tab" value="invoice">
+              <div class="row">
+                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerAddress2{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.address2" value="{{cfgu.invoice_seller_address2}}"></div>
+                <div class="col-md-3 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerZip{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.zip" value="{{cfgu.invoice_seller_zip}}"></div>
+                <div class="col-md-5 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerCity{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.city" value="{{cfgu.invoice_seller_city}}"></div>
+                <div class="col-md-4 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerCountry{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.country" value="{{cfgu.invoice_seller_country}}"></div>
+                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerPhone{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.phone" value="{{cfgu.invoice_seller_phone}}"></div>
+                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerSiret{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.siret" value="{{cfgu.invoice_seller_siret}}"></div>
+                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerRna{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.rna" value="{{cfgu.invoice_seller_rna}}"></div>
+                <div class="col-12 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerPrefecture{{/i18n}}</label>
+                  <input class="form-control" name="invoice.seller.prefecture" value="{{cfgu.invoice_seller_prefecture}}"></div>
+                <div class="col-md-4 mb-3"><label class="form-label">{{#i18n}}admin.field.invoicePrefix{{/i18n}}</label>
+                  <input class="form-control" name="invoice.number.prefix" value="{{cfgu.invoice_number_prefix}}"></div>
+                <div class="col-md-8 mb-3"><label class="form-label">{{#i18n}}admin.field.invoiceFooter{{/i18n}}</label>
+                  <input class="form-control" name="invoice.footer" value="{{cfgu.invoice_footer}}"></div>
+                <div class="col-12 mb-3"><label class="form-label">{{#i18n}}admin.field.invoiceVat{{/i18n}}</label>
+                  <input class="form-control" name="invoice.vat.notice" value="{{cfgu.invoice_vat_notice}}"></div>
+                <div class="col-12"><hr class="my-2"><h6 class="text-body-secondary">{{#i18n}}admin.section.donationAttestation{{/i18n}}</h6></div>
+                <div class="col-12 mb-3"><label class="form-label">{{#i18n}}admin.field.donationObject{{/i18n}}</label>
+                  <input class="form-control" name="invoice.donation.object" value="{{cfgu.invoice_donation_object}}"></div>
+                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.donationSignatory{{/i18n}}</label>
+                  <input class="form-control" name="invoice.donation.signatory" value="{{cfgu.invoice_donation_signatory}}"></div>
+                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.donationSignatoryTitle{{/i18n}}</label>
+                  <input class="form-control" name="invoice.donation.signatoryTitle" value="{{cfgu.invoice_donation_signatoryTitle}}"></div>
+                <div class="col-md-4 mb-3"><label class="form-label">{{#i18n}}admin.field.donationPrefix{{/i18n}}</label>
+                  <input class="form-control" name="invoice.donation.prefix" value="{{cfgu.invoice_donation_prefix}}"></div>
+              </div>
+              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+            </form>
+          </div>
+
+          <div class="tab-pane fade {{#tabIsfiles}}show active{{/tabIsfiles}}" id="files" role="tabpanel">
+            <div class="row g-4">
+              <div class="col-md-6 col-xl-3">
+                <h2 class="h5 mb-3">{{#i18n}}admin.logo.current{{/i18n}}</h2>
+                {{#logoAvailable}}
+                  <img src="{{contextPath}}/admin/organisations/{{organisation.id}}/files/logo" alt="" class="img-fluid mb-3 border rounded" style="max-height: 80px;">
+                  <div class="mb-3">
+                    <button class="btn btn-outline-danger" type="button" id="logo-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                  </div>
+                {{/logoAvailable}}{{^logoAvailable}}
+                  <p class="text-body-secondary">{{#i18n}}admin.logo.missing{{/i18n}}</p>
+                {{/logoAvailable}}
+                <form id="logo-upload-form">
+                  <div class="mb-3">
+                    <label class="form-label" for="logo-file">{{#i18n}}admin.logo.fileLabel{{/i18n}}</label>
+                    <input class="form-control" type="file" id="logo-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
+                  </div>
+                  <button class="btn btn-primary" type="submit" id="logo-upload-btn">{{#i18n}}admin.logo.upload{{/i18n}}</button>
+                </form>
+              </div>
+              <div class="col-md-6 col-xl-3">
+                <h2 class="h5 mb-3">{{#i18n}}admin.signature.current{{/i18n}}</h2>
+                {{#signatureAvailable}}
+                  <img src="{{contextPath}}/admin/organisations/{{organisation.id}}/files/signature" alt="" class="img-fluid mb-3 border rounded bg-white" style="max-height: 80px;">
+                  <div class="mb-3">
+                    <button class="btn btn-outline-danger" type="button" id="signature-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                  </div>
+                {{/signatureAvailable}}{{^signatureAvailable}}
+                  <p class="text-body-secondary">{{#i18n}}admin.signature.missing{{/i18n}}</p>
+                {{/signatureAvailable}}
+                <p class="form-text">{{#i18n}}help.adminSignature{{/i18n}}</p>
+                <form id="signature-upload-form">
+                  <div class="mb-3">
+                    <label class="form-label" for="signature-file">{{#i18n}}admin.signature.fileLabel{{/i18n}}</label>
+                    <input class="form-control" type="file" id="signature-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
+                  </div>
+                  <button class="btn btn-primary" type="submit" id="signature-upload-btn">{{#i18n}}admin.signature.upload{{/i18n}}</button>
+                </form>
+              </div>
+              <div class="col-md-6 col-xl-3">
+                <h2 class="h5 mb-3">{{#i18n}}admin.background.current{{/i18n}}</h2>
+                {{#backgroundAvailable}}
+                  <div class="mb-3 border rounded overflow-hidden" style="height: 80px; background: url('{{contextPath}}/admin/organisations/{{organisation.id}}/files/background') center / cover no-repeat;"></div>
+                  <div class="mb-3">
+                    <button class="btn btn-outline-danger" type="button" id="background-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                  </div>
+                {{/backgroundAvailable}}{{^backgroundAvailable}}
+                  <p class="text-body-secondary mb-3">{{#i18n}}admin.background.missing{{/i18n}}</p>
+                  <div class="mb-3 border rounded overflow-hidden" style="height: 80px; background: url('{{contextPath}}/assets/6.jpg') center / cover no-repeat;"></div>
+                {{/backgroundAvailable}}
+                <form id="background-upload-form">
+                  <div class="mb-3">
+                    <label class="form-label" for="background-file">{{#i18n}}admin.background.fileLabel{{/i18n}}</label>
+                    <input class="form-control" type="file" id="background-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
+                  </div>
+                  <button class="btn btn-primary" type="submit" id="background-upload-btn">{{#i18n}}admin.background.upload{{/i18n}}</button>
+                </form>
+              </div>
+              <div class="col-md-6 col-xl-3">
+                <h2 class="h5 mb-3">{{#i18n}}admin.rib.current{{/i18n}}</h2>
+                {{#ribAvailable}}
+                  <p class="mb-3">{{#i18n}}admin.rib.available{{/i18n}}{{#ribSize}} ({{ribSize}}){{/ribSize}}</p>
+                  <div class="d-flex flex-wrap gap-2 mb-3">
+                    <a class="btn btn-outline-primary" href="{{contextPath}}/admin/organisations/{{organisation.id}}/files/rib" target="_blank">{{#i18n}}payment.downloadRIB{{/i18n}}</a>
+                    <button class="btn btn-outline-danger" type="button" id="rib-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                  </div>
+                {{/ribAvailable}}{{^ribAvailable}}
+                  <p class="text-body-secondary">{{#i18n}}admin.rib.missing{{/i18n}}</p>
+                {{/ribAvailable}}
+                <form id="rib-upload-form">
+                  <div class="mb-3">
+                    <label class="form-label" for="rib-file">{{#i18n}}admin.rib.fileLabel{{/i18n}}</label>
+                    <input class="form-control" type="file" id="rib-file" name="file" accept="application/pdf,.pdf" required>
+                  </div>
+                  <button class="btn btn-primary" type="submit" id="rib-upload-btn">{{#i18n}}admin.rib.upload{{/i18n}}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade {{#tabIsstripe}}show active{{/tabIsstripe}}" id="stripe" role="tabpanel">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config" id="org-stripe-form">
+              <input type="hidden" name="tab" value="stripe">
+              <div class="form-check mb-3">
+                {{#stripeSimuled}}
+                <input class="form-check-input" type="checkbox" name="stripe.simuled" value="true" id="stripe.simuled" checked>
+                {{/stripeSimuled}}{{^stripeSimuled}}
+                <input class="form-check-input" type="checkbox" name="stripe.simuled" value="true" id="stripe.simuled">
+                {{/stripeSimuled}}
+                <label class="form-check-label" for="stripe.simuled">{{#i18n}}admin.field.stripeSimuled{{/i18n}}</label>
+              </div>
+              <div class="mb-3" id="stripe-public-wrap">
+                <label class="form-label" for="stripe.public" id="stripe-public-label">{{#i18n}}admin.field.stripePublic{{/i18n}}</label>
+                <input class="form-control" id="stripe.public" name="stripe.public" value="{{cfgu.stripe_public}}">
+              </div>
+              <div class="mb-3" id="stripe-secret-wrap">
+                <label class="form-label" for="stripe.secret" id="stripe-secret-label">{{#i18n}}admin.field.stripeSecret{{/i18n}}</label>
+                {{#stripeSecretConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/stripeSecretConfigured}}{{^stripeSecretConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/stripeSecretConfigured}}
+                <input class="form-control" id="stripe.secret" type="password" name="stripe.secret" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}">
+              </div>
+              <div class="mb-3" id="stripe-prefix-wrap">
+                <label class="form-label" for="stripe.keyprefix" id="stripe-prefix-label">{{#i18n}}admin.field.stripePrefix{{/i18n}}</label>
+                <input class="form-control" id="stripe.keyprefix" name="stripe.keyprefix" value="{{cfgu.stripe_keyprefix}}">
+              </div>
+              <div class="form-check mb-3">
+                {{#stripeCardEvents}}
+                <input class="form-check-input" type="checkbox" name="stripe.card.events" value="true" id="stripe.card.events" checked>
+                {{/stripeCardEvents}}{{^stripeCardEvents}}
+                <input class="form-check-input" type="checkbox" name="stripe.card.events" value="true" id="stripe.card.events">
+                {{/stripeCardEvents}}
+                <label class="form-check-label" for="stripe.card.events" id="stripe-card-events-label">{{#i18n}}admin.field.stripeCardEvents{{/i18n}}</label>
+              </div>
+              <div class="form-check mb-3">
+                {{#stripeCardMemberships}}
+                <input class="form-check-input" type="checkbox" name="stripe.card.memberships" value="true" id="stripe.card.memberships" checked>
+                {{/stripeCardMemberships}}{{^stripeCardMemberships}}
+                <input class="form-check-input" type="checkbox" name="stripe.card.memberships" value="true" id="stripe.card.memberships">
+                {{/stripeCardMemberships}}
+                <label class="form-check-label" for="stripe.card.memberships" id="stripe-card-memberships-label">{{#i18n}}admin.field.stripeCardMemberships{{/i18n}}</label>
+              </div>
+              {{^ribAvailable}}
+              <div class="alert alert-warning mb-3" role="alert">
+                {{#i18n}}admin.stripeTransferRequiresRibBefore{{/i18n}}
+                <a href="#files">{{#i18n}}admin.tab.files{{/i18n}}</a>{{#i18n}}admin.stripeTransferRequiresRibAfter{{/i18n}}
+              </div>
+              {{/ribAvailable}}
+              <div class="form-check mb-3">
+                {{^ribAvailable}}
+                <input class="form-check-input" type="checkbox" value="true" id="payment.transfer.events" disabled>
+                {{/ribAvailable}}{{#ribAvailable}}{{#paymentTransferEvents}}
+                <input class="form-check-input" type="checkbox" name="payment.transfer.events" value="true" id="payment.transfer.events" checked>
+                {{/paymentTransferEvents}}{{^paymentTransferEvents}}
+                <input class="form-check-input" type="checkbox" name="payment.transfer.events" value="true" id="payment.transfer.events">
+                {{/paymentTransferEvents}}{{/ribAvailable}}
+                <label class="form-check-label {{^ribAvailable}}text-body-secondary{{/ribAvailable}}" for="payment.transfer.events">{{#i18n}}admin.field.paymentTransferEvents{{/i18n}}</label>
+              </div>
+              <div class="form-check mb-3">
+                {{^ribAvailable}}
+                <input class="form-check-input" type="checkbox" value="true" id="payment.transfer.memberships" disabled>
+                {{/ribAvailable}}{{#ribAvailable}}{{#paymentTransferMemberships}}
+                <input class="form-check-input" type="checkbox" name="payment.transfer.memberships" value="true" id="payment.transfer.memberships" checked>
+                {{/paymentTransferMemberships}}{{^paymentTransferMemberships}}
+                <input class="form-check-input" type="checkbox" name="payment.transfer.memberships" value="true" id="payment.transfer.memberships">
+                {{/paymentTransferMemberships}}{{/ribAvailable}}
+                <label class="form-check-label {{^ribAvailable}}text-body-secondary{{/ribAvailable}}" for="payment.transfer.memberships">{{#i18n}}admin.field.paymentTransferMemberships{{/i18n}}</label>
+              </div>
+              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+            </form>
+            <script>
+              (function () {
+                var simuled = document.getElementById('stripe.simuled');
+                var publicKey = document.getElementById('stripe.public');
+                var secretKey = document.getElementById('stripe.secret');
+                var prefix = document.getElementById('stripe.keyprefix');
+                var cardEvents = document.getElementById('stripe.card.events');
+                var cardMemberships = document.getElementById('stripe.card.memberships');
+                var keyFields = [
+                  { input: publicKey, label: document.getElementById('stripe-public-label') },
+                  { input: secretKey, label: document.getElementById('stripe-secret-label') },
+                  { input: prefix, label: document.getElementById('stripe-prefix-label') }
+                ];
+                var cardFields = [
+                  { input: cardEvents, label: document.getElementById('stripe-card-events-label') },
+                  { input: cardMemberships, label: document.getElementById('stripe-card-memberships-label') }
+                ];
+                function setDisabled(fields, disabled) {
+                  fields.forEach(function (field) {
+                    if (!field.input) return;
+                    field.input.disabled = disabled;
+                    if (field.label) {
+                      field.label.classList.toggle('text-body-secondary', disabled);
+                    }
+                  });
+                }
+                function syncStripeForm() {
+                  if (!simuled) return;
+                  var simulate = simuled.checked;
+                  setDisabled(keyFields, simulate);
+                  var publicBlank = !publicKey || !publicKey.value.trim();
+                  setDisabled(cardFields, !simulate && publicBlank);
+                }
+                if (simuled) simuled.addEventListener('change', syncStripeForm);
+                if (publicKey) publicKey.addEventListener('input', syncStripeForm);
+                syncStripeForm();
+              })();
+            </script>
+          </div>
+        </div>
+        {{/editMode}}
+      </div>
+    </main>
+    {{> platform/footer}}
+
+    {{#editMode}}
+    <script type="text/javascript">
+      async function handleOrgFileResponse(res, statusEl, button, errorMessage) {
+        const contentType = res.headers.get('Content-Type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.redirect) {
+            window.location.assign(data.redirect);
+            return;
+          }
+        }
+        if (!res.ok) {
+          const text = await res.text();
+          statusEl.className = 'alert mb-3 alert-danger';
+          statusEl.textContent = text || errorMessage;
+          statusEl.classList.remove('d-none');
+          button.disabled = false;
+        }
+      }
+      function bindUpload(formId, inputId, buttonId, url, contentType) {
+        const form = document.getElementById(formId);
+        if (!form) return;
+        const fileInput = document.getElementById(inputId);
+        const button = document.getElementById(buttonId);
+        const statusEl = document.getElementById('rib-status');
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const file = fileInput.files[0];
+          if (!file) {
+            return;
+          }
+          button.disabled = true;
+          try {
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': contentType, 'Accept': 'application/json' },
+              body: file
+            });
+            await handleOrgFileResponse(res, statusEl, button, '{{#i18n}}admin.uploadFailed{{/i18n}}');
+          } catch (e) {
+            statusEl.className = 'alert mb-3 alert-danger';
+            statusEl.textContent = '{{#i18n}}admin.uploadFailed{{/i18n}}';
+            statusEl.classList.remove('d-none');
+            button.disabled = false;
+          }
+        });
+      }
+      function bindDelete(buttonId, url, confirmMessage) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+        const statusEl = document.getElementById('rib-status');
+        button.addEventListener('click', async () => {
+          if (!window.confirm(confirmMessage)) {
+            return;
+          }
+          button.disabled = true;
+          try {
+            const res = await fetch(url, {
+              method: 'DELETE',
+              headers: { 'Accept': 'application/json' }
+            });
+            await handleOrgFileResponse(res, statusEl, button, '{{#i18n}}admin.deleteFailed{{/i18n}}');
+          } catch (e) {
+            statusEl.className = 'alert mb-3 alert-danger';
+            statusEl.textContent = '{{#i18n}}admin.deleteFailed{{/i18n}}';
+            statusEl.classList.remove('d-none');
+            button.disabled = false;
+          }
+        });
+      }
+      const orgBase = '{{contextPath}}/admin/organisations/{{organisation.id}}';
+      bindUpload('rib-upload-form', 'rib-file', 'rib-upload-btn', orgBase + '/rib', 'application/octet-stream');
+      bindUpload('logo-upload-form', 'logo-file', 'logo-upload-btn', orgBase + '/logo', 'application/octet-stream');
+      bindUpload('signature-upload-form', 'signature-file', 'signature-upload-btn', orgBase + '/signature', 'application/octet-stream');
+      bindUpload('background-upload-form', 'background-file', 'background-upload-btn', orgBase + '/background', 'application/octet-stream');
+      bindDelete('logo-delete-btn', orgBase + '/logo', '{{#i18n}}action.confirm{{/i18n}}');
+      bindDelete('signature-delete-btn', orgBase + '/signature', '{{#i18n}}action.confirm{{/i18n}}');
+      bindDelete('background-delete-btn', orgBase + '/background', '{{#i18n}}action.confirm{{/i18n}}');
+      bindDelete('rib-delete-btn', orgBase + '/rib', '{{#i18n}}action.confirm{{/i18n}}');
+
+      const hash = (window.location.hash || '').replace('#', '');
+      if (hash) {
+        const trigger = document.querySelector('[data-bs-target="#' + hash + '"]');
+        if (trigger && window.bootstrap) {
+          window.bootstrap.Tab.getOrCreateInstance(trigger).show();
+        }
+      }
+      document.querySelectorAll('#org-tabs button[data-bs-toggle="tab"]').forEach((btn) => {
+        btn.addEventListener('shown.bs.tab', (event) => {
+          const target = event.target.getAttribute('data-bs-target');
+          if (target) {
+            history.replaceState(null, '', target);
+          }
+        });
+      });
+    </script>
+    {{/editMode}}
+  </body>
+</html>

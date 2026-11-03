@@ -18,7 +18,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class EventGroupApiTest {
 
@@ -37,9 +37,9 @@ class EventGroupApiTest {
 
         inject(api, "eventGroupService", dao);
 
-        JteHtml html = api.list();
+        MustacheHtml html = api.list();
 
-        assertEquals("event/eventgroup.jte", html.getTemplate());
+        assertEquals("event/eventgroup.mustache", html.getTemplate());
         @SuppressWarnings("unchecked")
         List<EventGroup> groups = (List<EventGroup>) html.getModel().get("eventGroups");
         assertEquals(2, groups.size());
@@ -56,33 +56,31 @@ class EventGroupApiTest {
 
         inject(api, "eventGroupService", dao);
 
-        JteHtml html = api.newEventGroup();
+        MustacheHtml html = api.newEventGroup();
 
-        assertEquals("event/eventgroupEdit.jte", html.getTemplate());
+        assertEquals("event/eventgroupEdit.mustache", html.getTemplate());
         assertTrue(html.getModel().get("eventGroup") instanceof EventGroup);
     }
 
     @Test
-    void editShouldReturnEventGroupWithEventsAndNotifications() throws Exception {
+    void editShouldReturnEventGroupWithEvents() throws Exception {
         EventGroupApi api = new EventGroupApi();
         EventGroupDao dao = mock(EventGroupDao.class);
 
         EventGroup eg = new EventGroup("Open");
         eg.setId(1);
         eg.setEvents(List.of());
-        eg.setNotifications(List.of());
 
         when(dao.findDetachedForEdit(1)).thenReturn(eg);
 
         inject(api, "eventGroupService", dao);
 
-        JteHtml html = api.edit(1);
+        MustacheHtml html = api.edit(1);
 
-        assertEquals("event/eventgroupEdit.jte", html.getTemplate());
+        assertEquals("event/eventgroupEdit.mustache", html.getTemplate());
         Map<String, Object> model = html.getModel();
         assertEquals(eg, model.get("eventGroup"));
         assertTrue(((List<?>) model.get("events")).isEmpty());
-        assertTrue(((List<?>) model.get("egnotifications")).isEmpty());
     }
 
     @Test

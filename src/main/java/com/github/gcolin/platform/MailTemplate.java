@@ -1,47 +1,29 @@
 package com.github.gcolin.platform;
 
-
-
-import gg.jte.ContentType;
-
-import gg.jte.TemplateEngine;
-
-import gg.jte.output.StringOutput;
-
+import com.github.mustachejava.Mustache;
+import com.github.mustachejava.MustacheFactory;
 import java.io.IOException;
-
-
+import java.io.StringWriter;
 
 public class MailTemplate {
 
-
-
-    private final TemplateEngine engine;
-
-
+    private final MustacheFactory factory;
 
     public MailTemplate() {
-
-        engine = TemplateEngine.createPrecompiled(ContentType.Html);
-
+        factory = new RootRelativeMustacheFactory("templates");
     }
-
-
 
     public String render(String name, Object data) throws IOException {
-
-        String templateName = name.endsWith(".jte") ? name : name + ".jte";
-
-        templateName = "tmpl/" + templateName;
-
-        StringOutput output = new StringOutput();
-
-        engine.render(templateName, data, output);
-
+        String templateName = name;
+        if (!templateName.endsWith(".mustache")) {
+            templateName = templateName + ".mustache";
+        }
+        if (!templateName.startsWith("tmpl/")) {
+            templateName = "tmpl/" + templateName;
+        }
+        Mustache mustache = factory.compile(templateName);
+        StringWriter output = new StringWriter();
+        mustache.execute(output, data).flush();
         return output.toString();
-
     }
-
 }
-
-

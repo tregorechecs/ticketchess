@@ -30,7 +30,7 @@ public class ConstraintViolationExceptionMapper implements ExceptionMapper<Const
 
         return Response.status(Response.Status.BAD_REQUEST)
                 .type(MediaType.TEXT_HTML + ";charset=UTF-8")
-                .entity(new JteHtml(model, "platform/error.jte"))
+                .entity(new MustacheHtml(model, "platform/error.mustache"))
                 .build();
     }
 }

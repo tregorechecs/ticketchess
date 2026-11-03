@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("logas")
 @RequireRole(RoleCode.ADMIN)
@@ -31,7 +31,7 @@ public class LogAsApi {
 
     @GET
     @Transactional
-    public JteHtml page() {
+    public MustacheHtml page() {
         Set<String> emails = new TreeSet<>();
         emails.addAll(playerSubscriptionDao.findDistinctCreationUsers());
         emails.addAll(paymentDao.findDistinctUserEmails());
@@ -39,6 +39,6 @@ public class LogAsApi {
         Map<String, Object> model = new HashMap<>();
         model.put("users", new ArrayList<>(emails));
         model.put("admins", config.getAdmins());
-        return new JteHtml(model, "auth/logas.jte");
+        return new MustacheHtml(model, "auth/logas.mustache");
     }
 }

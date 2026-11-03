@@ -1,0 +1,15 @@
+<div class="d-flex align-items-center gap-2">
+  <span>{{collection.name}}</span>
+  <div class="dropdown">
+    <button class="btn btn-sm btn-link text-body-secondary text-decoration-none border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{#i18n}}label.action{{/i18n}}" title="{{#i18n}}label.action{{/i18n}}">
+      <i class="bi bi-three-dots-vertical"></i>
+    </button>
+    <ul class="dropdown-menu">
+      <li><a class="dropdown-item" href="{{contextPath}}/eventcollection/{{collection.id}}">{{#i18n}}action.edit{{/i18n}}</a></li>
+      <li><a class="dropdown-item" href="{{contextPath}}/eventcollection/{{collection.id}}/statistics">{{#i18n}}event.statistics{{/i18n}}</a></li>
+      {{#showCollectionMailLink}}
+      <li><a class="dropdown-item" href="{{contextPath}}/eventcollection/{{collection.id}}/mail">{{#i18n}}mail.send{{/i18n}}</a></li>
+      {{/showCollectionMailLink}}
+    </ul>
+  </div>
+</div>

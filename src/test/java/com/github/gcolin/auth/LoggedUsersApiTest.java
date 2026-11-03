@@ -10,7 +10,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class LoggedUsersApiTest {
 
@@ -30,9 +30,9 @@ class LoggedUsersApiTest {
 
         inject(api, "activeLoggedUsers", activeUsers);
 
-        JteHtml html = api.page();
+        MustacheHtml html = api.page();
 
-        assertEquals("auth/loggedusers.jte", html.getTemplate());
+        assertEquals("auth/loggedusers.mustache", html.getTemplate());
         Map<String, Object> model = html.getModel();
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("sessions");
@@ -66,7 +66,7 @@ class LoggedUsersApiTest {
 
         inject(api, "activeLoggedUsers", activeUsers);
 
-        JteHtml html = api.page();
+        MustacheHtml html = api.page();
 
         Map<String, Object> model = html.getModel();
         @SuppressWarnings("unchecked")

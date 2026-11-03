@@ -13,6 +13,15 @@ public class Page {
     private String backgroundUrl;
     private String accountUrl;
     private String sourceUrl;
+    private String primaryColor;
+    private String secondaryColor;
+    private String primaryRgb;
+    private String secondaryRgb;
+    private String primaryHover;
+    private String secondaryHover;
+    private String fontFamily;
+    private boolean customFont;
+    private String googleFontHref;
 
     public String getTitle() {
         return title;
@@ -100,6 +109,78 @@ public class Page {
 
     public void setSourceUrl(String sourceUrl) {
         this.sourceUrl = sourceUrl;
+    }
+
+    public String getPrimaryColor() {
+        return primaryColor;
+    }
+
+    public void setPrimaryColor(String primaryColor) {
+        this.primaryColor = primaryColor;
+    }
+
+    public String getSecondaryColor() {
+        return secondaryColor;
+    }
+
+    public void setSecondaryColor(String secondaryColor) {
+        this.secondaryColor = secondaryColor;
+    }
+
+    public String getPrimaryRgb() {
+        return primaryRgb;
+    }
+
+    public void setPrimaryRgb(String primaryRgb) {
+        this.primaryRgb = primaryRgb;
+    }
+
+    public String getSecondaryRgb() {
+        return secondaryRgb;
+    }
+
+    public void setSecondaryRgb(String secondaryRgb) {
+        this.secondaryRgb = secondaryRgb;
+    }
+
+    public String getPrimaryHover() {
+        return primaryHover;
+    }
+
+    public void setPrimaryHover(String primaryHover) {
+        this.primaryHover = primaryHover;
+    }
+
+    public String getSecondaryHover() {
+        return secondaryHover;
+    }
+
+    public void setSecondaryHover(String secondaryHover) {
+        this.secondaryHover = secondaryHover;
+    }
+
+    public String getFontFamily() {
+        return fontFamily;
+    }
+
+    public void setFontFamily(String fontFamily) {
+        this.fontFamily = fontFamily;
+    }
+
+    public boolean isCustomFont() {
+        return customFont;
+    }
+
+    public void setCustomFont(boolean customFont) {
+        this.customFont = customFont;
+    }
+
+    public String getGoogleFontHref() {
+        return googleFontHref;
+    }
+
+    public void setGoogleFontHref(String googleFontHref) {
+        this.googleFontHref = googleFontHref;
     }
 
     @Override

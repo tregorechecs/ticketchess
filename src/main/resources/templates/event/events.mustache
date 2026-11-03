@@ -1,0 +1,145 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+
+<body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+
+    <main class="container flex-fill mt-3">
+        <div class="bg-body p-3 rounded mb-3">
+        <h1>{{#i18n}}home.title{{/i18n}}</h1> <p class="lead">{{#i18n}}home.description{{/i18n}}</p>
+        </div>
+    
+        <div class="d-flex justify-content-end">
+            <button id="filterbutton" class="btn btn-sm btn-dark mb-2"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#filters"
+                    aria-expanded="true">
+                <i class="bi bi-filter"></i> {{#i18n}}label.filters{{/i18n}}
+            </button>
+        </div>
+        <div class="collapse" id="filters">
+            <div class="row">
+                <div class="col">
+                    <div class="btn-group mb-3" role="group">
+                        {{#user.canManageEvents}}
+                        {{#statusIsDRAFT}}
+                        <a id="event_draft" href="{{contextPath}}{{filterUrl}}?status=DRAFT{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info active">{{#i18n}}status.DRAFT{{/i18n}}</a>
+                        {{/statusIsDRAFT}}
+                        {{^statusIsDRAFT}}
+                        <a id="event_draft" href="{{contextPath}}{{filterUrl}}?status=DRAFT{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info">{{#i18n}}status.DRAFT{{/i18n}}</a>
+                        {{/statusIsDRAFT}}
+                        {{/user.canManageEvents}}
+                        {{#statusIsACTIVE}}
+                        <a id="event_active" href="{{contextPath}}{{filterUrl}}?status=ACTIVE{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info active">{{#i18n}}status.ACTIVE{{/i18n}}</a>
+                        {{/statusIsACTIVE}}
+                        {{^statusIsACTIVE}}
+                        <a id="event_active" href="{{contextPath}}{{filterUrl}}?status=ACTIVE{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info">{{#i18n}}status.ACTIVE{{/i18n}}</a>
+                        {{/statusIsACTIVE}}
+                        {{#statusIsONGOING}}
+                        <a id="event_ongoing" href="{{contextPath}}{{filterUrl}}?status=ONGOING{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info active">{{#i18n}}status.ONGOING{{/i18n}}</a>
+                        {{/statusIsONGOING}}
+                        {{^statusIsONGOING}}
+                        <a id="event_ongoing" href="{{contextPath}}{{filterUrl}}?status=ONGOING{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info">{{#i18n}}status.ONGOING{{/i18n}}</a>
+                        {{/statusIsONGOING}}
+                        {{#statusIsCOMPLETED}}
+                        <a id="event_completed" href="{{contextPath}}{{filterUrl}}?status=COMPLETED{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info active">{{#i18n}}status.COMPLETED{{/i18n}}</a>
+                        {{/statusIsCOMPLETED}}
+                        {{^statusIsCOMPLETED}}
+                        <a id="event_completed" href="{{contextPath}}{{filterUrl}}?status=COMPLETED{{#seasonId}}&seasonId={{seasonId}}{{/seasonId}}" class="btn btn-info">{{#i18n}}status.COMPLETED{{/i18n}}</a>
+                        {{/statusIsCOMPLETED}}
+                    </div>
+                </div>
+                <div class="col">
+                    <form method="get" action="{{contextPath}}{{filterUrl}}" class="input-group mb-3">
+                        <input type="hidden" name="status" value="{{status}}">
+                        <span class="input-group-text">{{#i18n}}label.season{{/i18n}}</span>
+                        <select class="form-select" name="seasonId" onchange="this.form.submit()">
+                            {{#seasons}}
+                            {{#selected}}
+                            <option value="{{value}}" selected>{{label}}</option>
+                            {{/selected}}
+                            {{^selected}}
+                            <option value="{{value}}">{{label}}</option>
+                            {{/selected}}
+                            {{/seasons}}
+                        </select>
+                    </form>
+                </div>
+                <div class="col">
+                    <div class="input-group mb-3">
+                        <label class="input-group-text" for="inputCategory">{{#i18n}}label.category{{/i18n}}</label>
+                        <select class="form-select" id="inputCategory">
+                            {{#eventgroups}}
+                            {{#selected}}
+                            <option value="{{value}}" selected>{{label}}</option>
+                            {{/selected}}
+                            {{^selected}}
+                            <option value="{{value}}">{{label}}</option>
+                            {{/selected}}
+                            {{/eventgroups}}
+                        </select>
+
+                        <script type="text/javascript">
+                        document.getElementById("inputCategory").addEventListener("change", e => {
+                            var newLocation = "{{contextPath}}/event?status={{status}}";
+                            if (e.target.value) {
+                                newLocation = "{{contextPath}}/event/" + e.target.value + "?status={{status}}";
+                            }
+                            {{#seasonId}}
+                            newLocation += "&seasonId={{seasonId}}";
+                            {{/seasonId}}
+                            window.location = newLocation;
+                        });
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{#eventGroup}}
+        <div class="bg-body p-3 mb-3">
+            <h2>{{name}}</h2>
+        </div>
+        {{/eventGroup}}
+        {{^hasEvents}}
+        <div id="noevent" class="bg-body p-3 pb-1 rounded mb-3">
+            <p>{{#i18n}}event.noevent{{/i18n}}</p>
+        </div>
+        {{/hasEvents}}
+        {{#hasEvents}}
+        <div class="rounded" style="overflow: hidden;"> 
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th scope="col">{{#i18n}}event.name{{/i18n}}</th>
+                <th scope="col"><i class="bi bi-calendar3 me-2"></i> {{#i18n}}event.start{{/i18n}}</th>
+                <th scope="col"><i class="bi bi-clock me-2"></i> {{#i18n}}event.type{{/i18n}}</th>
+           </tr>
+           </thead>
+           <tbody>
+                {{#events}}
+		            <tr>
+		                <td>
+		                    <a href="{{contextPath}}/event/{{id}}">{{name}}</a>
+                            {{#full}}
+		                    <span class="badge bg-info">{{#i18n}}event.full2{{/i18n}}</span>
+		                    {{/full}}
+		                </td>
+		                <td>
+		                    {{startDateDisplay}}
+		                </td>
+		                <td>{{#i18n}}{{eventTypeMessageKey}}{{/i18n}}
+		                </td>
+		            </tr>
+              {{/events}}
+           </tbody>
+        </table>
+		</div>
+        {{/hasEvents}}
+    </main>
+    {{> platform/footer}}
+</body>
+
+</html>

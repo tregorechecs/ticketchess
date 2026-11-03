@@ -1,8 +1,6 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.platform.Config;
-import com.github.gcolin.auth.ActiveLoggedUsers;
-import com.github.gcolin.auth.LoggedUser;
 import io.jsonwebtoken.Claims;
 import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,13 +14,9 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import java.util.Properties;
 
 @Path("logout")
 public class LogoutApi {
-
-    @Inject
-    private Properties properties;
 
     @Inject
     private Config config;
@@ -65,9 +59,7 @@ public class LogoutApi {
                                         + "?id_token_hint="
                                         + id
                                         + "&post_logout_redirect_uri="
-                                        + URLEncoder.encode(
-                                                properties.getProperty("baseurl", "http://localhost:8080"),
-                                                StandardCharsets.UTF_8)))
+                                        + URLEncoder.encode(config.getPublicBaseUrl(), StandardCharsets.UTF_8)))
                                 .cookie(cookie)
                                 .build();
                     }

@@ -29,8 +29,8 @@ class ConstraintViolationExceptionMapperTest {
         Response response = mapper.toResponse(ex);
 
         assertEquals(400, response.getStatus());
-        JteHtml html = (JteHtml) response.getEntity();
-        assertEquals("platform/error.jte", html.getTemplate());
+        MustacheHtml html = (MustacheHtml) response.getEntity();
+        assertEquals("platform/error.mustache", html.getTemplate());
         @SuppressWarnings("unchecked")
         java.util.List<String> errors = (java.util.List<String>) html.getModel().get("errors");
         assertTrue(errors.get(0).contains("field : must not be null"));

@@ -17,7 +17,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.TestContext;
 
 class EventStatisticsApiTest {
@@ -62,10 +62,10 @@ class EventStatisticsApiTest {
         inject(api, "statisticsReportService", new StatisticsReportService());
 
         try (TestContext ignored = TestContext.open(find)) {
-        JteHtml html = api.show(1);
+        MustacheHtml html = api.show(1);
         Map<String, Object> model = html.getModel();
 
-        assertEquals("event/eventStatistics.jte", html.getTemplate());
+        assertEquals("event/eventStatistics.mustache", html.getTemplate());
         assertEquals(2, model.get("total"));
         assertEquals(30.0, (Double) model.get("totalAmount"), 0.001);
         assertSame(event, model.get("event"));
@@ -99,7 +99,7 @@ class EventStatisticsApiTest {
         inject(api, "statisticsReportService", new StatisticsReportService());
 
         try (TestContext ignored = TestContext.open(find)) {
-        JteHtml html = api.show(2);
+        MustacheHtml html = api.show(2);
         Map<String, Object> model = html.getModel();
 
         assertEquals(0, model.get("total"));
@@ -132,7 +132,7 @@ class EventStatisticsApiTest {
         inject(api, "statisticsReportService", new StatisticsReportService());
 
         try (TestContext ignored = TestContext.open(find)) {
-        JteHtml html = api.show(3);
+        MustacheHtml html = api.show(3);
         Map<String, Object> model = html.getModel();
 
         // total counts the subscription even if player not found
@@ -175,7 +175,7 @@ class EventStatisticsApiTest {
         inject(api, "statisticsReportService", new StatisticsReportService());
 
         try (TestContext ignored = TestContext.open(find)) {
-        JteHtml html = api.show(4);
+        MustacheHtml html = api.show(4);
         Map<String, Object> model = html.getModel();
 
         @SuppressWarnings("unchecked")
@@ -231,7 +231,7 @@ class EventStatisticsApiTest {
         inject(api, "statisticsReportService", new StatisticsReportService());
 
         try (TestContext ignored = TestContext.open(find)) {
-        JteHtml html = api.show(5);
+        MustacheHtml html = api.show(5);
         @SuppressWarnings("unchecked")
         Map<String, Integer> byClub = (Map<String, Integer>) html.getModel().get("byClub");
 

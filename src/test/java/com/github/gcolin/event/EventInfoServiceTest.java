@@ -76,14 +76,21 @@ class EventInfoServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void testSetEventInfo_New() {
         Event event = new Event();
         event.setId(1);
+        TypedQuery<EventInfo> query = mock(TypedQuery.class);
 
         when(eventService.find(1)).thenReturn(event);
+        when(em.createQuery("SELECT e FROM EventInfo e where e.event = :event", EventInfo.class))
+                .thenReturn(query);
+        when(query.setParameter("event", event)).thenReturn(query);
+        when(query.getResultStream()).thenReturn(Stream.empty());
 
         eventInfoService.setEventInfo(1, "New description");
 
         verify(eventService).find(1);
+        verify(em).persist(org.mockito.ArgumentMatchers.any(EventInfo.class));
     }
 }

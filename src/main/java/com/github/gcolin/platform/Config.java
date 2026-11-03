@@ -1,8 +1,15 @@
 package com.github.gcolin.platform;
 
+import com.github.gcolin.organisation.OrgConfig;
+import com.github.gcolin.organisation.OrgUiStyle;
+import com.github.gcolin.organisation.Organisation;
+import com.github.gcolin.organisation.OrganisationFiles;
+import com.github.gcolin.organisation.OrgProperties;
+import com.github.gcolin.organisation.OrgScope;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.MacAlgorithm;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.ServletContext;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -31,7 +38,7 @@ public class Config {
     public static final Set<String> SECRET_KEYS = Set.of(
             "stripe.secret", "oauth.clientSecret", "jwt.key", "mail.PASSWORD", "db.pass", "keycloak.CLIENT_SECRET");
 
-    private Properties properties = new Properties();
+    private Properties properties = new OrgProperties();
     private Logger logger = LoggerFactory.getLogger(this.getClass().getName());
 
     private ServletContext context;
@@ -39,8 +46,6 @@ public class Config {
     private Set<String> admins;
 
     private SecretKey keys;
-
-    private String loginUrl;
 
     private boolean testMode;
 
@@ -101,7 +106,7 @@ public class Config {
             properties.put("title", "Event Test");
         }
         if (!properties.containsKey("contact.url")) {
-            properties.put("contact.url", "http://127.0.0.1");
+            properties.put("contact.url", "http://localhost:8080");
         }
         if (!properties.containsKey("baseurl")) {
             properties.put("baseurl", "http://localhost:8080");
@@ -116,14 +121,30 @@ public class Config {
         if (updates == null || updates.isEmpty()) {
             return;
         }
-        Properties previous = snapshotProperties();
+        Map<String, String> platformUpdates = new LinkedHashMap<>();
+        Map<String, String> orgUpdates = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : updates.entrySet()) {
             String key = entry.getKey();
             String value = entry.getValue() == null ? "" : entry.getValue();
             if (SECRET_KEYS.contains(key) && value.isBlank()) {
                 continue;
             }
-            properties.setProperty(key, value);
+            if (shouldWriteToCurrentOrg(key)) {
+                orgUpdates.put(key, value);
+            } else {
+                platformUpdates.put(key, value);
+            }
+        }
+        if (!orgUpdates.isEmpty()) {
+            persistOrgUpdates(orgUpdates);
+        }
+        if (platformUpdates.isEmpty()) {
+            applyRuntime();
+            return;
+        }
+        Properties previous = snapshotProperties();
+        for (Map.Entry<String, String> entry : platformUpdates.entrySet()) {
+            properties.setProperty(entry.getKey(), entry.getValue());
         }
         applyRuntime();
         try {
@@ -132,7 +153,34 @@ public class Config {
             restoreProperties(previous);
             throw new IOException(e.getMessage(), e);
         }
-        PropertiesFileUpdater.update(getConfigFile(), updates, SECRET_KEYS);
+        PropertiesFileUpdater.update(getConfigFile(), platformUpdates, SECRET_KEYS);
+    }
+
+    private static boolean shouldWriteToCurrentOrg(String key) {
+        // Org-scoped keys (club/invoice/stripe/oauth/mail/…) never go to params.properties.
+        return OrgConfig.isOrgScoped(key);
+    }
+
+    private void persistOrgUpdates(Map<String, String> orgUpdates) throws IOException {
+        RequestContext ctx = RequestContext.current();
+        Organisation current = OrgScope.currentOrg();
+        if (ctx == null || current == null || current.getId() == null) {
+            throw new IOException("No organisation in scope to save settings");
+        }
+        EntityManager em = ctx.em();
+        Organisation managed = em.find(Organisation.class, current.getId());
+        if (managed == null) {
+            throw new IOException("Organisation not found: " + current.getId());
+        }
+        OrgConfig orgConfig = new OrgConfig(managed);
+        for (Map.Entry<String, String> entry : orgUpdates.entrySet()) {
+            orgConfig.setProperty(entry.getKey(), entry.getValue());
+        }
+        em.flush();
+        ctx.setOrganisation(managed);
+        if (AppContext.get() != null && AppContext.get().organisationResolver() != null) {
+            AppContext.get().organisationResolver().invalidate();
+        }
     }
 
     private Properties snapshotProperties() {
@@ -161,29 +209,18 @@ public class Config {
         }
         admins = Collections.unmodifiableSet(adminsset);
 
-        page.setContactUrl(properties.getProperty("contact.url"));
-        page.setTitle(properties.getProperty("title", "TicketChess"));
+        // Page holds platform defaults; per-request org branding is applied in MustacheMessageBodyWriter.
+        page.setContactUrl(platformProperty("contact.url"));
+        page.setTitle(platformProperty("title", "TicketChess"));
         page.setClubRegisterEnabled(hasMembershipNotifEmails());
-        page.setOrgName(firstNonBlank(getProperty("org.name"), getProperty("title"), "TicketChess"));
-        page.setOrgEmail(blankToNull(getProperty("org.email")));
-        page.setOrgAddress(blankToNull(getProperty("org.address")));
-        page.setOrgHostingAddress(blankToNull(getProperty("org.hosting.address")));
+        page.setOrgName(firstNonBlank(platformProperty("org.name"), platformProperty("title"), "TicketChess"));
+        page.setOrgEmail(blankToNull(platformProperty("org.email")));
+        page.setOrgAddress(blankToNull(platformProperty("org.address")));
+        page.setOrgHostingAddress(blankToNull(platformProperty("org.hosting.address")));
         page.setAccountUrl(blankToNull(getOauthAccountUrl()));
-        page.setSourceUrl(blankToNull(getProperty("source.url")));
+        page.setSourceUrl(blankToNull(platformProperty("source.url")));
         page.setLogoUrl(logoFileExists() ? "/logo" : null);
         page.setBackgroundUrl(backgroundFileExists() ? "/background" : null);
-
-        loginUrl = properties.getProperty("baseurl") + (context != null ? context.getContextPath() : "") + "/auth-sim?state=";
-        if (isOauthEnabled()) {
-            String scope = URLEncoder.encode(getOauthScope(), StandardCharsets.UTF_8);
-            loginUrl = getOauthAuthorizationUrl() + "?client_id="
-                    + URLEncoder.encode(getOauthClientId(), StandardCharsets.UTF_8)
-                    + "&redirect_uri="
-                    + URLEncoder.encode(getOauthRedirectUri(), StandardCharsets.UTF_8)
-                    + "&response_type=code&scope="
-                    + scope
-                    + "&state=";
-        }
 
         if (!properties.containsKey("jwt.key") && (isTestModeProperty() || isTestEnvironment())) {
             logger.warn(
@@ -212,11 +249,19 @@ public class Config {
 
     public Map<String, String> getOrgFormValues() {
         Map<String, String> map = new LinkedHashMap<>();
+        Organisation org = OrgScope.currentOrg();
+        if (org != null) {
+            map.putAll(new OrgConfig(org).toMap(false));
+        }
         for (String key : properties.stringPropertyNames()) {
             if (SECRET_KEYS.contains(key)) {
                 continue;
             }
-            map.put(key, nullToEmpty(properties.getProperty(key)));
+            if (org != null && OrgConfig.isOrgScoped(key)) {
+                map.putIfAbsent(key, "");
+                continue;
+            }
+            map.putIfAbsent(key, nullToEmpty(platformProperty(key)));
         }
         putIfBlank(map, "oauth.clientId", getOauthClientId());
         putIfBlank(map, "oauth.authorizationUrl", getOauthAuthorizationUrl());
@@ -230,6 +275,19 @@ public class Config {
         putIfBlank(map, "invoice.seller.email", invoiceProperty("invoice.seller.email", "org.email"));
         putIfBlank(map, "invoice.seller.website", invoiceProperty("invoice.seller.website", "contact.url"));
         return map;
+    }
+
+    /** Raw value from {@code params.properties}, ignoring the current organisation overlay. */
+    public String platformProperty(String key) {
+        if (properties instanceof OrgProperties orgProperties) {
+            return orgProperties.rawProperty(key);
+        }
+        return properties.getProperty(key);
+    }
+
+    public String platformProperty(String key, String defaultValue) {
+        String value = platformProperty(key);
+        return value == null ? defaultValue : value;
     }
 
     private static void putIfBlank(Map<String, String> map, String key, String value) {
@@ -331,7 +389,22 @@ public class Config {
     }
 
     public String getOauthRedirectUri() {
-        return getProperty("baseurl", "http://localhost:8080") + getOauthCallbackPath();
+        return getPublicBaseUrl() + getRequestContextPath() + getOauthCallbackPath();
+    }
+
+    /**
+     * Public site origin for the current organisation when a request is in scope, otherwise the
+     * platform {@code baseurl}. Used for login, OAuth redirect and logout return URLs.
+     */
+    public String getPublicBaseUrl() {
+        Organisation org = OrgScope.currentOrg();
+        if (org != null) {
+            String orgBase = blankToNull(OrgConfig.normalizeBaseUrl(org.getBaseUrl()));
+            if (orgBase != null) {
+                return orgBase;
+            }
+        }
+        return OrgConfig.normalizeBaseUrl(platformProperty("baseurl", "http://localhost:8080"));
     }
 
     public boolean isSecretConfigured(String key) {
@@ -340,7 +413,7 @@ public class Config {
     }
 
     private boolean logoFileExists() {
-        Path dir = Path.of(getConfigDir());
+        Path dir = OrganisationFiles.currentDir(this);
         return Files.isRegularFile(dir.resolve("logo.png"))
                 || Files.isRegularFile(dir.resolve("logo.jpg"))
                 || Files.isRegularFile(dir.resolve("logo.jpeg"))
@@ -348,7 +421,7 @@ public class Config {
     }
 
     private boolean backgroundFileExists() {
-        Path dir = Path.of(getConfigDir());
+        Path dir = OrganisationFiles.currentDir(this);
         return Files.isRegularFile(dir.resolve("background.png"))
                 || Files.isRegularFile(dir.resolve("background.jpg"))
                 || Files.isRegularFile(dir.resolve("background.jpeg"))
@@ -401,11 +474,11 @@ public class Config {
     }
 
     public static boolean isBankTransferEnabledForEvents(Properties properties) {
-        return Boolean.parseBoolean(properties.getProperty("stripe.transfer.events", "true"));
+        return Boolean.parseBoolean(properties.getProperty("payment.transfer.events", "true"));
     }
 
     public static boolean isBankTransferEnabledForMemberships(Properties properties) {
-        return Boolean.parseBoolean(properties.getProperty("stripe.transfer.memberships", "true"));
+        return Boolean.parseBoolean(properties.getProperty("payment.transfer.memberships", "true"));
     }
 
     public boolean isTestMode() {
@@ -437,7 +510,7 @@ public class Config {
     }
 
     boolean hasSecureJwtKey() {
-        String jwtKey = properties.getProperty("jwt.key");
+        String jwtKey = platformProperty("jwt.key");
         if (jwtKey == null || jwtKey.isBlank()) {
             return false;
         }
@@ -454,7 +527,7 @@ public class Config {
     }
 
     private boolean isTestModeProperty() {
-        return Boolean.parseBoolean(properties.getProperty("testmode", "false"));
+        return Boolean.parseBoolean(platformProperty("testmode", "false"));
     }
 
     public int getPendingQueueOffset() {
@@ -473,8 +546,30 @@ public class Config {
         return keys;
     }
 
+    /** Servlet + optional {@code /o/{slug}} path used for login and OAuth return URLs. */
+    public String getRequestContextPath() {
+        RequestContext ctx = RequestContext.current();
+        if (ctx != null) {
+            return ctx.effectiveContextPath();
+        }
+        return context != null ? context.getContextPath() : "";
+    }
+
     public String getLoginUrl() {
-        return loginUrl;
+        String contextPath = getRequestContextPath();
+        if (isOauthEnabled()) {
+            String scope = URLEncoder.encode(getOauthScope(), StandardCharsets.UTF_8);
+            return getOauthAuthorizationUrl() + "?client_id="
+                    + URLEncoder.encode(getOauthClientId(), StandardCharsets.UTF_8)
+                    + "&redirect_uri="
+                    + URLEncoder.encode(getOauthRedirectUri(), StandardCharsets.UTF_8)
+                    + "&response_type=code&scope="
+                    + scope
+                    + "&state=";
+        }
+        // Relative so auth-sim stays on the host:port the browser is already using
+        // (org baseurl may omit a non-default port such as :8080).
+        return contextPath + "/auth-sim?state=";
     }
 
     public Page getPage() {
@@ -482,7 +577,10 @@ public class Config {
     }
 
     private boolean hasMembershipNotifEmails() {
-        String raw = properties.getProperty("membership.notif.emails", "");
+        String raw = getProperty("membership.notif.emails");
+        if (raw == null || raw.isBlank()) {
+            raw = platformProperty("membership.notif.emails", "");
+        }
         if (raw == null || raw.isBlank()) {
             return false;
         }
@@ -492,5 +590,39 @@ public class Config {
             }
         }
         return false;
+    }
+
+    /** Request-scoped page view: current org identity + per-org logo/background when available. */
+    public Page pageForRequest() {
+        Page base = page;
+        Page view = new Page();
+        view.setTitle(firstNonBlank(getProperty("title"), base.getTitle(), "TicketChess"));
+        view.setContactUrl(firstNonBlank(getProperty("contact.url"), base.getContactUrl()));
+        view.setClubRegisterEnabled(hasMembershipNotifEmails());
+        Organisation org = OrgScope.currentOrg();
+        if (org != null && blankToNull(org.getName()) != null) {
+            view.setOrgName(org.getName().trim());
+        } else {
+            view.setOrgName(firstNonBlank(getProperty("org.name"), getProperty("title"), base.getOrgName(), "TicketChess"));
+        }
+        view.setOrgEmail(blankToNull(firstNonBlank(getProperty("org.email"), base.getOrgEmail())));
+        view.setOrgAddress(blankToNull(firstNonBlank(getProperty("org.address"), base.getOrgAddress())));
+        view.setOrgHostingAddress(
+                blankToNull(firstNonBlank(getProperty("org.hosting.address"), base.getOrgHostingAddress())));
+        view.setAccountUrl(blankToNull(getOauthAccountUrl()));
+        view.setSourceUrl(blankToNull(firstNonBlank(getProperty("source.url"), base.getSourceUrl())));
+        view.setLogoUrl(logoFileExists() ? "/logo" : null);
+        view.setBackgroundUrl(backgroundFileExists() ? "/background" : null);
+        OrgUiStyle.Resolved ui = OrgUiStyle.resolve(this::getProperty);
+        view.setPrimaryColor(ui.primaryColor());
+        view.setSecondaryColor(ui.secondaryColor());
+        view.setPrimaryRgb(ui.primaryRgb());
+        view.setSecondaryRgb(ui.secondaryRgb());
+        view.setPrimaryHover(ui.primaryHover());
+        view.setSecondaryHover(ui.secondaryHover());
+        view.setFontFamily(ui.fontFamily());
+        view.setCustomFont(ui.fontFamily() != null && !ui.fontFamily().isBlank());
+        view.setGoogleFontHref(ui.googleFontHref());
+        return view;
     }
 }

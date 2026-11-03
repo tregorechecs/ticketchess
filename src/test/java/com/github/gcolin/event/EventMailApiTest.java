@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.SendMail;
 
 class EventMailApiTest {
@@ -38,9 +38,9 @@ class EventMailApiTest {
 
         inject(api, "eventService", eventDao);
 
-        JteHtml html = api.showForm(1, null);
+        MustacheHtml html = api.showForm(1, null);
 
-        assertEquals("event/eventMail.jte", html.getTemplate());
+        assertEquals("event/eventMail.mustache", html.getTemplate());
         Map<String, Object> model = html.getModel();
         assertEquals(event, model.get("event"));
     }
@@ -58,7 +58,7 @@ class EventMailApiTest {
 
         inject(api, "eventService", eventDao);
 
-        JteHtml html = api.showForm(1, 5);
+        MustacheHtml html = api.showForm(1, 5);
 
         Map<String, Object> model = html.getModel();
         assertEquals(5, model.get("sent"));

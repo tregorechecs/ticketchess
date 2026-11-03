@@ -1,0 +1,94 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/membership-option-admin{{seasonQuery}}">{{#i18n}}breadcrumb.membershipOptions{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#optionIsEdit}}{{#i18n}}page.membershipOptionEdit{{/i18n}}{{/optionIsEdit}}{{^optionIsEdit}}{{#i18n}}page.membershipOptionNew{{/i18n}}{{/optionIsEdit}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-toggles fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{#optionIsEdit}}{{#i18n}}page.membershipOptionEdit{{/i18n}}{{/optionIsEdit}}{{^optionIsEdit}}{{#i18n}}page.membershipOptionNew{{/i18n}}{{/optionIsEdit}}</h1>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        {{#optionIsEdit}}
+        <form method="post" action="{{contextPath}}/membership-option-admin/{{option.id}}">
+        {{/optionIsEdit}}{{^optionIsEdit}}
+        <form method="post" action="{{contextPath}}/membership-option-admin">
+        {{/optionIsEdit}}
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label for="opt_season" class="form-label">{{#i18n}}label.season{{/i18n}}</label>
+              <select id="opt_season" name="seasonId" class="form-select" required>
+                {{#seasonOptions}}{{#selected}}
+                  <option value="{{value}}" selected>{{label}}</option>
+                {{/selected}}{{^selected}}
+                  <option value="{{value}}">{{label}}</option>
+                {{/selected}}{{/seasonOptions}}
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="opt_type" class="form-label">{{#i18n}}label.type{{/i18n}}</label>
+              <select id="opt_type" name="optionType" class="form-select" required>
+                {{#optionTypeChoices}}{{#selected}}
+                  <option value="{{value}}" selected>{{label}}</option>
+                {{/selected}}{{^selected}}
+                  <option value="{{value}}">{{label}}</option>
+                {{/selected}}{{/optionTypeChoices}}
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="opt_license" class="form-label">{{#i18n}}label.license{{/i18n}} (optionnelle)</label>
+              <select id="opt_license" name="licenseId" class="form-select">
+                <option value="">-- Toutes les licences --</option>
+                {{#licenseChoices}}{{#selected}}
+                  <option value="{{id}}" selected>{{name}}</option>
+                {{/selected}}{{^selected}}
+                  <option value="{{id}}">{{name}}</option>
+                {{/selected}}{{/licenseChoices}}
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="opt_value" class="form-label">{{#i18n}}label.value{{/i18n}}</label>
+              <input id="opt_value" type="text" name="optionValue" class="form-control" value="{{option.optionValue}}" required>
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="opt_amount" class="form-label">Montant (cents)</label>
+              <input id="opt_amount" type="number" name="amountCents" class="form-control" min="0" value="{{amountCentsValue}}">
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="opt_access_rule" class="form-label">{{#i18n}}label.accessibility{{/i18n}}</label>
+              <select id="opt_access_rule" name="accessRule" class="form-select">
+                {{#accessRuleChoices}}{{#selected}}
+                  <option value="{{value}}" selected>{{label}}</option>
+                {{/selected}}{{^selected}}
+                  <option value="{{value}}">{{label}}</option>
+                {{/selected}}{{/accessRuleChoices}}
+              </select>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <a class="btn btn-secondary" href="{{contextPath}}/membership-option-admin{{seasonQuery}}">{{#i18n}}action.cancel{{/i18n}}</a>
+            {{#optionIsEdit}}
+            <button type="submit" class="btn btn-primary">{{#i18n}}action.save{{/i18n}}</button>
+            {{/optionIsEdit}}{{^optionIsEdit}}
+            <button type="submit" class="btn btn-primary">{{#i18n}}action.createGeneric{{/i18n}}</button>
+            {{/optionIsEdit}}
+          </div>
+        </form>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

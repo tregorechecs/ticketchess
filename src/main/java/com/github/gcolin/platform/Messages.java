@@ -9,8 +9,9 @@ import java.time.format.FormatStyle;
 import java.util.Date;
 import java.util.Locale;
 import java.util.ResourceBundle;
+import java.util.function.Function;
 
-/** Looks up i18n messages from ResourceBundles for JTE templates. */
+/** Looks up i18n messages from ResourceBundles for Mustache templates. */
 public class Messages {
 
     private final Locale locale;
@@ -61,5 +62,13 @@ public class Messages {
             return message;
         }
         return new MessageFormat(message, locale).format(params);
+    }
+
+    /**
+     * Mustache function (plain {@link Function}, not {@code TemplateFunction}): section body is
+     * rendered first so nested keys work, e.g. {@code {{#i18n}}{{statusMessageKey}}{{/i18n}}}.
+     */
+    public Function<String, String> asLambda() {
+        return key -> get(key == null ? "" : key.trim());
     }
 }

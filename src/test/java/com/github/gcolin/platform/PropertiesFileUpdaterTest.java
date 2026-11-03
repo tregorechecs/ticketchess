@@ -59,4 +59,21 @@ class PropertiesFileUpdaterTest {
 
         assertEquals("oauth.clientId=new-id", Files.readString(file, StandardCharsets.UTF_8).trim());
     }
+
+    @Test
+    void removeKeysShouldDropAssignmentsAndKeepComments() throws Exception {
+        Path file = tempDir.resolve("params.properties");
+        Files.writeString(
+                file,
+                "# keep\ntitle=Club\norg.email=a@b.c\njwt.key=secret\n",
+                StandardCharsets.UTF_8);
+
+        PropertiesFileUpdater.removeKeys(file, Set.of("title", "org.email"));
+
+        String content = Files.readString(file, StandardCharsets.UTF_8);
+        assertTrue(content.contains("# keep"));
+        assertTrue(content.contains("jwt.key=secret"));
+        assertTrue(!content.contains("title="));
+        assertTrue(!content.contains("org.email="));
+    }
 }

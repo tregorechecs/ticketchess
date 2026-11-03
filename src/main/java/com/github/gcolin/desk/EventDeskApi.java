@@ -21,7 +21,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("event/{id:\\d+}/desk")
 @RequireRole(RoleCode.ARBITRE)
@@ -42,7 +42,7 @@ public class EventDeskApi {
     private Config config;
 
     @GET
-    public JteHtml show(@PathParam("id") Integer eventId) {
+    public MustacheHtml show(@PathParam("id") Integer eventId) {
         Event event = eventDao.find(eventId);
         if (event == null) {
             throw new WebApplicationException("Event not found", Response.Status.NOT_FOUND);
@@ -63,6 +63,6 @@ public class EventDeskApi {
         model.put("eventsJson", JSONB.toJson(events));
         model.put("hasCollection", events.size() > 1);
         model.put("deskTicket", deskTicket);
-        return new JteHtml(model, "desk/eventDesk.jte");
+        return new MustacheHtml(model, "desk/eventDesk.mustache");
     }
 }

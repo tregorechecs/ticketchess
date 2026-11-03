@@ -40,13 +40,13 @@ public class AdminMailApi {
      * Show a simple form to send a templated email.
      */
     @GET
-    public JteHtml showForm() {
+    public MustacheHtml showForm() {
         Map<String, Object> model = new HashMap<>();
         // List of available templates
         model.put("templates", new String[] {
             "registrationConfirmation", "paymentConfirmation", "cancelConfirmation", "loginLink",
         });
-        return new JteHtml(model, "platform/adminMail.jte");
+        return new MustacheHtml(model, "platform/adminMail.mustache");
     }
 
     /**
@@ -140,7 +140,7 @@ public class AdminMailApi {
         switch (template) {
             case "registrationConfirmation": {
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getProperties().getProperty("baseurl") : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
                 
                 String jwt = Jwts.builder()
                         .subject(to.trim())
@@ -165,7 +165,7 @@ public class AdminMailApi {
             }
             case "paymentConfirmation": {
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getProperties().getProperty("baseurl") : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
                 
                 String jwt = Jwts.builder()
                         .subject(to.trim())
@@ -190,7 +190,7 @@ public class AdminMailApi {
             }
             case "cancelConfirmation": {
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getProperties().getProperty("baseurl") : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
                 
                 String jwt = Jwts.builder()
                         .subject(to.trim())
@@ -218,7 +218,7 @@ public class AdminMailApi {
                     return null;
                 }
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getProperties().getProperty("baseurl") : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
                 String jwt = Jwts.builder()
                         .subject(to.trim())
                         .issuer(safeName.isBlank() ? to.trim() : safeName)

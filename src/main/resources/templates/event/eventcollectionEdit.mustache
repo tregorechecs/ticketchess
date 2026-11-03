@@ -1,0 +1,105 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="mb-3 mt-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin/events">{{#i18n}}breadcrumb.events{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#createMode}}{{#i18n}}eventcollection.createBreadcrumb{{/i18n}}{{else}}{{#i18n}}eventcollection.editBreadcrumb{{/i18n}}{{/createMode}}</li>
+        </ol>
+      </nav>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <h1 class="h4 mb-2">{{#i18n}}heading.eventCollections{{/i18n}}</h1>
+          <p class="text-body-secondary mb-0">{{#i18n}}help.eventCollections{{/i18n}}</p>
+        </div>
+      </div>
+
+      {{#showSaveSuccess}}<div class="alert alert-success" role="alert">{{#i18n}}message.saveSuccess{{/i18n}}</div>{{/showSaveSuccess}}
+      {{#errorMessageKey}}<div class="alert alert-danger" role="alert">{{#i18n}}{{errorMessageKey}}{{/i18n}}</div>{{/errorMessageKey}}
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <form method="post" action="{{contextPath}}/eventcollection" class="row g-2 align-items-end">
+            <input type="hidden" name="action" value="{{#createMode}}create{{else}}update{{/createMode}}">
+            {{^createMode}}<input type="hidden" name="id" value="{{eventCollection.id}}">{{/createMode}}
+            <div class="col-12 col-md-8 col-lg-6">
+              <label class="form-label" for="eventcollection_name">{{#i18n}}event.name{{/i18n}}</label>
+              <input id="eventcollection_name" type="text" name="name" value="{{collectionNameValue}}{{^collectionNameValue}}{{eventCollection.name}}{{/collectionNameValue}}" class="form-control" required>
+            </div>
+            <div class="col-12 col-md-4 col-lg-3">
+              <label class="form-label" for="eventcollection_maxsubscribe">{{#i18n}}eventcollection.maxSubscribe{{/i18n}}</label>
+              <input id="eventcollection_maxsubscribe" type="text" inputmode="numeric" pattern="[0-9]*" name="maxSubscribe" value="{{maxSubscribeInputValue}}" placeholder="{{#i18n}}eventcollection.maxSubscribe.placeholder{{/i18n}}" class="form-control">
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+              <label class="form-label" for="eventcollection_chesseventid">{{#i18n}}eventcollection.chessEventId{{/i18n}}</label>
+              <input id="eventcollection_chesseventid" type="text" name="chessEventId" value="{{chessEventId}}" class="form-control" placeholder="{{#i18n}}eventcollection.chessEventId.placeholder{{/i18n}}">
+              <div class="form-text">{{#i18n}}eventcollection.chessEventId.help{{/i18n}}</div>
+            </div>
+            <div class="col-12 col-md-auto">
+              <button type="submit" class="btn btn-primary">{{#createMode}}{{#i18n}}action.createGeneric{{/i18n}}{{else}}{{#i18n}}action.save{{/i18n}}{{/createMode}}</button>
+            </div>
+          </form>
+          {{^createMode}}
+          <p class="text-body-secondary mt-3 mb-0">{{subscriptionsSummaryText}}</p>
+          <form method="post" action="{{contextPath}}/eventcollection" class="row g-2 mt-1">
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="id" value="{{eventCollection.id}}">
+            <div class="col-12 col-md-auto">
+              {{#removeDisabled}}
+              <button type="submit" class="btn btn-outline-danger" disabled>{{#i18n}}action.remove{{/i18n}}</button>
+              {{/removeDisabled}}
+              {{^removeDisabled}}
+              <button type="submit" class="btn btn-outline-danger">{{#i18n}}action.remove{{/i18n}}</button>
+              {{/removeDisabled}}
+            </div>
+          </form>
+          {{/createMode}}
+        </div>
+      </div>
+
+      {{^createMode}}{{#hasLinkedEvents}}
+      <div class="card mb-3">
+        <div class="card-body">
+          <h2 class="h5 mb-3">{{#i18n}}page.events{{/i18n}}</h2>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>{{#i18n}}event.name{{/i18n}}</th>
+                  <th>{{#i18n}}event.start{{/i18n}}</th>
+                  <th>{{#i18n}}event.status{{/i18n}}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#linkedEvents}}
+                <tr>
+                  <td>{{name}}</td>
+                  <td>{{#hasStartDate}}{{startDateText}}{{/hasStartDate}}</td>
+                  <td>
+                    {{#statusIsDRAFT}}<span class="badge bg-secondary">{{#i18n}}event.status.DRAFT{{/i18n}}</span>{{/statusIsDRAFT}}
+                    {{#statusIsACTIVE}}<span class="badge bg-success">{{#i18n}}event.status.ACTIVE{{/i18n}}</span>{{/statusIsACTIVE}}
+                    {{#statusIsONGOING}}<span class="badge bg-warning">{{#i18n}}event.status.ONGOING{{/i18n}}</span>{{/statusIsONGOING}}
+                    {{#statusIsCOMPLETED}}<span class="badge bg-danger">{{#i18n}}event.status.COMPLETED{{/i18n}}</span>{{/statusIsCOMPLETED}}
+                    {{#statusIsOther}}<span class="badge bg-info">{{#i18n}}{{statusMessageKey}}{{/i18n}}</span>{{/statusIsOther}}
+                  </td>
+                  <td class="text-end">
+                    <a href="{{contextPath}}/event/{{id}}" class="btn btn-sm btn-outline-primary">{{#i18n}}action.edit{{/i18n}}</a>
+                  </td>
+                </tr>
+                {{/linkedEvents}}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {{/hasLinkedEvents}}{{/createMode}}
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

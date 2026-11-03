@@ -134,7 +134,7 @@ public class CustomPlayer implements IPlayer {
         }
         try {
             int year = Integer.parseInt(birthDate.substring(0, 4));
-            return ModelUtils.getCategory(LocalDate.now(), year, gender);
+            return ModelUtils.getCategory(LocalDate.now(), year, Boolean.TRUE.equals(gender));
         } catch (RuntimeException e) {
             return female ? "SenF" : "SenM";
         }

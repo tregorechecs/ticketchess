@@ -50,6 +50,10 @@ public class AbstractDao<T> {
         em.persist(e);
     }
 
+    public void flush() {
+        em.flush();
+    }
+
     public T merge(T e) {
         return em.merge(e);
     }

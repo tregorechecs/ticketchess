@@ -1,0 +1,346 @@
+{{> platform/head}}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+      <html>
+
+
+      <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+{{> platform/menubar}}
+        <main class="container flex-fill mt-3">
+          {{#successRegister}}
+            <div class="alert alert-success" role="alert">{{#i18n}}register.success{{/i18n}}</div>
+          {{/successRegister}}
+          {{#successPending}}
+            <div class="alert alert-info" role="alert">{{#i18n}}register.pending.success{{/i18n}}</div>
+          {{/successPending}}
+          {{#successPayment}}
+            <div class="alert alert-success" role="alert">{{#i18n}}payment.success{{/i18n}}</div>
+          {{/successPayment}}
+
+          {{#noMyEvents}}
+            <div id="noevent" class="bg-body p-3 pb-1 rounded mb-3">
+            <p>
+              {{#i18n}}event.noevent{{/i18n}}
+            </p>
+            </div>
+          {{/noMyEvents}}
+          {{#hasEventDebt}}
+            <div class="bg-body p-3 rounded mb-3">
+                <h2>💶
+                {{#i18n}}info.payment{{/i18n}}</h2>
+                <div class="row g-3">
+                  {{#showCardPay}}
+                  <!-- Paiement par carte -->
+                  <div class="col-md-6">
+                    <div class="alert alert-primary p-3 h-100">
+                      <h6>💳 {{#i18n}}payment.cardTitle{{/i18n}}</h6>
+                      <p class="text-muted mb-3">
+                        {{#i18n}}payment.cardSecure{{/i18n}}
+                      </p>
+                      {{#showStripeJs}}
+                      <a class="btn btn-primary w-100" href="javascript:void(0)" id="paynow">
+                        {{#i18n}}payment.payByCard{{/i18n}}
+                      </a>
+                      {{/showStripeJs}}
+                      {{^showStripeJs}}
+                      <a class="btn btn-primary w-100" href="{{contextPath}}/payment/sim" id="paynow">
+                        {{#i18n}}payment.payByCard{{/i18n}}
+                      </a>
+                      {{/showStripeJs}}
+                    </div>
+                  </div>
+                  {{/showCardPay}}
+
+                  {{#showBankTransfer}}
+                  <!-- Paiement par RIB -->
+                  <div class="col-md-6">
+                    <div class="alert alert-primary p-3 h-100">
+                      <h6>🏦 {{#i18n}}payment.bankTransferTitle{{/i18n}}</h6>
+                      <p class="text-muted mb-3">
+                        {{#i18n}}payment.bankTransferDesc{{/i18n}}
+                        <br />
+                        <small class="text-muted">
+                          {{#i18n}}payment.bankTransferNote{{/i18n}}
+                        </small>
+                      </p>
+
+                      <a href="{{contextPath}}/rib" class="btn btn-primary w-100" target="_blank">
+                        {{#i18n}}payment.downloadRIB{{/i18n}}
+                      </a>
+                    </div>
+                  </div>
+                  {{/showBankTransfer}}
+
+                </div>
+
+                <!-- Autre option -->
+                <div class="alert alert-info mt-4 mb-0">
+                  💡 <strong>{{#i18n}}payment.otherMeansTitle{{/i18n}}</strong>
+                  {{#i18n}}payment.otherMeansDesc{{/i18n}}
+                  <br>
+                  <small class="text-muted">
+                    {{#i18n}}payment.otherMeansNote{{/i18n}}
+                  </small>
+                  <p class="text-muted small mt-2">
+                    ⚠️ {{#i18n}}payment.priceEvolution{{/i18n}}
+                  </p>
+                </div>
+
+            </div>
+            {{#showCardPay}}
+            {{#showStripeJs}}
+            <script type="text/javascript">
+
+              const form = document.getElementById('paynow');
+
+              let stripePromise = null;
+
+              function loadStripe() {
+                if (stripePromise) {
+                  return stripePromise; // déjà chargé ou en cours
+                }
+
+                stripePromise = new Promise((resolve, reject) => {
+                  if (window.Stripe) {
+                    resolve(window.Stripe);
+                    return;
+                  }
+
+                  const script = document.createElement('script');
+                  script.src = "https://js.stripe.com/v3/";
+                  script.async = true;
+
+                  script.onload = () => resolve(window.Stripe);
+                  script.onerror = () => reject(new Error("{{#i18n}}error.stripeLoadError{{/i18n}}"));
+
+                  document.head.appendChild(script);
+                });
+
+                return stripePromise;
+              };
+
+              form.addEventListener('click', async () => {
+                form.disabled = true;
+
+                try {
+                  const res = await fetch('{{contextPath}}/payment/initiate', {
+                    method: 'POST'
+                  });
+
+                  if (!res.ok) {
+                    form.disabled = false;
+                    alert('{{#i18n}}error.serverError{{/i18n}}');
+                    return;
+                  }
+
+                  const data = await res.json();
+
+                  if(!data['sessionId']) {
+                  	window.location.reload();
+                  	return;
+                  }
+
+                  const StripeLib = await loadStripe();
+                  const stripe = StripeLib('{{stripePublic}}');
+
+                  const result = await stripe.redirectToCheckout({
+                    sessionId: data.sessionId
+                  });
+
+                  if (result.error) {
+                    form.disabled = false;
+                    alert(result.error.message);
+                  }
+                } catch (e) {
+                  form.disabled = false;
+                  alert('{{#i18n}}error.prefix{{/i18n}}' + e);
+                }
+              });
+            </script>
+            {{/showStripeJs}}
+            {{/showCardPay}}
+          {{/hasEventDebt}}
+
+          {{#events}}
+            <div class="bg-body p-3 rounded mb-3">
+            <h3><a href="{{contextPath}}/event/{{id}}">{{name}}</a></h3>
+            <div class="rounded" style="overflow: hidden;">
+            <table class="table table-striped mb-0">
+              <thead>
+                <tr>
+                  <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.licence{{/i18n}}</th>
+                  <th scope="col">
+                    {{#i18n}}player.name{{/i18n}}
+                  </th>
+                  <th scope="col" class="d-none d-md-table-cell">
+                    {{#i18n}}player.category{{/i18n}}
+                  </th>
+                  <th scope="col" class="d-none d-md-table-cell">
+                    {{#i18n}}player.rating{{/i18n}}
+                  </th>
+                  <th class="d-none d-md-table-cell">{{#i18n}}player.club{{/i18n}}</th>
+                  {{#notFree}}
+                  <th scope="col" class="d-none d-md-table-cell">
+                    {{#i18n}}event.price{{/i18n}}
+                  </th>
+                  <th scope="col">
+                    {{#i18n}}event.status{{/i18n}}
+                  </th>
+                  {{/notFree}}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#players}}
+                  <tr>
+                    <td scope="row" class="d-none d-md-table-cell">
+                      {{licenceOrEmpty}}
+                    </td>
+                    <td class="js-name">
+                      {{name}}
+                      {{firstname}}
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                      {{categoryOrEmpty}}
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                      {{ratingOrEmpty}}
+                    </td>
+                    <td class="d-none d-md-table-cell">{{clubOrEmpty}}</td>
+                    {{#notFree}}
+                    <td class="js-price d-none d-md-table-cell">
+                      {{priceDisplay}}
+                    </td>
+                    <td class="js-status">{{#statusMessageKey}}{{#i18n}}{{statusMessageKey}}{{/i18n}}{{/statusMessageKey}}{{^statusMessageKey}}-{{/statusMessageKey}}</td>
+                    {{/notFree}}
+                    <td>
+                    {{#activeStatus}}
+                    {{#pointageEnabled}}
+                    {{#paid}}
+                      {{#pointed}}
+                        <span class="badge text-bg-success">{{#i18n}}action.pointed{{/i18n}}</span>
+                      {{/pointed}}
+                      {{^pointed}}
+                        <a class="btn btn-outline-success btn-sm"
+                           href="{{contextPath}}/event/{{eventId}}/pointe?subId={{subId}}"
+                           onclick="return confirm('{{#i18n}}action.confirm{{/i18n}}')">
+                          {{#i18n}}action.pointe{{/i18n}}</a>
+                      {{/pointed}}
+                    {{/paid}}
+                    {{/pointageEnabled}}
+                    {{#notCancelled}}
+                    <a class="btn btn-outline-danger btn-sm"
+                        href="{{contextPath}}/event/{{eventId}}/unregister?nrffe={{nrffeId}}"
+                        onclick="return confirm('{{#i18n}}action.confirm{{/i18n}}')">
+                      {{#i18n}}action.unregister{{/i18n}}</a>
+                    {{/notCancelled}}
+                    {{#hasEventCollection}}
+                    <a class="btn btn-outline-info btn-sm"
+                        href="{{contextPath}}/event/my/{{subId}}/eventcollection/{{eventCollectionId}}">
+                      {{#i18n}}action.change{{/i18n}}</a>
+                    {{/hasEventCollection}}
+                    {{/activeStatus}}
+                    {{#editable}}
+                    <a class="js-edit btn btn-outline-info btn-sm"
+                        href="{{contextPath}}/customplayer/{{id}}">{{#i18n}}action.edit{{/i18n}}</a>
+                    {{/editable}}
+                    </td>
+                  </tr>
+                {{/players}}
+              </tbody>
+            </table>
+            </div>
+            </div>
+          {{/events}}
+
+          {{#hasPendingEvents}}
+            <div class="bg-body p-3 rounded mb-3">
+              <h2>{{#i18n}}myevents.pendingQueue.title{{/i18n}}</h2>
+            </div>
+            {{#pendingEvents}}
+              <div class="bg-body p-3 rounded mb-3">
+                <h3><a href="{{contextPath}}/event/{{id}}">{{name}}</a></h3>
+                <div class="rounded" style="overflow: hidden;">
+                  <table class="table table-striped mb-0">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.licence{{/i18n}}</th>
+                        <th scope="col">{{#i18n}}player.name{{/i18n}}</th>
+                        <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.category{{/i18n}}</th>
+                        <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.rating{{/i18n}}</th>
+                        <th class="d-none d-md-table-cell">{{#i18n}}player.club{{/i18n}}</th>
+                        <th scope="col">{{#i18n}}myevents.pendingQueue.position{{/i18n}}</th>
+                        <th scope="col">{{#i18n}}myevents.pendingQueue.status{{/i18n}}</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {{#players}}
+                        <tr>
+                          <td scope="row" class="d-none d-md-table-cell">{{licenceOrEmpty}}</td>
+                          <td class="js-name">{{name}} {{firstname}}</td>
+                          <td class="d-none d-md-table-cell">{{categoryOrEmpty}}</td>
+                          <td class="d-none d-md-table-cell">{{ratingOrEmpty}}</td>
+                          <td class="d-none d-md-table-cell">{{clubOrEmpty}}</td>
+                          <td>{{pendingQueueAheadText}}</td>
+                          <td>{{#i18n}}myevents.pendingQueue.status{{/i18n}}</td>
+                          <td>
+                            <a class="btn btn-outline-danger btn-sm"
+                               href="{{contextPath}}/event/{{eventId}}/unregister-pending?nrffe={{nrffeId}}"
+                               onclick="return confirm('{{#i18n}}action.confirm{{/i18n}}')">
+                              {{#i18n}}action.leavePendingQueue{{/i18n}}
+                            </a>
+                            {{#editable}}
+                              <a class="js-edit btn btn-outline-info btn-sm"
+                                 href="{{contextPath}}/customplayer/{{id}}">{{#i18n}}action.edit{{/i18n}}</a>
+                            {{/editable}}
+                          </td>
+                        </tr>
+                      {{/players}}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            {{/pendingEvents}}
+          {{/hasPendingEvents}}
+
+          {{#hasFinishedEvents}}
+          <div class="mb-3">
+            <a class="btn btn-info" href="{{toggleDisplayUrl}}">
+              {{#showFinished}}{{#i18n}}myevents.hideFinished{{/i18n}}{{/showFinished}}{{^showFinished}}{{#i18n}}myevents.showFinished{{/i18n}}{{/showFinished}}
+            </a>
+          </div>
+          {{/hasFinishedEvents}}
+
+          {{#hasPaidPayments}}
+            {{#successIsPayerUpdated}}
+              <div class="alert alert-success mb-3" role="alert">{{#i18n}}payment.payer.updated{{/i18n}}</div>
+            {{/successIsPayerUpdated}}
+            <div class="bg-body p-3 rounded mb-3">
+              <div class="mb-2">{{#i18n}}payment.invoiceReady{{/i18n}}</div>
+              <div class="d-flex flex-column gap-2">
+                {{#paidPayments}}
+                  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between border rounded p-2">
+                    <div class="small text-body-secondary">
+                      #{{id}}
+                      {{#payerName}}
+                        — {{payerName}}
+                      {{/payerName}}
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                      <a class="btn btn-outline-secondary btn-sm" href="{{contextPath}}/payment/{{id}}/payer?returnTo=/event/my">{{#i18n}}payment.payer.edit{{/i18n}}</a>
+                      <a class="btn btn-outline-success btn-sm" href="{{contextPath}}/payment/{{id}}/invoice">
+                        {{#i18n}}payment.downloadInvoice{{/i18n}}
+                      </a>
+                    </div>
+                  </div>
+                {{/paidPayments}}
+              </div>
+            </div>
+          {{/hasPaidPayments}}
+
+        </main>
+        {{> platform/footer}}
+      </body>
+
+      </html>

@@ -25,7 +25,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("eventcollection")
 @RequireRole(RoleCode.EVENT_ADMIN)
@@ -47,7 +47,7 @@ public class EventCollectionApi {
     private UriInfo uriInfo;
 
     @GET
-    public JteHtml page(
+    public MustacheHtml page(
             @QueryParam("created") String created,
             @QueryParam("updated") String updated,
             @QueryParam("removed") String removed,
@@ -59,7 +59,7 @@ public class EventCollectionApi {
         model.put("updated", "1".equals(updated));
         model.put("removed", "1".equals(removed));
         model.put("error", error);
-        return new JteHtml(model, "event/eventcollection.jte");
+        return new MustacheHtml(model, "event/eventcollection.mustache");
     }
 
     @POST
@@ -142,18 +142,18 @@ public class EventCollectionApi {
 
     @GET
     @Path("new")
-    public JteHtml create(@QueryParam("error") String error) {
+    public MustacheHtml create(@QueryParam("error") String error) {
         Map<String, Object> model = new HashMap<>();
         model.put("eventCollection", new EventCollection());
         model.put("createMode", true);
         model.put("error", error);
         model.put("chessEventId", "");
-        return new JteHtml(model, "event/eventcollectionEdit.jte");
+        return new MustacheHtml(model, "event/eventcollectionEdit.mustache");
     }
 
     @GET
     @Path("{id:\\d+}")
-    public JteHtml edit(
+    public MustacheHtml edit(
             @PathParam("id") Integer id,
             @QueryParam("success") String success,
             @QueryParam("error") String error) {
@@ -174,7 +174,7 @@ public class EventCollectionApi {
                 "chessEventId",
                 eventCollectionOptionService.findOptionValue(
                         eventCollection.getId(), EventCollectionOptionType.CHESS_EVENT_ID));
-        return new JteHtml(model, "event/eventcollectionEdit.jte");
+        return new MustacheHtml(model, "event/eventcollectionEdit.mustache");
     }
 
     private void invalidateEventCaches() {

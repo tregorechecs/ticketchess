@@ -1,0 +1,11 @@
+<div class="dropdown">
+  <button class="btn btn-sm btn-link text-body-secondary text-decoration-none border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" aria-label="{{#i18n}}label.action{{/i18n}}" title="{{#i18n}}label.action{{/i18n}}">
+    <i class="bi bi-three-dots-vertical"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" href="{{contextPath}}/membership/mail{{#seasonId}}?seasonId={{seasonId}}{{/seasonId}}"><i class="bi bi-envelope me-2"></i>{{#i18n}}action.sendMembershipMails{{/i18n}}</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item" href="{{contextPath}}/membership/export/pdf{{#seasonId}}?seasonId={{seasonId}}{{/seasonId}}"><i class="bi bi-file-earmark-pdf me-2"></i>{{#i18n}}action.exportMembershipsPdf{{/i18n}}</a></li>
+    <li><a class="dropdown-item" href="{{contextPath}}/membership/export/csv{{#seasonId}}?seasonId={{seasonId}}{{/seasonId}}">{{#i18n}}action.exportCsv{{/i18n}}</a></li>
+  </ul>
+</div>

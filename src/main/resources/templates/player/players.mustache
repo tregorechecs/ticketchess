@@ -1,0 +1,82 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#i18n}}page.players{{/i18n}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <h1 class="h3 mb-0">{{#i18n}}page.players{{/i18n}}</h1>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mb-3 admin-table-panel px-3 py-2">
+        <div class="text-body-secondary">
+          {{paginationPlayerCountText}}
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <select class="form-select form-select-sm" style="width:auto" onchange="window.location='{{contextPath}}/customplayer?page=1&size='+this.value">
+            {{#pageSizeOptions}}
+              {{#selected}}
+              <option value="{{value}}" selected>{{value}}</option>
+              {{/selected}}
+              {{^selected}}
+              <option value="{{value}}">{{value}}</option>
+              {{/selected}}
+            {{/pageSizeOptions}}
+          </select>
+          {{#hasPrev}}
+            <a class="btn btn-outline-dark btn-sm" href="{{contextPath}}/customplayer?page={{prevPage}}&size={{pageSize}}">{{#i18n}}pagination.previous{{/i18n}}</a>
+          {{/hasPrev}}
+          {{^hasPrev}}
+            <span class="btn btn-outline-tertiary btn-sm disabled">{{#i18n}}pagination.previous{{/i18n}}</span>
+          {{/hasPrev}}
+          {{#hasNext}}
+            <a class="btn btn-outline-dark btn-sm" href="{{contextPath}}/customplayer?page={{nextPage}}&size={{pageSize}}">{{#i18n}}pagination.next{{/i18n}}</a>
+          {{/hasNext}}
+          {{^hasNext}}
+            <span class="btn btn-outline-tertiary btn-sm disabled">{{#i18n}}pagination.next{{/i18n}}</span>
+          {{/hasNext}}
+        </div>
+      </div>
+
+      <div class="table-responsive admin-table-panel">
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th scope="col"></th>
+              <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.licence{{/i18n}}</th>
+              <th scope="col">{{#i18n}}player.name{{/i18n}}</th>
+              <th scope="col" class="d-none d-md-table-cell">{{#i18n}}player.birthdate{{/i18n}}</th>
+              <th scope="col">{{#i18n}}player.rating{{/i18n}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#playersEmpty}}
+              <tr>
+                <td colspan="5" class="text-center text-muted">{{#i18n}}info.noPlayer{{/i18n}}</td>
+              </tr>
+            {{/playersEmpty}}
+            {{^playersEmpty}}
+              {{#playerRows}}
+                <tr>
+                  <td>{{rowNumber}}</td>
+                  <td class="d-none d-md-table-cell"><a href="{{contextPath}}/customplayer/{{id}}">{{id}}</a></td>
+                  <td><a href="{{contextPath}}/customplayer/{{id}}">{{name}} {{firstname}}</a></td>
+                  <td class="d-none d-md-table-cell">{{birthDate}}</td>
+                  <td>{{rating}}</td>
+                </tr>
+              {{/playerRows}}
+            {{/playersEmpty}}
+          </tbody>
+        </table>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>

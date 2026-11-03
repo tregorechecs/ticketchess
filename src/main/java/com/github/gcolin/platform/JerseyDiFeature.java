@@ -31,8 +31,7 @@ import com.github.gcolin.membership.MembershipOptionFileDao;
 import com.github.gcolin.membership.MembershipOptionFileService;
 import com.github.gcolin.membership.MembershipOptionSubscriptionDao;
 import com.github.gcolin.membership.MembershipReportService;
-import com.github.gcolin.notification.NotificationDao;
-import com.github.gcolin.notification.Notifications;
+import com.github.gcolin.organisation.OrganisationDao;
 import com.github.gcolin.payment.DebtService;
 import com.github.gcolin.payment.PaymentDao;
 import com.github.gcolin.payment.PaymentReceiptPdfService;
@@ -61,7 +60,7 @@ public class JerseyDiFeature implements Feature {
                 bindFactory(app(AppContext.get().config())).to(Config.class);
                 bindFactory(app(AppContext.get().caches())).to(Caches.class);
                 bindFactory(app(AppContext.get().sendMail())).to(SendMail.class);
-                bindFactory(app(AppContext.get().jteConfig())).to(JteConfig.class);
+                bindFactory(app(AppContext.get().mustacheConfig())).to(MustacheConfig.class);
                 bindFactory(app(AppContext.get().luceneDb())).to(LuceneDb.class);
                 bindFactory(app(AppContext.get().logoService())).to(LogoService.class);
                 bindFactory(app(AppContext.get().signatureService())).to(SignatureService.class);
@@ -83,6 +82,7 @@ public class JerseyDiFeature implements Feature {
                 bindFactory(app(new SharlyCallbackAllowlist(AppContext.get().config())))
                         .to(SharlyCallbackAllowlist.class);
 
+                bindFactory(req(RequestContext::organisationDao)).to(OrganisationDao.class);
                 bindFactory(req(RequestContext::clubSeasonDao)).to(ClubSeasonDao.class);
                 bindFactory(req(RequestContext::clubSeasonFilter)).to(ClubSeasonFilter.class);
                 bindFactory(req(RequestContext::licenseDao)).to(LicenseDao.class);
@@ -104,12 +104,10 @@ public class JerseyDiFeature implements Feature {
                 bindFactory(req(RequestContext::playerSubscriptionOptionDao)).to(PlayerSubscriptionOptionDao.class);
                 bindFactory(req(RequestContext::playerPendingSubscriptionDao)).to(PlayerPendingSubscriptionDao.class);
                 bindFactory(req(RequestContext::paymentDao)).to(PaymentDao.class);
-                bindFactory(req(RequestContext::notificationDao)).to(NotificationDao.class);
                 bindFactory(req(RequestContext::find)).to(Find.class);
                 bindFactory(req(RequestContext::debtService)).to(DebtService.class);
                 bindFactory(req(RequestContext::registerService)).to(RegisterService.class);
                 bindFactory(req(RequestContext::stateService)).to(StateService.class);
-                bindFactory(req(RequestContext::notifications)).to(Notifications.class);
                 bindFactory(req(RequestContext::eventGroupFilter)).to(EventGroupFilter.class);
                 bindFactory(req(RequestContext::papiService)).to(PapiService.class);
                 bindFactory(req(RequestContext::papiUlploadService)).to(PapiUlploadService.class);

@@ -1,0 +1,320 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/payment">{{#i18n}}breadcrumb.payments{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{paymentEditTitle}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi {{#donationMode}}bi-heart{{/donationMode}}{{^donationMode}}bi-credit-card{{/donationMode}} fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{paymentEditTitle}}</h1>
+          </div>
+        </div>
+      </div>
+
+      {{#successIsReceiptSent}}
+      <div class="alert alert-success mb-3" role="alert">{{#i18n}}payment.receiptSent{{/i18n}}</div>
+      {{/successIsReceiptSent}}
+
+      <div class="admin-table-panel mb-4">
+        <form id="paymentForm" method="post" action="{{contextPath}}/payment/save" enctype="application/x-www-form-urlencoded" accept-charset="UTF-8">
+          <input type="hidden" name="id" value="{{payment.id}}">
+          <input type="hidden" name="toRemove" id="toRemove" value="false">
+          <input type="hidden" name="donation" value="{{#donationMode}}true{{/donationMode}}{{^donationMode}}false{{/donationMode}}">
+
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}payment.email{{/i18n}}</label>
+            <input type="email" id="userEmail" name="userEmail" value="{{payment.userEmail}}" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="payerName">{{#donationMode}}{{#i18n}}payment.donorName{{/i18n}}{{/donationMode}}{{^donationMode}}{{#i18n}}payment.payerName{{/i18n}}{{/donationMode}}</label>
+            {{#donationMode}}
+              <input type="text" id="payerName" name="payerName" value="{{payment.payerName}}" class="form-control" maxlength="255" required>
+              <div class="form-text">{{#i18n}}help.paymentDonorName{{/i18n}}</div>
+            {{/donationMode}}
+            {{^donationMode}}
+              <input type="text" id="payerName" name="payerName" value="{{payment.payerName}}" class="form-control" maxlength="255">
+              <div class="form-text">{{#i18n}}help.paymentPayerName{{/i18n}}</div>
+            {{/donationMode}}
+          </div>
+
+          {{#donationMode}}
+            <div class="mb-3">
+              <label class="form-label" for="payerAddress">{{#i18n}}payment.donorAddress{{/i18n}}</label>
+              <textarea id="payerAddress" name="payerAddress" class="form-control" rows="3" maxlength="1000" required>{{payment.payerAddress}}</textarea>
+              <div class="form-text">{{#i18n}}help.paymentDonorAddress{{/i18n}}</div>
+            </div>
+          {{/donationMode}}
+
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}payment.status{{/i18n}}</label>
+            <select id="status" name="status" class="form-select" required>
+              {{#paymentStatusOptions}}
+                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{#i18n}}{{labelKey}}{{/i18n}}</option>
+              {{/paymentStatusOptions}}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}payment.type{{/i18n}}</label>
+            <select id="type" name="type" class="form-select" required>
+              {{#paymentTypeOptions}}
+                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{#i18n}}{{labelKey}}{{/i18n}}</option>
+              {{/paymentTypeOptions}}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">{{#i18n}}payment.amount{{/i18n}}</label>
+            {{#donationMode}}
+              <input type="number" id="amount" name="amount" value="{{payment.amount}}" step="0.01" min="0.01" class="form-control" required>
+            {{/donationMode}}
+            {{^donationMode}}
+              <input type="number" id="amount" name="amount" value="{{payment.amount}}" step="0.01" min="0" class="form-control" required>
+            {{/donationMode}}
+          </div>
+
+          {{^donationMode}}
+            <div class="mb-3">
+              <label class="form-label">{{#i18n}}payment.stripeSessionId{{/i18n}}</label>
+              <input type="text" id="stripeSessionId" name="stripeSessionId" value="{{payment.stripeSessionId}}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Intent</label>
+              <input type="text" id="stripeIntent" name="stripeIntent" value="{{payment.stripeIntent}}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">{{#i18n}}payment.associatedSubscription{{/i18n}}</label>
+              <div id="subscriptionIdsContainer" class="d-flex flex-column gap-2">
+                {{#hasSubscriptionDisplays}}
+                  {{#subscriptionDisplays}}
+                    <div class="input-group">
+                      <input type="number" name="subscriptionIds" value="{{subscriptionId}}" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.subscriptionId{{/i18n}}">
+                      {{#editLink}}
+                        <a class="btn btn-outline-primary" href="{{contextPath}}{{editLink}}">Voir</a>
+                      {{/editLink}}
+                      <button type="button" class="btn  btn-secondary" onclick="removeSubscriptionInput(this)">{{#i18n}}action.remove{{/i18n}}</button>
+                    </div>
+                    {{#hasPlayerOrEventName}}
+                      <div class="form-text mt-1 mb-2">
+                        {{#playerName}}{{playerName}}{{#eventName}} - {{/eventName}}{{/playerName}}
+                        {{#eventName}}{{eventName}}{{/eventName}}
+                        {{#eventLink}}
+                          (<a href="{{contextPath}}{{eventLink}}">{{#i18n}}action.view{{/i18n}}</a>)
+                        {{/eventLink}}
+                      </div>
+                    {{/hasPlayerOrEventName}}
+                  {{/subscriptionDisplays}}
+                {{/hasSubscriptionDisplays}}
+                {{^hasSubscriptionDisplays}}
+                  <div class="input-group">
+                    <input type="number" name="subscriptionIds" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.subscriptionId{{/i18n}}">
+                    <button type="button" class="btn  btn-secondary js-remove-sub" onclick="removeSubscriptionInput(this)">{{#i18n}}action.remove{{/i18n}}</button>
+                  </div>
+                {{/hasSubscriptionDisplays}}
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary mt-2 js-add-sub" onclick="addSubscriptionInput()">{{#i18n}}action.addId{{/i18n}}</button>
+              <div class="form-text">{{#i18n}}help.subscriptionIds{{/i18n}}</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">{{#i18n}}payment.associatedSubscriptionOption{{/i18n}}</label>
+              <div id="optionIdsContainer" class="d-flex flex-column gap-2">
+                {{#hasOptionDisplays}}
+                  {{#optionDisplays}}
+                    <div class="input-group">
+                      <input type="number" name="optionIds" value="{{optionId}}" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.optionId{{/i18n}}">
+                      {{#editLink}}
+                        <a class="btn btn-outline-primary" href="{{contextPath}}{{editLink}}">Voir</a>
+                      {{/editLink}}
+                      <button type="button" class="btn  btn-secondary" onclick="removeOptionInput(this)">{{#i18n}}action.remove{{/i18n}}</button>
+                    </div>
+                    <div class="form-text mt-1 mb-2">
+                      {{#description}}{{description}}{{/description}}
+                      {{#amountEuros}} — {{amountEuros}} €{{/amountEuros}}
+                      {{#statusMessageKey}} ({{#i18n}}{{statusMessageKey}}{{/i18n}}){{/statusMessageKey}}
+                      {{#hasPlayerOrEventName}}
+                        <br>
+                        {{#playerName}}{{playerName}}{{#eventName}} - {{/eventName}}{{/playerName}}
+                        {{#eventName}}{{eventName}}{{/eventName}}
+                        {{#eventLink}}
+                          (<a href="{{contextPath}}{{eventLink}}">{{#i18n}}action.view{{/i18n}}</a>)
+                        {{/eventLink}}
+                      {{/hasPlayerOrEventName}}
+                    </div>
+                  {{/optionDisplays}}
+                {{/hasOptionDisplays}}
+                {{^hasOptionDisplays}}
+                  <div class="input-group">
+                    <input type="number" name="optionIds" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.optionId{{/i18n}}">
+                    <button type="button" class="btn  btn-secondary" onclick="removeOptionInput(this)">{{#i18n}}action.remove{{/i18n}}</button>
+                  </div>
+                {{/hasOptionDisplays}}
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addOptionInput()">{{#i18n}}action.addId{{/i18n}}</button>
+              <div class="form-text">{{#i18n}}help.optionIds{{/i18n}}</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">{{#i18n}}payment.associatedMembership{{/i18n}}</label>
+              <div id="membershipIdsContainer" class="d-flex flex-column gap-2">
+                {{#hasMembershipDisplays}}
+                  {{#membershipDisplays}}
+                    <div class="input-group">
+                      <input type="number" name="membershipIds" value="{{membershipId}}" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.membershipId{{/i18n}}">
+                      {{#editLink}}
+                        <a class="btn btn-outline-primary" href="{{contextPath}}{{editLink}}">Voir</a>
+                      {{/editLink}}
+                      <button type="button" class="btn  btn-secondary" onclick="removeMembershipInput(this)">{{#i18n}}action.remove{{/i18n}}</button>
+                    </div>
+                    <div class="form-text mt-1 mb-2">
+                      {{#memberName}}{{memberName}}{{/memberName}}
+                      {{#amountEuros}} — {{amountEuros}} €{{/amountEuros}}
+                      {{#statusMessageKey}} ({{#i18n}}{{statusMessageKey}}{{/i18n}}){{/statusMessageKey}}
+                    </div>
+                  {{/membershipDisplays}}
+                {{/hasMembershipDisplays}}
+                {{^hasMembershipDisplays}}
+                  <div class="input-group">
+                    <input type="number" name="membershipIds" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.membershipId{{/i18n}}">
+                    <button type="button" class="btn  btn-secondary" onclick="removeMembershipInput(this)">{{#i18n}}action.remove{{/i18n}}</button>
+                  </div>
+                {{/hasMembershipDisplays}}
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addMembershipInput()">{{#i18n}}action.addId{{/i18n}}</button>
+              <div class="form-text">{{#i18n}}help.membershipIds{{/i18n}}</div>
+            </div>
+          {{/donationMode}}
+          {{#donationMode}}
+            <input type="hidden" name="stripeSessionId" value="">
+            <input type="hidden" name="stripeIntent" value="">
+          {{/donationMode}}
+
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            {{#paymentHasId}}
+              <button type="button" class="btn btn-sm btn-outline-danger js-remove-payment" onclick="removeAndSubmit()">
+                {{#i18n}}action.remove{{/i18n}}
+              </button>
+            {{/paymentHasId}}
+            {{^paymentHasId}}
+              <div></div>
+            {{/paymentHasId}}
+
+            <div class="d-flex gap-2">
+              {{#showReceiptActions}}
+                <a class="btn btn-outline-success" href="{{contextPath}}/payment/{{payment.id}}/invoice">
+                  {{#donationMode}}{{#i18n}}action.downloadDonationAttestation{{/i18n}}{{/donationMode}}{{^donationMode}}{{#i18n}}action.downloadInvoice{{/i18n}}{{/donationMode}}
+                </a>
+                <button type="submit"
+                        class="btn btn-outline-primary"
+                        formaction="{{contextPath}}/payment/{{payment.id}}/send-receipt"
+                        formmethod="post">
+                  {{#donationMode}}{{#i18n}}action.sendDonationAttestation{{/i18n}}{{/donationMode}}{{^donationMode}}{{#i18n}}action.sendInvoice{{/i18n}}{{/donationMode}}
+                </button>
+              {{/showReceiptActions}}
+              <button type="submit" class="btn btn-primary">{{#i18n}}action.save{{/i18n}}</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </main>
+    {{> platform/footer}}
+    <script type="text/javascript">
+      function addSubscriptionInput() {
+        const container = document.getElementById('subscriptionIdsContainer');
+        if (!container) return;
+        const line = document.createElement('div');
+        line.className = 'input-group';
+        line.innerHTML =
+          '<input type="number" name="subscriptionIds" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.subscriptionId{{/i18n}}">'
+          + '<button type="button" class="btn  btn-secondary" onclick="removeSubscriptionInput(this)">{{#i18n}}action.remove{{/i18n}}</button>';
+        const input = line.querySelector('input');
+        input.value = '';
+        container.appendChild(line);
+      }
+
+      function removeSubscriptionInput(button) {
+        const container = document.getElementById('subscriptionIdsContainer');
+        if (container.children.length === 1) {
+          const input = container.querySelector('input[name="subscriptionIds"]');
+          if (input) {
+            input.value = '';
+          }
+          return;
+        }
+        button.closest('.input-group').remove();
+      }
+
+      function addOptionInput() {
+        const container = document.getElementById('optionIdsContainer');
+        if (!container) return;
+        const line = document.createElement('div');
+        line.className = 'input-group';
+        line.innerHTML =
+          '<input type="number" name="optionIds" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.optionId{{/i18n}}">'
+          + '<button type="button" class="btn  btn-secondary" onclick="removeOptionInput(this)">{{#i18n}}action.remove{{/i18n}}</button>';
+        const input = line.querySelector('input');
+        input.value = '';
+        container.appendChild(line);
+      }
+
+      function removeOptionInput(button) {
+        const container = document.getElementById('optionIdsContainer');
+        const group = button.closest('.input-group');
+        if (container.querySelectorAll('input[name="optionIds"]').length === 1) {
+          const input = group.querySelector('input[name="optionIds"]');
+          if (input) {
+            input.value = '';
+          }
+          return;
+        }
+        group.remove();
+      }
+
+      function addMembershipInput() {
+        const container = document.getElementById('membershipIdsContainer');
+        if (!container) return;
+        const line = document.createElement('div');
+        line.className = 'input-group';
+        line.innerHTML =
+          '<input type="number" name="membershipIds" min="1" step="1" class="form-control" placeholder="{{#i18n}}placeholder.membershipId{{/i18n}}">'
+          + '<button type="button" class="btn  btn-secondary" onclick="removeMembershipInput(this)">{{#i18n}}action.remove{{/i18n}}</button>';
+        const input = line.querySelector('input');
+        input.value = '';
+        container.appendChild(line);
+      }
+
+      function removeMembershipInput(button) {
+        const container = document.getElementById('membershipIdsContainer');
+        const group = button.closest('.input-group');
+        if (container.querySelectorAll('input[name="membershipIds"]').length === 1) {
+          const input = group.querySelector('input[name="membershipIds"]');
+          if (input) {
+            input.value = '';
+          }
+          return;
+        }
+        group.remove();
+      }
+
+      function removeAndSubmit() {
+        if (confirm('{{#i18n}}sub.confirmDelete{{/i18n}}')) {
+          document.getElementById('toRemove').value = 'true';
+          document.getElementById('paymentForm').submit();
+        }
+      }
+    </script>
+  </body>
+</html>

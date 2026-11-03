@@ -29,13 +29,14 @@ import com.github.gcolin.payment.Payment;
 import com.github.gcolin.payment.PaymentStatus;
 import com.github.gcolin.payment.PaymentType;
 import com.github.gcolin.registration.PlayerSubscription;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.MailAttachment;
 import com.github.gcolin.platform.PagedList;
 import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.player.Player;
 import com.github.gcolin.player.Find;
 import com.github.gcolin.payment.PaymentDao;
+import com.github.gcolin.payment.DebtService;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
 import jakarta.ws.rs.WebApplicationException;
@@ -43,6 +44,7 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -50,6 +52,79 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class PaymentApiTest {
+
+    @Test
+    void initiateRejectsUnsupportedAmountsAndConfiguration() throws Exception {
+        PaymentApi api = new PaymentApi();
+        DebtService debt = mock(DebtService.class);
+        com.github.gcolin.auth.LoggedUser user = mock(com.github.gcolin.auth.LoggedUser.class);
+        java.util.Properties properties = new java.util.Properties();
+        inject(api, "debtService", debt);
+        inject(api, "loggerUser", user);
+        inject(api, "properties", properties);
+        when(user.getEmail()).thenReturn("u@test.com");
+
+        when(debt.calculateEventDebt("u@test.com")).thenReturn(0d);
+        WebApplicationException zero =
+                assertThrows(WebApplicationException.class, api::initiate);
+        assertEquals(502, zero.getResponse().getStatus());
+
+        when(debt.calculateEventDebt("u@test.com")).thenReturn(4.99d);
+        WebApplicationException small =
+                assertThrows(WebApplicationException.class, api::initiate);
+        assertEquals(502, small.getResponse().getStatus());
+
+        when(debt.calculateEventDebt("u@test.com")).thenReturn(10d);
+        properties.setProperty("stripe.card.events", "false");
+        WebApplicationException disabled =
+                assertThrows(WebApplicationException.class, api::initiate);
+        assertEquals(502, disabled.getResponse().getStatus());
+
+        properties.setProperty("stripe.card.events", "true");
+        properties.setProperty("stripe.simulated", "true");
+        WebApplicationException simulated =
+                assertThrows(WebApplicationException.class, api::initiate);
+        assertEquals(502, simulated.getResponse().getStatus());
+    }
+
+    @Test
+    void simulationEndpointsCreatePaymentsAndRedirectForPaidStatus() throws Exception {
+        PaymentApi api = new PaymentApi();
+        DebtService debt = mock(DebtService.class);
+        PaymentDao paymentDao = mock(PaymentDao.class);
+        com.github.gcolin.auth.LoggedUser user = mock(com.github.gcolin.auth.LoggedUser.class);
+        java.util.Properties properties = new java.util.Properties();
+        properties.setProperty("stripe.card.events", "true");
+        properties.setProperty("stripe.card.memberships", "true");
+        properties.setProperty("stripe.simulated", "true");
+        when(user.getEmail()).thenReturn("u@test.com");
+        when(user.getUsername()).thenReturn("User");
+        when(debt.calculateEventDebt("u@test.com")).thenReturn(20d);
+        when(debt.calculateMembershipDebt(eq("u@test.com"), any(SeasonScope.class))).thenReturn(30d);
+        Payment eventPayment = new Payment();
+        eventPayment.setId(1L);
+        Payment membershipPayment = new Payment();
+        membershipPayment.setId(2L);
+        when(debt.createPayment("u@test.com", 20d)).thenReturn(eventPayment);
+        when(debt.createMembershipPayment(eq("u@test.com"), eq(30d), any(SeasonScope.class)))
+                .thenReturn(membershipPayment);
+        when(paymentDao.findPendingEventPayment("u@test.com")).thenReturn(null);
+        when(paymentDao.findPendingMembershipPayment("u@test.com")).thenReturn(null);
+
+        inject(api, "debtService", debt);
+        inject(api, "paymentService", paymentDao);
+        inject(api, "loggerUser", user);
+        inject(api, "properties", properties);
+        inject(api, "clubSeasonDao", mock(com.github.gcolin.club.ClubSeasonDao.class));
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost/event/my")));
+
+        Response event = api.sim("paid");
+        assertEquals(303, event.getStatus());
+        verify(debt).payment(20d, "u@test.com", "sim-session-u@test.com", "sim-intent-u@test.com");
+        Response membership = api.membershipSim("paid");
+        assertEquals(303, membership.getStatus());
+        verify(debt).payment(30d, "u@test.com", "sim-membership-session-u@test.com", "sim-membership-intent-u@test.com");
+    }
 
     @Test
     void pageShouldBuildPaginationModel() throws Exception {
@@ -79,10 +154,10 @@ class PaymentApiTest {
         inject(api, "find", mock(Find.class));
         inject(api, "clubSeasonFilter", clubSeasonFilter);
 
-        JteHtml html = api.page(0, 25, "", null);
+        MustacheHtml html = api.page(0, 25, "", null);
         Map<String, Object> model = html.getModel();
 
-        assertEquals("payment/payments.jte", html.getTemplate());
+        assertEquals("payment/payments.mustache", html.getTemplate());
         assertEquals(1, model.get("currentPage"));
         assertEquals(25, model.get("pageSize"));
         assertEquals(30L, model.get("totalItems"));
@@ -95,10 +170,10 @@ class PaymentApiTest {
     void editPaymentNullShouldCreateDefaultPayment() {
         PaymentApi api = new PaymentApi();
 
-        JteHtml html = api.editPayment(null, "");
+        MustacheHtml html = api.editPayment(null, "");
         Payment payment = (Payment) html.getModel().get("payment");
 
-        assertEquals("payment/paymentEdit.jte", html.getTemplate());
+        assertEquals("payment/paymentEdit.mustache", html.getTemplate());
         assertEquals(PaymentStatus.PENDING, payment.getStatus());
         assertEquals(PaymentType.CARD, payment.getType());
         assertEquals(0d, payment.getAmount());
@@ -111,7 +186,7 @@ class PaymentApiTest {
     void newDonationShouldCreatePaidChequePayment() {
         PaymentApi api = new PaymentApi();
 
-        JteHtml html = api.newPayment(true, null);
+        MustacheHtml html = api.newPayment(true, null);
         Payment payment = (Payment) html.getModel().get("payment");
 
         assertTrue(payment.isDonation());
@@ -139,7 +214,7 @@ class PaymentApiTest {
         inject(api, "playerSubscriptionOptionService", mock(PlayerSubscriptionOptionDao.class));
         inject(api, "find", mock(Find.class));
 
-        JteHtml html = api.newPayment(false, 62);
+        MustacheHtml html = api.newPayment(false, 62);
         Payment payment = (Payment) html.getModel().get("payment");
         @SuppressWarnings("unchecked")
         List<MembershipDisplay> membershipDisplays =
@@ -180,11 +255,11 @@ class PaymentApiTest {
         inject(api, "playerSubscriptionOptionService", mock(PlayerSubscriptionOptionDao.class));
         inject(api, "find", mock(Find.class));
 
-        JteHtml html = api.newPayment(false, 62);
+        MustacheHtml html = api.newPayment(false, 62);
         Payment payment = (Payment) html.getModel().get("payment");
 
         assertSame(existing, payment);
-        assertEquals("payment/paymentEdit.jte", html.getTemplate());
+        assertEquals("payment/paymentEdit.mustache", html.getTemplate());
     }
 
     @Test
@@ -395,7 +470,7 @@ class PaymentApiTest {
         inject(api, "membershipDao", membershipDao);
         inject(api, "find", mock(Find.class));
 
-        JteHtml html = api.editPayment(329, "");
+        MustacheHtml html = api.editPayment(329, "");
         @SuppressWarnings("unchecked")
         List<MembershipDisplay> displays = (List<MembershipDisplay>) html.getModel().get("membershipDisplays");
 
@@ -819,6 +894,130 @@ class PaymentApiTest {
         assertSame(payment, byId);
         assertEquals(1, subs.size());
         assertEquals(70, subs.get(0).getId());
+    }
+
+    @Test
+    void auditFixShouldRecalculateEventSubscriptionAmounts() throws Exception {
+        PaymentApi api = new PaymentApi();
+        PaymentDao paymentDao = mock(PaymentDao.class);
+        PlayerSubscriptionDao subDao = mock(PlayerSubscriptionDao.class);
+        Find find = mock(Find.class);
+        Payment payment = new Payment();
+        payment.setId(12L);
+        PlayerSubscription sub = new PlayerSubscription();
+        sub.setNrFfe("A1");
+        Event event = new Event();
+        sub.setEvent(event);
+        Player player = new Player();
+        player.setBirthDate("2010-01-01");
+        when(paymentDao.find(12)).thenReturn(payment);
+        when(subDao.findByPaymentId(12)).thenReturn(List.of(sub));
+        when(find.player("A1", null)).thenReturn(player);
+        inject(api, "paymentService", paymentDao);
+        inject(api, "playerSubscriptionService", subDao);
+        inject(api, "find", find);
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost/payment/audit?seasonId=3")));
+
+        Response response = api.auditFix(12, 3);
+        assertEquals(303, response.getStatus());
+        verify(subDao).persist(sub);
+    }
+
+    @Test
+    void auditFixShouldRedirectWhenPaymentHasNoSubscriptions() throws Exception {
+        PaymentApi api = new PaymentApi();
+        PaymentDao paymentDao = mock(PaymentDao.class);
+        PlayerSubscriptionDao subDao = mock(PlayerSubscriptionDao.class);
+        Payment payment = new Payment();
+        payment.setId(13L);
+        when(paymentDao.find(13)).thenReturn(payment);
+        when(subDao.findByPaymentId(13)).thenReturn(List.of());
+        inject(api, "paymentService", paymentDao);
+        inject(api, "playerSubscriptionService", subDao);
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost/payment/audit")));
+        assertEquals(303, api.auditFix(13, null).getStatus());
+    }
+
+    @Test
+    void auditShouldFindMissingAndMismatchedAmounts() throws Exception {
+        PaymentApi api = new PaymentApi();
+        PaymentDao paymentDao = mock(PaymentDao.class);
+        PlayerSubscriptionDao subDao = mock(PlayerSubscriptionDao.class);
+        ClubSeasonFilter seasonFilter = mock(ClubSeasonFilter.class);
+        Payment payment = new Payment();
+        payment.setId(14L);
+        payment.setStatus(PaymentStatus.PAID);
+        payment.setAmount(12.0);
+        PlayerSubscription sub = new PlayerSubscription();
+        sub.setAmountCents(500L);
+        when(seasonFilter.resolve(null)).thenReturn(SeasonScope.all());
+        when(paymentDao.all(any(SeasonScope.class))).thenReturn(List.of(payment));
+        when(subDao.findByPaymentId(14)).thenReturn(List.of(sub));
+        doAnswer(invocation -> null).when(seasonFilter).addToModel(any(), any());
+        inject(api, "paymentService", paymentDao);
+        inject(api, "playerSubscriptionService", subDao);
+        inject(api, "membershipDao", mock(MembershipDao.class));
+        inject(api, "find", mock(Find.class));
+        inject(api, "clubSeasonFilter", seasonFilter);
+        MustacheHtml html = api.audit(null);
+        assertEquals(1, ((List<?>) html.getModel().get("mismatches")).size());
+        assertEquals(1200L, payment.getAmountCents());
+    }
+
+    @Test
+    void accountingRowsIncludeDonationOrphanEventAndMembershipLines() throws Exception {
+        PaymentApi api = new PaymentApi();
+        PlayerSubscriptionDao subDao = mock(PlayerSubscriptionDao.class);
+        MembershipDao membershipDao = mock(MembershipDao.class);
+        Payment donation = payment(3, PaymentStatus.PAID, true, 3000L);
+        donation.setPayerName("Donor");
+        Payment eventPayment = payment(1, PaymentStatus.PAID, false, 2000L);
+        PlayerSubscription sub = new PlayerSubscription();
+        sub.setAmountCents(2000L);
+        Event event = new Event();
+        event.setName("Tournament");
+        sub.setEvent(event);
+        Payment membershipPayment = payment(2, PaymentStatus.PAID, false, 1000L);
+        Membership membership = new Membership();
+        membership.setId(20);
+        membership.setAmountCents(1000);
+        membership.setFirstname("Ada");
+        membership.setLastname("Lovelace");
+        when(subDao.findByPaymentId(3)).thenReturn(List.of());
+        when(subDao.findByPaymentId(1)).thenReturn(List.of(sub));
+        when(subDao.findByPaymentId(2)).thenReturn(List.of());
+        when(membershipDao.findByPaymentId(3)).thenReturn(List.of());
+        when(membershipDao.findByPaymentId(1)).thenReturn(List.of());
+        when(membershipDao.findByPaymentId(2)).thenReturn(List.of(membership));
+        inject(api, "playerSubscriptionService", subDao);
+        inject(api, "membershipDao", membershipDao);
+        Method method = PaymentApi.class.getDeclaredMethod("buildAccountingDetailRows", List.class);
+        method.setAccessible(true);
+        List<?> rows = (List<?>) method.invoke(api, List.of(donation, eventPayment, membershipPayment));
+        assertEquals(3, rows.size());
+    }
+
+    @Test
+    void resolveAmountCentsUsesExplicitAmountAndPlayerPriceFallback() throws Exception {
+        PaymentApi api = new PaymentApi();
+        PlayerSubscription sub = new PlayerSubscription();
+        sub.setAmountCents(777L);
+        Method method = PaymentApi.class.getDeclaredMethod("resolveAmountCents", PlayerSubscription.class);
+        method.setAccessible(true);
+        assertEquals(777L, method.invoke(api, sub));
+        sub.setAmountCents(null);
+        inject(api, "find", mock(Find.class));
+        assertNull(method.invoke(api, sub));
+    }
+
+    private static Payment payment(int id, PaymentStatus status, boolean donation, Long cents) {
+        Payment payment = new Payment();
+        payment.setId((long) id);
+        payment.setStatus(status);
+        payment.setDonation(donation);
+        payment.setAmountCents(cents);
+        payment.setUserEmail("user" + id + "@test.com");
+        return payment;
     }
 
     private static UriInfo mockUriInfo(URI target) {

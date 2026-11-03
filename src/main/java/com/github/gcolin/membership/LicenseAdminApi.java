@@ -20,7 +20,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 @Path("license-admin")
 @RequireRole(RoleCode.TRESORIER)
@@ -36,32 +36,36 @@ public class LicenseAdminApi {
     private UriInfo uriInfo;
 
     @GET
-    public JteHtml list() {
+    public MustacheHtml list() {
         Map<String, Object> model = new HashMap<>();
         model.put("licenses", licenseDao.all());
-        return new JteHtml(model, "membership/licenseAdmin.jte");
+        return new MustacheHtml(model, "membership/licenseAdmin.mustache");
     }
 
     @GET
     @Path("new")
-    public JteHtml newLicense() {
+    public MustacheHtml newLicense() {
         License license = new License("");
         Map<String, Object> model = new HashMap<>();
         model.put("license", license);
-        model.put("accessRules", MembershipOptionAccessRule.values());
-        return new JteHtml(model, "membership/licenseEdit.jte");
+        MembershipOptionAccessRule[] accessRules = MembershipOptionAccessRule.values();
+        model.put("accessRules", accessRules);
+        MembershipMustacheView.enrichLicenseEditPage(model, license, accessRules);
+        return new MustacheHtml(model, "membership/licenseEdit.mustache");
     }
 
     @GET
     @Path("{id:\\d+}")
-    public JteHtml edit(@PathParam("id") Integer id) {
+    public MustacheHtml edit(@PathParam("id") Integer id) {
         License license = licenseDao.find(id);
         List<LicensePrice> prices = licensePriceDao.all();
         Map<String, Object> model = new HashMap<>();
         model.put("license", license);
         model.put("allPrices", prices);
-        model.put("accessRules", MembershipOptionAccessRule.values());
-        return new JteHtml(model, "membership/licenseEdit.jte");
+        MembershipOptionAccessRule[] accessRules = MembershipOptionAccessRule.values();
+        model.put("accessRules", accessRules);
+        MembershipMustacheView.enrichLicenseEditPage(model, license, accessRules);
+        return new MustacheHtml(model, "membership/licenseEdit.mustache");
     }
 
     @POST
@@ -109,7 +113,7 @@ public class LicenseAdminApi {
 
     @GET
     @Path("{licenseId:\\d+}/price")
-    public JteHtml listPrices(@PathParam("licenseId") Integer licenseId) {
+    public MustacheHtml listPrices(@PathParam("licenseId") Integer licenseId) {
         License license = licenseDao.find(licenseId);
         List<LicensePrice> prices = licensePriceDao.all();
         Map<String, Object> model = new HashMap<>();
@@ -117,29 +121,32 @@ public class LicenseAdminApi {
         model.put("prices", prices.stream()
                 .filter(p -> p.getLicense().getId().equals(licenseId))
                 .toList());
-        return new JteHtml(model, "membership/licensePriceAdmin.jte");
+        return new MustacheHtml(model, "membership/licensePriceAdmin.mustache");
     }
 
     @GET
     @Path("{licenseId:\\d+}/price/new")
-    public JteHtml newPrice(@PathParam("licenseId") Integer licenseId) {
+    public MustacheHtml newPrice(@PathParam("licenseId") Integer licenseId) {
         License license = licenseDao.find(licenseId);
         LicensePrice price = new LicensePrice();
         price.setLicense(license);
         Map<String, Object> model = new HashMap<>();
         model.put("price", price);
         model.put("license", license);
-        return new JteHtml(model, "membership/licensePriceEdit.jte");
+        MembershipMustacheView.enrichLicensePriceEditPage(model, license, price);
+        return new MustacheHtml(model, "membership/licensePriceEdit.mustache");
     }
 
     @GET
     @Path("{licenseId:\\d+}/price/{priceId:\\d+}/edit")
-    public JteHtml editPrice(@PathParam("licenseId") Integer licenseId, @PathParam("priceId") Integer priceId) {
+    public MustacheHtml editPrice(@PathParam("licenseId") Integer licenseId, @PathParam("priceId") Integer priceId) {
         LicensePrice price = licensePriceDao.find(priceId);
+        License license = price.getLicense();
         Map<String, Object> model = new HashMap<>();
         model.put("price", price);
-        model.put("license", price.getLicense());
-        return new JteHtml(model, "membership/licensePriceEdit.jte");
+        model.put("license", license);
+        MembershipMustacheView.enrichLicensePriceEditPage(model, license, price);
+        return new MustacheHtml(model, "membership/licensePriceEdit.mustache");
     }
 
     @POST

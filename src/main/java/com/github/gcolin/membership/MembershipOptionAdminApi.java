@@ -6,7 +6,7 @@ import com.github.gcolin.club.ClubSeason;
 import com.github.gcolin.club.ClubSeasonDao;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
@@ -45,36 +45,46 @@ public class MembershipOptionAdminApi {
     UriInfo uriInfo;
 
     @GET
-    public JteHtml list(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml list(@QueryParam("seasonId") Integer seasonId) {
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
+        List<MembershipOption> options = membershipOptionDao.all(scope);
         Map<String, Object> model = new HashMap<>();
-        model.put("options", membershipOptionDao.all(scope));
+        model.put("options", options);
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "membership/membershipOption.jte");
+        MembershipMustacheView.enrichOptionListPage(model, options);
+        return new MustacheHtml(model, "membership/membershipOption.mustache");
     }
 
     @GET
     @Path("new")
-    public JteHtml createPage(@QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml createPage(@QueryParam("seasonId") Integer seasonId) {
         Map<String, Object> model = new HashMap<>();
-        model.put("option", new MembershipOption());
+        MembershipOption option = new MembershipOption();
+        model.put("option", option);
         model.put("optionTypes", MembershipOptionType.values());
         model.put("accessRules", MembershipOptionAccessRule.values());
         model.put("licenses", licenseDao.all());
         model.put("seasonId", clubSeasonFilter.effectiveSeasonId(seasonId));
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "membership/membershipOptionEdit.jte");
+        MembershipMustacheView.enrichOptionEditPage(
+                model,
+                option,
+                MembershipOptionType.values(),
+                MembershipOptionAccessRule.values(),
+                licenseDao.all(),
+                clubSeasonFilter.effectiveSeasonId(seasonId));
+        return new MustacheHtml(model, "membership/membershipOptionEdit.mustache");
     }
 
     @GET
     @Path("{id}/edit")
-    public JteHtml editPage(@PathParam("id") Integer id, @QueryParam("seasonId") Integer seasonId) {
+    public MustacheHtml editPage(@PathParam("id") Integer id, @QueryParam("seasonId") Integer seasonId) {
         MembershipOption option = membershipOptionDao.find(id);
         if (option == null) {
-            return new JteHtml(Map.of(
+            return new MustacheHtml(Map.of(
                     "statusCode", 404,
                     "statusMessage", "Not Found",
-                    "errors", List.of()), "platform/error.jte");
+                    "errors", List.of()), "platform/error.mustache");
         }
         Map<String, Object> model = new HashMap<>();
         model.put("option", option);
@@ -83,7 +93,14 @@ public class MembershipOptionAdminApi {
         model.put("licenses", licenseDao.all());
         model.put("seasonId", clubSeasonFilter.effectiveSeasonId(seasonId));
         clubSeasonFilter.addToModel(model, seasonId);
-        return new JteHtml(model, "membership/membershipOptionEdit.jte");
+        MembershipMustacheView.enrichOptionEditPage(
+                model,
+                option,
+                MembershipOptionType.values(),
+                MembershipOptionAccessRule.values(),
+                licenseDao.all(),
+                clubSeasonFilter.effectiveSeasonId(seasonId));
+        return new MustacheHtml(model, "membership/membershipOptionEdit.mustache");
     }
 
     @POST

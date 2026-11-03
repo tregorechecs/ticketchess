@@ -40,9 +40,9 @@ class DashboardApiTest {
         inject(api, "find", find);
         inject(api, "clubSeasonFilter", clubSeasonFilter);
 
-        JteHtml html = api.page(null);
+        MustacheHtml html = api.page(null);
 
-        assertEquals("platform/dashboard.jte", html.getTemplate());
+        assertEquals("platform/dashboard.mustache", html.getTemplate());
         Map<String, Object> model = html.getModel();
         assertEquals(1, ((List<?>) model.get("subsWithoutPayment")).size());
         assertEquals(0, ((List<?>) model.get("cancelledSubs")).size());
@@ -75,7 +75,7 @@ class DashboardApiTest {
         inject(api, "find", find);
         inject(api, "clubSeasonFilter", clubSeasonFilter);
 
-        JteHtml html = api.page(null);
+        MustacheHtml html = api.page(null);
 
         Map<String, Object> model = html.getModel();
         assertEquals(1, ((List<?>) model.get("subsWithoutPayment")).size());

@@ -189,6 +189,13 @@ public class LoggedUser implements Serializable {
         return hasRole(RoleCode.TRESORIER) || hasRole(RoleCode.ENTRAINEUR);
     }
 
+    /** Platform administrator: listed in the {@code admins} property of params.properties. */
+    public boolean isPlatformAdmin() {
+        return config != null
+                && email != null
+                && config.getAdmins().stream().anyMatch(admin -> admin.equalsIgnoreCase(email.trim()));
+    }
+
     public boolean canSeeAdminMenu() {
         return roleResolver != null && email != null && roleResolver.hasAnyRole(email);
     }

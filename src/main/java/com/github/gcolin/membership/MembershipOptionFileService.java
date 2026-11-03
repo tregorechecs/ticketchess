@@ -1,5 +1,6 @@
 package com.github.gcolin.membership;
 
+import com.github.gcolin.organisation.OrganisationFiles;
 import com.github.gcolin.platform.Config;
 import jakarta.ws.rs.WebApplicationException;
 import java.io.IOException;
@@ -80,7 +81,7 @@ public class MembershipOptionFileService {
     }
 
     private Path optionDir(Integer optionId) {
-        return Path.of(config.getConfigDir(), ROOT_DIR, String.valueOf(optionId));
+        return OrganisationFiles.currentDir(config).resolve(ROOT_DIR).resolve(String.valueOf(optionId));
     }
 
     private static String sanitizeOriginalName(String originalName) {

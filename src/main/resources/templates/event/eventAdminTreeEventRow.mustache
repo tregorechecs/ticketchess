@@ -1,0 +1,9 @@
+<div class="d-flex flex-wrap align-items-center gap-2">
+  <span class="text-body-secondary text-nowrap">
+    {{#hasStartDate}}{{startDateFormatted}}{{/hasStartDate}}
+    {{^hasStartDate}}—{{/hasStartDate}}
+  </span>
+  <i class="bi bi-calendar-event text-body-secondary"></i>
+  <span>{{event.name}}</span>
+  {{> event/eventActionsMenu}}
+</div>

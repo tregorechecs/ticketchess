@@ -28,7 +28,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.JteHtml;
+import com.github.gcolin.platform.MustacheHtml;
 
 class PlayerSubscriptionAdminApiTest {
 
@@ -52,9 +52,9 @@ class PlayerSubscriptionAdminApiTest {
         inject(api, "caches", new Caches());
         inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        JteHtml html = api.page(null);
+        MustacheHtml html = api.page(null);
 
-        assertEquals("registration/playersubscriptionAdmin.jte", html.getTemplate());
+        assertEquals("registration/playersubscriptionAdmin.mustache", html.getTemplate());
         Map<String, Object> model = html.getModel();
         assertTrue(((List<?>) model.get("rows")).isEmpty());
         assertTrue(((List<?>) model.get("pendingRows")).isEmpty());
@@ -81,7 +81,7 @@ class PlayerSubscriptionAdminApiTest {
         inject(api, "caches", new Caches());
         inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        JteHtml html = api.pageResult(5, 2, null, null, null);
+        MustacheHtml html = api.pageResult(5, 2, null, null, null);
 
         Map<String, Object> model = html.getModel();
         assertEquals(5, model.get("replaced"));
@@ -287,7 +287,7 @@ class PlayerSubscriptionAdminApiTest {
         inject(api, "caches", new Caches());
         inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        JteHtml html = api.page(null);
+        MustacheHtml html = api.page(null);
 
         Map<String, Object> model = html.getModel();
         assertEquals(1, model.get("pendingRowCount"));

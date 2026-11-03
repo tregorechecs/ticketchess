@@ -1,6 +1,7 @@
 package com.github.gcolin.event;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -91,5 +92,33 @@ class EventPaymentsReportServiceTest {
 
         assertTrue(pdf.length > 100);
         assertTrue(new String(pdf, 0, Math.min(8, pdf.length)).startsWith("%PDF"));
+    }
+
+    @Test
+    void emptyCollectionAndAccountingDetailsWithNullsStillProducePdf() {
+        EventPaymentsReportService service = new EventPaymentsReportService();
+        service.setProperties(new Properties());
+        EventCollection collection = new EventCollection();
+        collection.setId(8);
+        collection.setName("Empty Cup");
+        assertTrue(service.generateForEventCollection(collection, List.of()).length > 100);
+        assertTrue(service.generateForAccountingDetails(
+                        List.of(new EventPaymentsReportService.AccountingDetailRow(
+                                null, null, "UNKNOWN", null, 0.0, "other", null)),
+                        SeasonScope.of(season()))
+                .length
+                > 100);
+        assertEquals("UNKNOWN", EventPaymentsReportService.resolvePaymentType(null));
+        Payment payment = new Payment();
+        payment.setStripeIntent("intent");
+        assertEquals("CARD", EventPaymentsReportService.resolvePaymentType(payment));
+    }
+
+    private static com.github.gcolin.club.ClubSeason season() {
+        com.github.gcolin.club.ClubSeason season = new com.github.gcolin.club.ClubSeason();
+        season.setId(2026);
+        season.setStartDate(java.time.LocalDate.of(2026, 1, 1));
+        season.setEndDate(java.time.LocalDate.of(2026, 12, 31));
+        return season;
     }
 }

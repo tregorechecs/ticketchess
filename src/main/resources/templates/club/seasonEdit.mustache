@@ -1,0 +1,51 @@
+{{> platform/head}}
+<html>
+  <body class="d-flex flex-column min-vh-100 bg-chess-overlay">
+    {{> platform/menubar}}
+    <main class="container flex-fill mt-3">
+      <nav aria-label="breadcrumb" class="admin-breadcrumb mb-3">
+        <ol class="breadcrumb bg-body rounded px-3 py-2 mb-0">
+          <li class="breadcrumb-item"><a href="{{contextPath}}/">{{#i18n}}breadcrumb.home{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin">{{#i18n}}menu.admin{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin/seasons">{{#i18n}}breadcrumb.seasons{{/i18n}}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{#seasonIsEdit}}{{#i18n}}page.seasonEdit{{/i18n}}{{/seasonIsEdit}}{{^seasonIsEdit}}{{#i18n}}page.seasonNew{{/i18n}}{{/seasonIsEdit}}</li>
+        </ol>
+      </nav>
+
+      <div class="admin-table-panel mb-4">
+        <h1 class="h3 mb-0">{{#seasonIsEdit}}{{#i18n}}page.seasonEdit{{/i18n}}{{/seasonIsEdit}}{{^seasonIsEdit}}{{#i18n}}page.seasonNew{{/i18n}}{{/seasonIsEdit}}</h1>
+      </div>
+
+      <div class="admin-table-panel mb-4">
+        <form method="post" action="{{contextPath}}/{{formAction}}">
+          <div class="row g-3">
+            <div class="col-12">
+              <label for="season_name" class="form-label">{{#i18n}}label.seasonName{{/i18n}}</label>
+              <input id="season_name" type="text" name="name" class="form-control" value="{{seasonName}}" required maxlength="255">
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="season_start" class="form-label">{{#i18n}}label.startDate{{/i18n}}</label>
+              <input id="season_start" type="date" name="startDate" class="form-control" value="{{startDateValue}}" required>
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="season_end" class="form-label">{{#i18n}}label.endDate{{/i18n}}</label>
+              <input id="season_end" type="date" name="endDate" class="form-control" value="{{endDateValue}}" required>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input id="season_current" type="checkbox" name="current" value="true" class="form-check-input"{{#seasonCurrent}} checked{{/seasonCurrent}}>
+                <label for="season_current" class="form-check-label">{{#i18n}}label.seasonCurrent{{/i18n}}</label>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <a class="btn btn-secondary" href="{{contextPath}}/admin/seasons">{{#i18n}}action.cancel{{/i18n}}</a>
+            {{#seasonIsEdit}}<button type="submit" class="btn btn-primary">{{#i18n}}action.save{{/i18n}}</button>{{/seasonIsEdit}}
+            {{^seasonIsEdit}}<button type="submit" class="btn btn-primary">{{#i18n}}action.createSeason{{/i18n}}</button>{{/seasonIsEdit}}
+          </div>
+        </form>
+      </div>
+    </main>
+    {{> platform/footer}}
+  </body>
+</html>
