@@ -29,12 +29,10 @@
 		<slf4j.version>2.0.18</slf4j.version>
 		<json.version>20260814</json.version>
 		<commonmark.version>0.30.0</commonmark.version>
-		<stripe.version>33.3.0</stripe.version>
 		<angus-mail.version>2.0.5</angus-mail.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<mockito.version>5.23.0</mockito.version>
-		<eclipselink.version>5.0.2</eclipselink.version>
-		<eclipselink-maven-plugin.version>4.0.2</eclipselink-maven-plugin.version>
+		<commons-dbutils.version>1.8.1</commons-dbutils.version>
 		<playwright.version>1.63.0</playwright.version>
 		<caffeine.version>3.2.4</caffeine.version>
 		<mustache.version>0.9.14</mustache.version>
@@ -152,11 +150,6 @@
 			<version>${commonmark.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>com.stripe</groupId>
-			<artifactId>stripe-java</artifactId>
-			<version>${stripe.version}</version>
-		</dependency>
-		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>
 		</dependency>
@@ -196,9 +189,9 @@
 			<artifactId>jersey-hk2</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.eclipse.persistence</groupId>
-			<artifactId>eclipselink</artifactId>
-			<version>${eclipselink.version}</version>
+			<groupId>commons-dbutils</groupId>
+			<artifactId>commons-dbutils</artifactId>
+			<version>${commons-dbutils.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>
@@ -221,18 +214,6 @@
 		<dependency>
 			<groupId>org.glassfish.jersey.containers</groupId>
 			<artifactId>jersey-container-servlet</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.glassfish.jersey.media</groupId>
-			<artifactId>jersey-media-json-binding</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.glassfish.jersey.media</groupId>
-			<artifactId>jersey-media-jaxb</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.glassfish.jersey.ext</groupId>
-			<artifactId>jersey-bean-validation</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.github.librepdf</groupId>
@@ -409,25 +390,6 @@
 					<source>25</source>
 					<target>25</target>
 				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>com.ethlo.persistence.tools</groupId>
-				<artifactId>eclipselink-maven-plugin</artifactId>
-				<version>${eclipselink-maven-plugin.version}</version>
-				<configuration>
-					<basePackage>com.github.gcolin</basePackage>
-					<!-- Keep META-INF/persistence.xml as the source of truth. -->
-					<updatePersistenceXml>false</updatePersistenceXml>
-				</configuration>
-				<executions>
-					<execution>
-						<id>weave</id>
-						<phase>process-classes</phase>
-						<goals>
-							<goal>weave</goal>
-						</goals>
-					</execution>
-				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

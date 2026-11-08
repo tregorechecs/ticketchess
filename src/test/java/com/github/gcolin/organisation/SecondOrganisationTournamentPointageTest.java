@@ -19,19 +19,16 @@ public class SecondOrganisationTournamentPointageTest extends PlaywrightBaseTest
         Page page = browserContext.newPage();
         login(page);
 
-        String slug = "club2";
+        String orgBase = "http://club2.localhost:8080";
         page.navigate(BASE_URL + "/admin/organisations/new");
-        page.locator("#org_slug").fill(slug);
         page.locator("#org_name").fill("Club Two");
-        page.locator("#org_base_url").fill("http://127.0.0.1:8080");
+        page.locator("#org_base_url").fill(orgBase);
         page.locator("#org_super_user_email").fill("test@test.com");
-        page.locator("#org_clone").selectOption("1");
         page.locator("button[type='submit']").click();
         page.waitForURL("**/admin/organisations?success=created**");
-        assertThat(page.locator("table.table")).containsText(slug);
         assertThat(page.locator("table.table")).containsText("Club Two");
+        assertThat(page.locator("table.table")).containsText(orgBase);
 
-        String orgBase = BASE_URL + "/o/" + slug;
         page.navigate(orgBase + "/event/new");
 
         Locator name = page.locator("#event_name");
@@ -48,7 +45,7 @@ public class SecondOrganisationTournamentPointageTest extends PlaywrightBaseTest
         page.locator("#event_price_young").fill("5");
         page.locator("#event_submit").click();
 
-        page.waitForURL("**/o/" + slug + "/event/*/edit**");
+        page.waitForURL("**/event/*/edit**");
         String eventId = page.url().replaceAll(".*/event/(\\d+)/edit.*", "$1");
         assertTrue(eventId.matches("\\d+"), "event id expected in edit URL: " + page.url());
 
@@ -63,7 +60,7 @@ public class SecondOrganisationTournamentPointageTest extends PlaywrightBaseTest
         assertThat(pointage).isVisible();
         pointage.check();
         page.locator("#event_options_submit").click();
-        page.waitForURL("**/o/" + slug + "/event/" + eventId + "/edit**");
+        page.waitForURL("**/event/" + eventId + "/edit**");
         assertThat(page.locator(".alert-success:not(.d-none)")).isVisible();
 
         optionsTab = page.locator("#options-tab");
@@ -74,22 +71,22 @@ public class SecondOrganisationTournamentPointageTest extends PlaywrightBaseTest
         Locator register = page.locator("#register");
         assertThat(register).isVisible();
         register.click();
-        page.waitForURL("**/o/" + slug + "/event/" + eventId + "/register");
+        page.waitForURL("**/event/" + eventId + "/register");
 
         page.locator("#player").fill("Gael colin");
         page.locator("#searchplayer").click();
-        page.waitForURL("**/o/" + slug + "/event/" + eventId + "/register?query=**");
+        page.waitForURL("**/event/" + eventId + "/register?query=**");
         Locator selectPlayer = page.locator(".btn.btn-secondary.js-select").first();
         assertThat(selectPlayer).isVisible();
         selectPlayer.click();
-        page.waitForURL("**/o/" + slug + "/event/my**");
+        page.waitForURL("**/event/my**");
 
         page.navigate(orgBase + "/event/" + eventId);
         openEventActionsMenu(page);
         Locator desk = page.locator("#desk");
         assertThat(desk).isVisible();
         desk.click();
-        page.waitForURL("**/o/" + slug + "/event/" + eventId + "/desk");
+        page.waitForURL("**/event/" + eventId + "/desk");
         assertThat(page.locator("#desk-table")).isVisible();
 
         page.waitForFunction(

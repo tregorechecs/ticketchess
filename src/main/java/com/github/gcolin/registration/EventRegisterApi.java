@@ -26,7 +26,6 @@ import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
 import com.github.gcolin.payment.PaymentMail;
 import com.github.gcolin.platform.SendMail;
 import jakarta.inject.Inject;
-import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -132,7 +131,7 @@ public class EventRegisterApi {
             for (Player player : players) {
                 DisplayPlayer p = new DisplayPlayer(player);
                 if (!subscriptionsRefs.contains(player.getNrffe())) {
-                    p.setPrice(ServiceUtils.toEuros(ServiceUtils.calculatePrice(player, event)));
+                    p.setPriceCents(ServiceUtils.calculatePrice(player, event));
                     p.setRating(player, event.getEventType());
                     playersFiltered.add(p);
                 }
@@ -161,7 +160,7 @@ public class EventRegisterApi {
                 ids.add(sub.getNrFfe());
                 if (player != null) {
                     DisplayPlayer p = new DisplayPlayer(player);
-                    p.setPrice(ServiceUtils.toEuros(ServiceUtils.calculatePrice(player, event)));
+                    p.setPriceCents(ServiceUtils.calculatePrice(player, event));
                     p.setRating(player, event.getEventType());
                     favoritePlayers.add(p);
                 }
@@ -175,7 +174,7 @@ public class EventRegisterApi {
         for (CustomPlayer customPlayer : internalPlayers) {
             if (!ids.contains(customPlayer.getNrffe())) {
                 DisplayPlayer p = new DisplayPlayer(customPlayer);
-                p.setPrice(ServiceUtils.toEuros(ServiceUtils.calculatePrice(customPlayer, event)));
+                p.setPriceCents(ServiceUtils.calculatePrice(customPlayer, event));
                 p.setRating(customPlayer.getRating());
                 favoritePlayers.add(p);
             }
@@ -220,7 +219,10 @@ public class EventRegisterApi {
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @LoggedOnly
-    public Response registerSave(@PathParam("id") Integer eventId, @FormParam("nrffe") @NotNull String nrffe) {
+    public Response registerSave(@PathParam("id") Integer eventId, @FormParam("nrffe") String nrffe) {
+        if (nrffe == null || nrffe.isBlank()) {
+            throw new WebApplicationException("nrffe is required", Response.Status.BAD_REQUEST);
+        }
         PlayerSubscription sub = registerService.registerPlayerToEvent(eventId, nrffe, loggerUser.getEmail());
         caches.getEvent().invalidateAll();
         caches.getDebtCache().invalidateAll();
@@ -257,7 +259,7 @@ public class EventRegisterApi {
 
     @GET
     @Path("{subId}")
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     public MustacheHtml registeredit(@PathParam("id") Integer eventId, @PathParam("subId") Integer subId) {
         PlayerSubscription sub = playerSubscriptionService.findWithEvent(subId);
         Map<String, Object> model = new HashMap<>();
@@ -273,7 +275,7 @@ public class EventRegisterApi {
     @POST
     @Path("{subId}")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     @Transactional
     public Response registerEditSave(
             @FormParam("eventId") Integer eventId,

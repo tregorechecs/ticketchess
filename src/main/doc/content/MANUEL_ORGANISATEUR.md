@@ -1,6 +1,6 @@
 # Manuel organisateur — Ticket Chess
 
-Ce guide s'adresse aux **organisateurs** et **administrateurs** d'un club utilisant Ticket Chess : créer des tournois, gérer les inscriptions, les paiements et la liaison avec la FFE ou SharlyChess.
+Ce guide s'adresse aux **organisateurs** et **administrateurs** d'un club utilisant Ticket Chess : créer des tournois, gérer les inscriptions, les paiements et la liaison avec la FFE.
 
 Prérequis : disposer d'un compte doté de droits d'administration (le menu **Admin** est visible après la connexion).
 
@@ -34,7 +34,7 @@ Ticket Chess organise les tournois en trois niveaux :
 
 1. **Admin** → **Tous les événements**.
 2. Cliquez sur **Créer une collection d'événements**.
-3. Renseignez le **nom**, éventuellement le **nombre maximal d'inscriptions** pour la série, et l'**identifiant ChessEvent (SharlyChess)** si vous synchronisez avec SharlyChess (voir [Synchronisation SharlyChess](SYNCHRO_SHARLYCHESS.md)).
+3. Renseignez le **nom**, et éventuellement le **nombre maximal d'inscriptions** pour la série.
 
 ### Créer un tournoi
 
@@ -46,7 +46,7 @@ Le statut **Inscriptions ouvertes** permet aux joueurs de s'inscrire depuis la p
 
 ---
 
-## Options d'un tournoi (FFE, SharlyChess, pointage)
+## Options d'un tournoi (FFE, pointage)
 
 Sur la page du tournoi → **Modifier** → onglet **Options** :
 
@@ -54,9 +54,7 @@ Sur la page du tournoi → **Modifier** → onglet **Options** :
 |-------|--------|
 | Identifiant FFE | Numéro du tournoi fédéral (lien vers la fiche FFE) |
 | Mot de passe FFE | Envoi automatique du fichier PAPI vers la FFE |
-| Pointage joueur | Si activé, le pointage au guichet est transmis à SharlyChess comme check-in (tous les inscrits non annulés sont quand même importés) |
-
-L'import vers SharlyChess se fait via le bouton **Importer un événement Ticketchess** (authentification JWT, sans identifiants ChessEvent).
+| Pointage joueur | Si activé, permet le pointage des joueurs au guichet |
 
 ---
 
@@ -67,8 +65,6 @@ L'écran **Paiement & pointage** (`menu ⋯` du tournoi → **Paiement & pointag
 - marquer un joueur **présent** (pointage) ;
 - enregistrer un paiement **sur place** (payé ou non payé) ;
 - consulter l'**historique** des actions et annuler une erreur.
-
-Le pointage au guichet est transmis à SharlyChess comme **check-in** ; tous les inscrits non annulés sont importés.
 
 Voir la [liste de contrôle pour les bénévoles](CHECKLIST_BENEVOLES_GUICHET.md) pour le déroulement des opérations sur place.
 
@@ -91,10 +87,8 @@ Les joueurs règlent en ligne (carte, virement) depuis **Mes tournois** ; les en
 
 Depuis la page d'un tournoi :
 
-- **⋯** → **Exporter PAPI** — fichier `.papi` pour SharlyChess ou autre logiciel ;
+- **⋯** → **Exporter PAPI** — fichier `.papi` pour logiciel d'arbitrage ;
 - **Exporter PAPI vers la FFE** — si l'identifiant et le mot de passe FFE sont renseignés dans les options.
-
-Alternative avec SharlyChess : synchronisation automatique grâce à [ChessEvent](SYNCHRO_SHARLYCHESS.md).
 
 ---
 
@@ -150,6 +144,5 @@ En production, placez `params.properties`, le logo et le RIB dans `CONFIG_DIR` (
 ## Voir aussi
 
 - [Manuel utilisateur](MANUEL_UTILISATEUR.md) — parcours des joueurs et des parents
-- [Synchronisation SharlyChess](SYNCHRO_SHARLYCHESS.md)
 - [Liste de contrôle pour les bénévoles](CHECKLIST_BENEVOLES_GUICHET.md)
 - `README.md` (racine du dépôt) — installation, déploiement, sécurité

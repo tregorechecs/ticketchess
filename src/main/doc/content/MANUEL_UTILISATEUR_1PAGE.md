@@ -12,4 +12,4 @@
 
 **Un problème ?** Si le bouton **S'inscrire** est absent, vérifier la connexion, le statut du tournoi et le quota. Si un virement n'est pas encore validé, attendre le délai de traitement, puis contacter l'organisation.
 
-**Organisateurs** — [Manuel organisateur](MANUEL_ORGANISATEUR.md) · [SharlyChess](SYNCHRO_SHARLYCHESS.md) · [Liste de contrôle pour les bénévoles](CHECKLIST_BENEVOLES_GUICHET.md)
+**Organisateurs** — [Manuel organisateur](MANUEL_ORGANISATEUR.md) · [Liste de contrôle pour les bénévoles](CHECKLIST_BENEVOLES_GUICHET.md)

@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.github.gcolin.organisation.Organisation;
-import jakarta.persistence.EntityManager;
+import java.sql.Connection;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.AfterEach;
@@ -54,6 +54,22 @@ class ConfigOauthTest {
     }
 
     @Test
+    void oauthAuthorizationUrlEndingWithAuthDerivesLogout() {
+        Config config = new Config();
+        config.getProperties().setProperty("oauth.clientId", "cid");
+        config.getProperties()
+                .setProperty(
+                        "oauth.authorizationUrl",
+                        "https://oauth.example.org/realms/master/protocol/openid-connect/auth");
+        config.getProperties().setProperty("baseurl", "http://localhost:8080");
+        config.applyRuntime();
+
+        assertEquals(
+                "https://oauth.example.org/realms/master/protocol/openid-connect/logout",
+                config.getOauthLogoutUrl());
+    }
+
+    @Test
     void invoicePropertyShouldFallBackToOrg() {
         Config config = new Config();
         config.getProperties().setProperty("org.name", "Test Club");
@@ -77,7 +93,7 @@ class ConfigOauthTest {
         config.getProperties().setProperty("baseurl", "http://localhost:8080");
         config.applyRuntime();
 
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         Organisation org = new Organisation();
         org.setBaseUrl("https://club.example.org/");
         org.setOauthClientId("cid");
@@ -99,32 +115,12 @@ class ConfigOauthTest {
         config.getProperties().setProperty("baseurl", "http://localhost:8080");
         config.applyRuntime();
 
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         Organisation org = new Organisation();
         org.setBaseUrl("https://club.example.org");
         RequestContext.require().setOrganisation(org);
 
         assertEquals("/auth-sim?state=", config.getLoginUrl());
-    }
-
-    @Test
-    void authSimLoginKeepsOrgPathPrefix() {
-        Config config = new Config();
-        config.getProperties().setProperty("baseurl", "http://localhost:8080");
-        config.applyRuntime();
-
-        RequestContext.openForTest((EntityManager) null);
-        Organisation org = new Organisation();
-        org.setBaseUrl("http://localhost:8080");
-        RequestContext.require().setOrganisation(org);
-        RequestContext.require().setOrgPathPrefix("/o/demo");
-
-        assertEquals("/o/demo/auth-sim?state=", config.getLoginUrl());
-        assertEquals(
-                "http://localhost:8080/o/demo/keycloak-callback", config.getOauthRedirectUri());
-
-        org.setOauthClientId("cid");
-        assertEquals("http://localhost:8080/o/demo/oauth-callback", config.getOauthRedirectUri());
     }
 
     @Test
@@ -134,7 +130,7 @@ class ConfigOauthTest {
         config.getProperties().setProperty("org.name", "Platform Club");
         config.applyRuntime();
 
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         Organisation org = new Organisation();
         org.setName("Resolved Club");
         org.setBaseUrl("https://club.example.org");

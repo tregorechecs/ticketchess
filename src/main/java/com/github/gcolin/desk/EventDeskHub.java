@@ -1,7 +1,5 @@
 package com.github.gcolin.desk;
 
-import jakarta.json.bind.Jsonb;
-import jakarta.json.bind.JsonbBuilder;
 import jakarta.websocket.Session;
 import java.io.IOException;
 import java.util.HashMap;
@@ -16,7 +14,6 @@ import org.slf4j.LoggerFactory;
 public class EventDeskHub {
 
     private static final Logger logger = LoggerFactory.getLogger(EventDeskHub.class);
-    private static final Jsonb JSONB = JsonbBuilder.create();
 
     private final Map<Integer, Set<Session>> sessionsByEvent = new ConcurrentHashMap<>();
 
@@ -43,7 +40,7 @@ public class EventDeskHub {
         payload.put("eventId", eventId);
         payload.put("players", players);
         payload.put("acked", List.of());
-        broadcast(eventId, JSONB.toJson(payload), except);
+        broadcast(eventId, EventDeskJson.toJson(payload), except);
     }
 
     public void broadcast(Integer eventId, String message, Session except) {

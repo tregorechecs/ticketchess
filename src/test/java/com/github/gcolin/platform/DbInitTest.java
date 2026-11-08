@@ -4,18 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.github.gcolin.event.Event;
+import com.github.gcolin.event.EventDao;
+import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.registration.PlayerSubscription;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.EntityTransaction;
-import jakarta.persistence.TypedQuery;
+import com.github.gcolin.registration.PlayerSubscriptionDao;
 import java.nio.file.Path;
 import java.util.List;
-import org.junit.jupiter.api.Assertions;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mockito;
 
 class DbInitTest {
 
@@ -32,69 +29,51 @@ class DbInitTest {
         PersistenceService persistence = new PersistenceService(config);
         try {
             persistence.init();
-            DbInit dbInit = new DbInit(persistence.getEmf());
+            DbInit dbInit = new DbInit(persistence);
             dbInit.initLicenses();
             dbInit.initClubSeason();
             dbInit.initMembershipOptions();
             dbInit.initEvents();
 
-            EntityManager em = persistence.getEmf().createEntityManager();
-            try {
-                Event deskEvent = em.find(Event.class, 3);
+            RequestContext.run(persistence.getDataSource(), () -> {
+                OrgScope.disableFilter();
+                Event deskEvent = new EventDao().find(3);
                 assertEquals("Sample Event 3", deskEvent.getName());
 
-                List<PlayerSubscription> subs = em.createQuery(
-                                "SELECT s FROM PlayerSubscription s WHERE s.event.id = 3", PlayerSubscription.class)
-                        .getResultList();
+                List<PlayerSubscription> subs = new PlayerSubscriptionDao().findByEvent(deskEvent);
                 assertEquals(10, subs.size());
                 assertTrue(subs.stream().allMatch(s -> s.getNrFfe() != null && s.getNrFfe().startsWith("@")));
-            } finally {
-                em.close();
-            }
+                return null;
+            });
         } finally {
             persistence.shutdown();
         }
     }
 
-    @SuppressWarnings("unchecked")
-    @Test
-    void testInitEventsDoesNothingWhenDatabaseAlreadyInitialized() {
-        EntityManagerFactory emf = Mockito.mock(EntityManagerFactory.class);
-        DbInit dbInit = new DbInit(emf);
-        EntityManager em = Mockito.mock(EntityManager.class);
-        TypedQuery<Long> query = Mockito.mock(TypedQuery.class);
-        EntityTransaction tx = Mockito.mock(EntityTransaction.class);
-
-        Mockito.when(emf.createEntityManager()).thenReturn(em);
-        Mockito.when(em.createQuery("select count(e) from Event e", Long.class)).thenReturn(query);
-        Mockito.when(query.getSingleResult()).thenReturn(1L);
-        Mockito.when(em.getTransaction()).thenReturn(tx);
-
-        Assertions.assertDoesNotThrow(dbInit::initEvents);
-
-        Mockito.verify(tx, Mockito.never()).begin();
-        Mockito.verify(tx, Mockito.never()).commit();
-        Mockito.verify(em, Mockito.never()).persist(ArgumentMatchers.any());
+    private static long countEvents(DataSource dataSource) {
+        return RequestContext.run(dataSource, () -> Db.scalarLongOrZero("SELECT COUNT(*) FROM event"));
     }
 
-    @SuppressWarnings("unchecked")
+    @Test
+    void testInitEventsDoesNothingWhenDatabaseAlreadyInitialized() {
+        DataSource dataSource = TestDb.newDataSource();
+        DbInit dbInit = new DbInit(dataSource);
+        dbInit.initEvents();
+        long afterFirst = countEvents(dataSource);
+        assertTrue(afterFirst > 0);
+
+        dbInit.initEvents();
+
+        assertEquals(afterFirst, countEvents(dataSource));
+    }
+
     @Test
     void testInitEventsInitializesWhenDatabaseIsEmpty() {
-        EntityManagerFactory emf = Mockito.mock(EntityManagerFactory.class);
-        DbInit dbInit = new DbInit(emf);
-        EntityManager em = Mockito.mock(EntityManager.class);
-        TypedQuery<Long> query = Mockito.mock(TypedQuery.class);
-        EntityTransaction tx = Mockito.mock(EntityTransaction.class);
+        DataSource dataSource = TestDb.newDataSource();
+        assertEquals(0L, countEvents(dataSource));
 
-        Mockito.when(emf.createEntityManager()).thenReturn(em);
-        Mockito.when(em.createQuery("select count(e) from Event e", Long.class)).thenReturn(query);
-        Mockito.when(query.getSingleResult()).thenReturn(0L);
-        Mockito.when(em.getTransaction()).thenReturn(tx);
+        new DbInit(dataSource).initEvents();
 
-        Assertions.assertDoesNotThrow(dbInit::initEvents);
-
-        Mockito.verify(tx).begin();
-        Mockito.verify(tx).commit();
-        Mockito.verify(em, Mockito.times(36)).persist(ArgumentMatchers.any());
+        assertTrue(countEvents(dataSource) > 0);
     }
 }

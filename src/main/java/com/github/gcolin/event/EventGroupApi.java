@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import com.github.gcolin.platform.MustacheHtml;
 
-@RequireRole(RoleCode.EVENT_ADMIN)
+@RequireRole(RoleCode.ARBITRE)
 @Path("eventgroup")
 public class EventGroupApi {
 

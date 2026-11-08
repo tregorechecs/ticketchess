@@ -1,43 +1,41 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.platform.AbstractDao;
-import com.github.gcolin.platform.Transactional;
-import jakarta.persistence.TypedQuery;
+import com.github.gcolin.platform.Db;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.apache.commons.dbutils.handlers.ColumnListHandler;
 
 public class UserAuthorizationDao extends AbstractDao<UserAuthorization> {
 
     public UserAuthorizationDao() {
-        super(UserAuthorization.class);
+        super(UserAuthorization.class, "user_authorization");
     }
 
     public List<UserAuthorization> allOrdered() {
-        TypedQuery<UserAuthorization> query = em.createQuery(
-                "SELECT ua FROM UserAuthorization ua ORDER BY ua.email, ua.role, ua.scopeType, ua.scopeId",
-                UserAuthorization.class);
-        return query.getResultList();
+        return select("SELECT * FROM user_authorization ORDER BY email, role, scope_type, scope_id");
     }
 
     public Set<RoleCode> findActiveGlobalRoles(String email) {
         if (email == null || email.isBlank()) {
             return Set.of();
         }
-        TypedQuery<RoleCode> query = em.createQuery(
-                "SELECT ua.role FROM UserAuthorization ua"
-                        + " WHERE ua.email = :email"
-                        + " AND ua.scopeType = :scopeType"
-                        + " AND ua.active = true"
-                        + " AND (ua.validUntil IS NULL OR ua.validUntil > :now)",
-                RoleCode.class);
-        query.setParameter("email", email.trim().toLowerCase());
-        query.setParameter("scopeType", AuthorizationScopeType.GLOBAL);
-        query.setParameter("now", LocalDateTime.now());
-        List<RoleCode> roles = query.getResultList();
-        if (roles.isEmpty()) {
+        List<String> names = Db.query(
+                "SELECT role FROM user_authorization WHERE email = ? AND scope_type = ?"
+                        + " AND active = TRUE AND (valid_until IS NULL OR valid_until > ?)",
+                new ColumnListHandler<String>(),
+                email.trim().toLowerCase(),
+                AuthorizationScopeType.GLOBAL,
+                LocalDateTime.now());
+        if (names == null || names.isEmpty()) {
             return Set.of();
+        }
+        Set<RoleCode> roles = new HashSet<>();
+        for (String name : names) {
+            roles.add(RoleCode.valueOf(name));
         }
         return EnumSet.copyOf(roles);
     }
@@ -77,16 +75,56 @@ public class UserAuthorizationDao extends AbstractDao<UserAuthorization> {
 
     private UserAuthorization findByNaturalKey(
             String email, RoleCode role, AuthorizationScopeType scopeType, Integer scopeId) {
-        TypedQuery<UserAuthorization> query = em.createQuery(
-                "SELECT ua FROM UserAuthorization ua WHERE ua.email = :email"
-                        + " AND ua.role = :role"
-                        + " AND ua.scopeType = :scopeType"
-                        + " AND ((:scopeId IS NULL AND ua.scopeId IS NULL) OR ua.scopeId = :scopeId)",
-                UserAuthorization.class);
-        query.setParameter("email", email);
-        query.setParameter("role", role);
-        query.setParameter("scopeType", scopeType);
-        query.setParameter("scopeId", scopeId);
-        return query.getResultStream().findFirst().orElse(null);
+        if (scopeId == null) {
+            return selectOne(
+                    "SELECT * FROM user_authorization WHERE email = ? AND role = ? AND scope_type = ?"
+                            + " AND scope_id IS NULL ORDER BY id LIMIT 1",
+                    email,
+                    role,
+                    scopeType);
+        }
+        return selectOne(
+                "SELECT * FROM user_authorization WHERE email = ? AND role = ? AND scope_type = ?"
+                        + " AND scope_id = ? ORDER BY id LIMIT 1",
+                email,
+                role,
+                scopeType,
+                scopeId);
+    }
+
+    @Override
+    public void persist(UserAuthorization authorization) {
+        authorization.normalize();
+        if (authorization.getId() == null) {
+            int id = Db.insertReturningInt(
+                    "INSERT INTO user_authorization (email, role, scope_type, scope_id, active, valid_until,"
+                            + " granted_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    authorization.getEmail(),
+                    Db.enumName(authorization.getRole()),
+                    Db.enumName(authorization.getScopeType()),
+                    authorization.getScopeId(),
+                    authorization.isActive(),
+                    authorization.getValidUntil(),
+                    authorization.getGrantedBy());
+            authorization.setId(id);
+        } else {
+            Db.update(
+                    "UPDATE user_authorization SET email = ?, role = ?, scope_type = ?, scope_id = ?, active = ?,"
+                            + " valid_until = ?, granted_by = ? WHERE id = ?",
+                    authorization.getEmail(),
+                    Db.enumName(authorization.getRole()),
+                    Db.enumName(authorization.getScopeType()),
+                    authorization.getScopeId(),
+                    authorization.isActive(),
+                    authorization.getValidUntil(),
+                    authorization.getGrantedBy(),
+                    authorization.getId());
+        }
+    }
+
+    @Override
+    public UserAuthorization merge(UserAuthorization authorization) {
+        persist(authorization);
+        return authorization;
     }
 }

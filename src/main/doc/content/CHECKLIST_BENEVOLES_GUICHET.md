@@ -40,13 +40,6 @@ Cette liste de contrôle concerne le **jour J** : accueillir les joueurs sur pla
 
 - [ ] Onglet **Historique** → **Annuler** sur la dernière action incorrecte.
 
-## Avant la synchronisation avec SharlyChess
-
-- [ ] Si le **pointage** est activé : tous les joueurs présents doivent être **pointés** ici (transmis comme check-in dans SharlyChess).
-- [ ] Informer l'arbitre que tous les inscrits non annulés seront importés ; le pointage correspond au check-in SharlyChess.
-
-Voir [Synchronisation SharlyChess](SYNCHRO_SHARLYCHESS.md).
-
 ## Cas à transmettre à l'organisateur
 
 - [ ] Badge **Hors ligne** persistant malgré une connexion à Internet.

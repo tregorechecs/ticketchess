@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import com.github.gcolin.organisation.Organisation;
 import com.github.gcolin.payment.RibService;
-import jakarta.persistence.EntityManager;
+import java.sql.Connection;
 import jakarta.ws.rs.core.*;
 import java.io.*;
 import java.lang.reflect.Field;
@@ -30,7 +30,7 @@ class AdminApiExtraTest {
         inject(api,"uriInfo",uri); inject(api,"config",config); inject(api,"logoService",logo);
         inject(api,"signatureService",sig); inject(api,"backgroundService",bg);
         Organisation org = new Organisation(); org.setId(1);
-        RequestContext.openForTest((EntityManager)null); RequestContext.require().setOrganisation(org);
+        RequestContext.openForTest((java.sql.Connection) null); RequestContext.require().setOrganisation(org);
         assertEquals(200, api.uploadLogo(new ByteArrayInputStream(new byte[0])).getStatus());
         assertEquals(200, api.uploadSignature(new ByteArrayInputStream(new byte[0])).getStatus());
         assertEquals(200, api.uploadBackground(new ByteArrayInputStream(new byte[0])).getStatus());

@@ -79,12 +79,11 @@ class EventCollectionApiTest {
         inject(api, "caches", new Caches());
         inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventcollection/11?success=save")));
 
-        Response response = api.post("create", null, " Open Series ", "12", "fest-id");
+        Response response = api.post("create", null, " Open Series ", "12");
 
         assertEquals(303, response.getStatus());
         verify(dao).persist(any(EventCollection.class));
         verify(optionDao).setOption(11, EventCollectionOptionType.MAX_SUBSCRIPTIONS, "12");
-        verify(optionDao).setOption(11, EventCollectionOptionType.CHESS_EVENT_ID, "fest-id");
     }
 
     @Test
@@ -103,7 +102,7 @@ class EventCollectionApiTest {
         inject(api, "caches", new Caches());
         inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventcollection?error=linkedEvents")));
 
-    Response response = api.post("remove", 8, null, null, null);
+    Response response = api.post("remove", 8, null, null);
 
         assertEquals(303, response.getStatus());
     }
@@ -124,7 +123,7 @@ class EventCollectionApiTest {
         inject(api, "caches", new Caches());
         inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/events")));
 
-    Response response = api.post("remove", 9, null, null, null);
+    Response response = api.post("remove", 9, null, null);
 
         assertEquals(303, response.getStatus());
         verify(dao).remove(event);
@@ -148,13 +147,12 @@ class EventCollectionApiTest {
         inject(api, "caches", new Caches());
         inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventcollection/10?success=save")));
 
-        Response response = api.post("update", 10, " New Name ", "24", "open-2026");
+        Response response = api.post("update", 10, " New Name ", "24");
 
         assertEquals(303, response.getStatus());
         assertEquals("New Name", event.getName());
         verify(dao).merge(event);
         verify(optionDao).setOption(10, EventCollectionOptionType.MAX_SUBSCRIPTIONS, "24");
-        verify(optionDao).setOption(10, EventCollectionOptionType.CHESS_EVENT_ID, "open-2026");
         verify(registerService).promoteNextPendingSubscriptionInCollection(event);
     }
 
@@ -168,7 +166,6 @@ class EventCollectionApiTest {
         event.setId(6);
         event.setName("Spring Open");
         when(dao.find(6)).thenReturn(event);
-        when(optionDao.findOptionValue(6, EventCollectionOptionType.CHESS_EVENT_ID)).thenReturn("slug");
 
         inject(api, "eventCollectionService", dao);
         inject(api, "eventCollectionOptionService", optionDao);
@@ -178,7 +175,6 @@ class EventCollectionApiTest {
         assertEquals("event/eventcollectionEdit.mustache", html.getTemplate());
         assertEquals(event, html.getModel().get("eventCollection"));
         assertEquals("save", html.getModel().get("success"));
-        assertEquals("slug", html.getModel().get("chessEventId"));
     }
 
     @Test

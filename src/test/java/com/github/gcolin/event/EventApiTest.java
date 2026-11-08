@@ -17,7 +17,6 @@ import com.github.gcolin.platform.Config;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.event.EventCollection;
 import com.github.gcolin.event.EventCollectionOptionType;
-import com.github.gcolin.event.EventInfo;
 import com.github.gcolin.event.EventOption;
 import com.github.gcolin.event.EventOptionType;
 import com.github.gcolin.registration.PlayerPendingSubscription;
@@ -39,7 +38,6 @@ import com.github.gcolin.event.EventCollectionDao;
 import com.github.gcolin.event.EventCollectionOptionDao;
 import com.github.gcolin.event.EventDao;
 import com.github.gcolin.event.EventGroupDao;
-import com.github.gcolin.event.EventInfoDao;
 import com.github.gcolin.event.EventOptionDao;
 import com.github.gcolin.payment.PaymentDao;
 import com.github.gcolin.registration.PlayerPendingSubscriptionDao;
@@ -147,10 +145,9 @@ class EventApiTest {
     }
 
     @Test
-    void editWithIdShouldIncludeEventInfoAndOptions() throws Exception {
+    void editWithIdShouldIncludeDescriptionAndOptions() throws Exception {
         EventApi api = new EventApi();
         EventDao eventDao = mock(EventDao.class);
-        EventInfoDao eventInfoDao = mock(EventInfoDao.class);
         EventOptionDao eventOptionDao = mock(EventOptionDao.class);
         EventCollectionDao eventCollectionDao = mock(EventCollectionDao.class);
         EventGroupDao eventGroupDao = mock(EventGroupDao.class);
@@ -158,29 +155,24 @@ class EventApiTest {
         Event event = new Event();
         event.setId(5);
         event.setName("Open");
-
-        EventInfo info = new EventInfo();
-        info.setEvent(event);
-        info.setDescription("hello");
+        event.setDescription("hello");
 
         EventOption option = new EventOption();
         option.setOptionType(EventOptionType.FFE_ID);
         option.setValue("abc");
 
         when(eventDao.find(5)).thenReturn(event);
-        when(eventInfoDao.findByEventId(5)).thenReturn(info);
         when(eventOptionDao.findByEventId(5)).thenReturn(List.of(option));
         when(eventCollectionDao.allOrdered()).thenReturn(List.of());
         when(eventGroupDao.all()).thenReturn(List.of());
 
         inject(api, "eventService", eventDao);
-        inject(api, "eventInfoService", eventInfoDao);
         inject(api, "eventOptionService", eventOptionDao);
         inject(api, "eventGroupService", eventGroupDao);
         inject(api, "eventCollectionService", eventCollectionDao);
 
         LoggedUser loggedUser = mock(LoggedUser.class);
-        when(loggedUser.hasRole(RoleCode.EVENT_ADMIN)).thenReturn(true);
+        when(loggedUser.hasRole(RoleCode.ARBITRE)).thenReturn(true);
         inject(api, "loggerUser", loggedUser);
 
         MustacheHtml html = api.edit(5, "save");
@@ -188,7 +180,7 @@ class EventApiTest {
 
         assertEquals("event/eventEdit.mustache", html.getTemplate());
         assertEquals(event, model.get("event"));
-        assertEquals(info, model.get("eventInfo"));
+        assertEquals("hello", ((Event) model.get("event")).getDescription());
         assertEquals("save", model.get("success"));
         @SuppressWarnings("unchecked")
         Map<String, String> options = (Map<String, String>) model.get("eventOptions");
@@ -208,7 +200,7 @@ class EventApiTest {
             inject(api, "eventCollectionService", eventCollectionDao);
 
             LoggedUser loggedUser = mock(LoggedUser.class);
-            when(loggedUser.hasRole(RoleCode.EVENT_ADMIN)).thenReturn(true);
+            when(loggedUser.hasRole(RoleCode.ARBITRE)).thenReturn(true);
             inject(api, "loggerUser", loggedUser);
         } catch (Exception ex) {
             throw new RuntimeException(ex);
@@ -223,11 +215,10 @@ class EventApiTest {
     @Test
     void postEventEditDescriptionOnlyShouldUpdateInfoAndRedirect() throws Exception {
         EventApi api = new EventApi();
-        EventInfoDao eventInfoDao = mock(EventInfoDao.class);
+        EventDao eventDao = mock(EventDao.class);
 
-        inject(api, "eventInfoService", eventInfoDao);
         inject(api, "eventOptionService", mock(EventOptionDao.class));
-        inject(api, "eventService", mock(EventDao.class));
+        inject(api, "eventService", eventDao);
         inject(api, "caches", new Caches());
         inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/9/edit?success=save")));
 
@@ -237,6 +228,7 @@ class EventApiTest {
 
         assertEquals(303, response.getStatus());
         assertEquals(URI.create("http://localhost:8080/event/9/edit?success=save"), response.getLocation());
+        verify(eventDao).updateDescription(9, "desc");
     }
 
     @Test
@@ -254,7 +246,6 @@ class EventApiTest {
         EventApi api = new EventApi();
         EventOptionDao optionDao = mock(EventOptionDao.class);
 
-        inject(api, "eventInfoService", mock(EventInfoDao.class));
         inject(api, "eventOptionService", optionDao);
         inject(api, "eventService", mock(EventDao.class));
         inject(api, "caches", new Caches());

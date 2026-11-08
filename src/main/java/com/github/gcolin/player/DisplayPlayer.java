@@ -19,7 +19,7 @@ public class DisplayPlayer implements IPlayer {
     private String clubRef;
     private String name;
     private String firstname;
-    private Double price;
+    private Long priceCents;
     private String category;
     private String nrffe;
     private String nrffeId;
@@ -176,12 +176,12 @@ public class DisplayPlayer implements IPlayer {
         this.firstname = firstname;
     }
 
-    public Double getPrice() {
-        return price;
+    public Long getPriceCents() {
+        return priceCents;
     }
 
-    public void setPrice(Double price) {
-        this.price = price;
+    public void setPriceCents(Long priceCents) {
+        this.priceCents = priceCents;
     }
 
     public String getNrffe() {

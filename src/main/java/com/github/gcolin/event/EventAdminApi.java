@@ -13,7 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@RequireRole(RoleCode.EVENT_ADMIN)
+@RequireRole(RoleCode.ARBITRE)
 @Path("admin/events")
 public class EventAdminApi {
 

@@ -10,12 +10,9 @@ import com.github.gcolin.event.EventCollectionOptionDao;
 import com.github.gcolin.event.EventDao;
 import com.github.gcolin.event.EventGroupDao;
 import com.github.gcolin.event.EventGroupFilter;
-import com.github.gcolin.event.EventInfoDao;
 import com.github.gcolin.event.EventOptionDao;
 import com.github.gcolin.event.PapiService;
 import com.github.gcolin.event.PapiUlploadService;
-import com.github.gcolin.event.ChessEventService;
-import com.github.gcolin.event.SharlySelectService;
 import com.github.gcolin.club.ClubSeasonDao;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.membership.LicenseDao;
@@ -35,9 +32,11 @@ import com.github.gcolin.registration.PlayerPendingSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
 import com.github.gcolin.registration.RegisterService;
-import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.sql.Connection;
+import java.sql.SQLException;
+import javax.sql.DataSource;
 import java.util.function.Supplier;
 
 public final class RequestContext {
@@ -46,11 +45,11 @@ public final class RequestContext {
     private static final String LOGGED_USER_KEY = "loggedUser";
 
     private HttpServletRequest request;
-    private EntityManager em;
+    private Connection connection;
+    /** {@code true} when this context opened (and therefore must close) the connection. */
+    private boolean ownsConnection;
     private boolean readOnly;
     private Organisation organisation;
-    /** {@code /o/{slug}} when the tenant was resolved from the path; otherwise {@code null}. */
-    private String orgPathPrefix;
     private OrganisationDao organisationDao;
 
     private ClubSeasonDao clubSeasonDao;
@@ -64,7 +63,6 @@ public final class RequestContext {
     private UserAuthorizationDao userAuthorizationDao;
     private CustomPlayerDao customPlayerDao;
     private EventGroupDao eventGroupDao;
-    private EventInfoDao eventInfoDao;
     private EventOptionDao eventOptionDao;
     private EventCollectionOptionDao eventCollectionOptionDao;
     private EventCollectionDao eventCollectionDao;
@@ -81,24 +79,25 @@ public final class RequestContext {
     private EventGroupFilter eventGroupFilter;
     private PapiService papiService;
     private PapiUlploadService papiUlploadService;
-    private ChessEventService chessEventService;
-    private SharlySelectService sharlySelectService;
 
     private RequestContext() {}
 
     public static void open(HttpServletRequest request) {
         RequestContext ctx = new RequestContext();
         ctx.request = request;
-        ctx.em = AppContext.get().persistence().getEmf().createEntityManager();
-        ctx.em.getTransaction().begin();
+        ctx.ownsConnection = true;
         CURRENT.set(ctx);
     }
 
+    /**
+     * Read-only requests (GET/HEAD/OPTIONS). The connection is acquired lazily on first use, so requests
+     * that never touch the database do not hold a pooled connection.
+     */
     public static void openReadOnly(HttpServletRequest request) {
         RequestContext ctx = new RequestContext();
         ctx.request = request;
         ctx.readOnly = true;
-        ctx.em = AppContext.get().persistence().getEmf().createEntityManager();
+        ctx.ownsConnection = true;
         CURRENT.set(ctx);
     }
 
@@ -107,40 +106,81 @@ public final class RequestContext {
         return ctx != null && ctx.readOnly;
     }
 
+    /** Commits the work done so far by a read-only request (nothing to clear: JDBC has no persistence context). */
     public static void commitReadAndClear() {
         RequestContext ctx = CURRENT.get();
-        if (ctx == null || !ctx.readOnly || ctx.em == null) {
+        if (ctx == null || !ctx.readOnly || ctx.connection == null) {
             return;
         }
-        if (ctx.em.getTransaction().isActive()) {
-            ctx.em.getTransaction().commit();
-        }
-        ctx.em.clear();
+        ctx.commitConnection();
     }
 
-    private void touchEm() {
-        if (readOnly && em != null && !em.getTransaction().isActive()) {
-            em.getTransaction().begin();
+    private static Connection acquire() {
+        return acquire(AppContext.get().persistence().getDataSource());
+    }
+
+    private static Connection acquire(DataSource dataSource) {
+        try {
+            Connection connection = dataSource.getConnection();
+            connection.setAutoCommit(false);
+            return connection;
+        } catch (SQLException e) {
+            throw new PersistenceException("Cannot open database connection", e);
         }
     }
 
-    static void openForTest(EntityManager em) {
+    private void commitConnection() {
+        try {
+            if (connection != null && !connection.isClosed()) {
+                connection.commit();
+            }
+        } catch (SQLException e) {
+            throw new PersistenceException("Commit failed", e);
+        }
+    }
+
+    private void rollbackConnection() {
+        try {
+            if (connection != null && !connection.isClosed()) {
+                connection.rollback();
+            }
+        } catch (SQLException e) {
+            throw new PersistenceException("Rollback failed", e);
+        }
+    }
+
+    private void closeConnection() {
+        Connection toClose = connection;
+        connection = null;
+        if (toClose == null || !ownsConnection) {
+            return;
+        }
+        try {
+            if (!toClose.isClosed()) {
+                toClose.close();
+            }
+        } catch (SQLException e) {
+            throw new PersistenceException("Cannot close database connection", e);
+        }
+    }
+
+    static void openForTest(Connection connection) {
         RequestContext ctx = new RequestContext();
-        ctx.em = em;
+        ctx.connection = connection;
         CURRENT.set(ctx);
     }
 
-    static void openForTestReadOnly(EntityManager em) {
+    static void openForTestReadOnly(Connection connection) {
         RequestContext ctx = new RequestContext();
-        ctx.em = em;
+        ctx.connection = connection;
         ctx.readOnly = true;
         CURRENT.set(ctx);
     }
 
-    static void openForTest(HttpServletRequest request, EntityManager em) {
+    static void openForTest(HttpServletRequest request, Connection connection) {
         RequestContext ctx = new RequestContext();
         ctx.request = request;
-        ctx.em = em;
+        ctx.connection = connection;
         CURRENT.set(ctx);
     }
 
@@ -156,36 +196,36 @@ public final class RequestContext {
         CURRENT.set(ctx);
     }
 
-    static void openForTest(EntityManager em, Find find) {
+    static void openForTest(Connection connection, Find find) {
         RequestContext ctx = new RequestContext();
-        ctx.em = em;
+        ctx.connection = connection;
         ctx.find = find;
         CURRENT.set(ctx);
     }
 
     public static void commit() {
         RequestContext ctx = CURRENT.get();
-        if (ctx != null && ctx.em != null && ctx.em.getTransaction().isActive()) {
-            ctx.em.flush();
-            ctx.em.getTransaction().commit();
+        if (ctx != null) {
+            ctx.commitConnection();
         }
     }
 
     public static void rollback() {
         RequestContext ctx = CURRENT.get();
-        if (ctx != null && ctx.em != null && ctx.em.getTransaction().isActive()) {
-            ctx.em.getTransaction().rollback();
+        if (ctx != null) {
+            ctx.rollbackConnection();
         }
     }
 
     public static void close() {
         RequestContext ctx = CURRENT.get();
         try {
-            if (ctx != null && ctx.em != null && ctx.em.isOpen()) {
-                ctx.em.close();
+            if (ctx != null) {
+                ctx.closeConnection();
             }
         } finally {
             CURRENT.remove();
+            OrgScope.clearFilter();
         }
     }
 
@@ -213,30 +253,15 @@ public final class RequestContext {
         this.organisation = organisation;
     }
 
-    public String orgPathPrefix() {
-        return orgPathPrefix;
-    }
-
-    public void setOrgPathPrefix(String orgPathPrefix) {
-        this.orgPathPrefix = orgPathPrefix;
-    }
-
-    /**
-     * Servlet context path plus optional {@code /o/{slug}} prefix used for links and login/OAuth return URLs.
-     */
+    /** Servlet context path used for links and login/OAuth return URLs. */
     public String effectiveContextPath() {
         String base = request != null ? request.getContextPath() : "";
-        if (base == null) {
-            base = "";
-        }
-        return orgPathPrefix == null || orgPathPrefix.isBlank() ? base : base + orgPathPrefix;
+        return base == null ? "" : base;
     }
 
     public OrganisationDao organisationDao() {
-        touchEm();
         if (organisationDao == null) {
             organisationDao = new OrganisationDao();
-            organisationDao.setEm(em);
         }
         return organisationDao;
     }
@@ -249,30 +274,64 @@ public final class RequestContext {
     }
 
     public static <T> T run(Supplier<T> action) {
+        return run((DataSource) null, action);
+    }
+
+    /**
+     * Runs {@code action} in its own transactional context on a connection borrowed from {@code dataSource}
+     * (or from the application's data source when {@code null}).
+     */
+    public static void run(DataSource dataSource, Runnable action) {
+        run(dataSource, (Supplier<Object>) () -> {
+            action.run();
+            return null;
+        });
+    }
+
+    public static <T> T run(DataSource dataSource, Supplier<T> action) {
+        RequestContext previous = CURRENT.get();
         RequestContext ctx = new RequestContext();
-        ctx.em = AppContext.get().persistence().getEmf().createEntityManager();
-        ctx.em.getTransaction().begin();
+        ctx.ownsConnection = true;
+        if (previous != null) {
+            // Nested run (e.g. desk service called while serving a request): keep the tenant / request.
+            ctx.request = previous.request;
+            ctx.organisation = previous.organisation;
+            ctx.loggedUserOverride = previous.loggedUserOverride;
+            ctx.find = previous.find;
+        }
         CURRENT.set(ctx);
         try {
+            if (dataSource != null) {
+                ctx.connection = acquire(dataSource);
+            }
             T result = action.get();
-            ctx.em.flush();
-            ctx.em.getTransaction().commit();
+            ctx.commitConnection();
             return result;
         } catch (RuntimeException e) {
-            if (ctx.em.getTransaction().isActive()) {
-                ctx.em.getTransaction().rollback();
+            try {
+                ctx.rollbackConnection();
+            } catch (RuntimeException rollbackFailure) {
+                e.addSuppressed(rollbackFailure);
             }
             throw e;
         } finally {
-            CURRENT.remove();
-            if (ctx.em.isOpen()) {
-                ctx.em.close();
+            if (previous != null) {
+                CURRENT.set(previous);
+            } else {
+                CURRENT.remove();
+                OrgScope.clearFilter();
             }
+            ctx.closeConnection();
         }
     }
 
-    public EntityManager em() {
-        return em;
+    /** The request-scoped JDBC connection (acquired lazily, auto-commit disabled). */
+    public Connection connection() {
+        if (connection == null) {
+            connection = acquire();
+            ownsConnection = true;
+        }
+        return connection;
     }
 
     public HttpServletRequest request() {
@@ -314,10 +373,8 @@ public final class RequestContext {
     }
 
     public ClubSeasonDao clubSeasonDao() {
-        touchEm();
         if (clubSeasonDao == null) {
             clubSeasonDao = new ClubSeasonDao();
-            clubSeasonDao.setEm(em);
         }
         return clubSeasonDao;
     }
@@ -331,120 +388,86 @@ public final class RequestContext {
     }
 
     public LicenseDao licenseDao() {
-        touchEm();
         if (licenseDao == null) {
             licenseDao = new LicenseDao();
-            licenseDao.setEm(em);
         }
         return licenseDao;
     }
 
     public LicensePriceDao licensePriceDao() {
-        touchEm();
         if (licensePriceDao == null) {
             licensePriceDao = new LicensePriceDao();
-            licensePriceDao.setEm(em);
         }
         return licensePriceDao;
     }
 
     public MembershipDao membershipDao() {
-        touchEm();
         if (membershipDao == null) {
             membershipDao = new MembershipDao();
-            membershipDao.setEm(em);
         }
         return membershipDao;
     }
 
     public MembershipOptionDao membershipOptionDao() {
-        touchEm();
         if (membershipOptionDao == null) {
             membershipOptionDao = new MembershipOptionDao();
-            membershipOptionDao.setEm(em);
         }
         return membershipOptionDao;
     }
 
     public MembershipOptionFileDao membershipOptionFileDao() {
-        touchEm();
         if (membershipOptionFileDao == null) {
             membershipOptionFileDao = new MembershipOptionFileDao();
-            membershipOptionFileDao.setEm(em);
         }
         return membershipOptionFileDao;
     }
 
     public MembershipOptionSubscriptionDao membershipOptionSubscriptionDao() {
-        touchEm();
         if (membershipOptionSubscriptionDao == null) {
             membershipOptionSubscriptionDao = new MembershipOptionSubscriptionDao();
-            membershipOptionSubscriptionDao.setEm(em);
         }
         return membershipOptionSubscriptionDao;
     }
 
     public UserAuthorizationDao userAuthorizationDao() {
-        touchEm();
         if (userAuthorizationDao == null) {
             userAuthorizationDao = new UserAuthorizationDao();
-            userAuthorizationDao.setEm(em);
         }
         return userAuthorizationDao;
     }
 
     public CustomPlayerDao customPlayerDao() {
-        touchEm();
         if (customPlayerDao == null) {
             customPlayerDao = new CustomPlayerDao();
-            customPlayerDao.setEm(em);
         }
         return customPlayerDao;
     }
 
     public EventGroupDao eventGroupDao() {
-        touchEm();
         if (eventGroupDao == null) {
             eventGroupDao = new EventGroupDao();
-            eventGroupDao.setEm(em);
         }
         return eventGroupDao;
     }
 
-    public EventInfoDao eventInfoDao() {
-        touchEm();
-        if (eventInfoDao == null) {
-            eventInfoDao = new EventInfoDao();
-            eventInfoDao.setEm(em);
-            eventInfoDao.setEventDao(this::eventDao);
-        }
-        return eventInfoDao;
-    }
-
     public EventOptionDao eventOptionDao() {
-        touchEm();
         if (eventOptionDao == null) {
             eventOptionDao = new EventOptionDao();
-            eventOptionDao.setEm(em);
             eventOptionDao.setEventDao(this::eventDao);
         }
         return eventOptionDao;
     }
 
     public EventCollectionOptionDao eventCollectionOptionDao() {
-        touchEm();
         if (eventCollectionOptionDao == null) {
             eventCollectionOptionDao = new EventCollectionOptionDao();
-            eventCollectionOptionDao.setEm(em);
         }
         return eventCollectionOptionDao;
     }
 
     public EventCollectionDao eventCollectionDao() {
-        touchEm();
         if (eventCollectionDao == null) {
             eventCollectionDao = new EventCollectionDao();
-            eventCollectionDao.setEm(em);
             eventCollectionDao.setEventCollectionOptionDao(this::eventCollectionOptionDao);
             eventCollectionDao.setPlayerSubscriptionDao(this::playerSubscriptionDao);
         }
@@ -452,12 +475,9 @@ public final class RequestContext {
     }
 
     public EventDao eventDao() {
-        touchEm();
         if (eventDao == null) {
             eventDao = new EventDao();
-            eventDao.setEm(em);
             eventDao.setFinder(find());
-            eventDao.setEventInfoDao(this::eventInfoDao);
             eventDao.setEventGroupDao(this::eventGroupDao);
             eventDao.setEventOptionDao(this::eventOptionDao);
             eventDao.setEventCollectionOptionDao(this::eventCollectionOptionDao);
@@ -467,37 +487,29 @@ public final class RequestContext {
     }
 
     public PlayerSubscriptionDao playerSubscriptionDao() {
-        touchEm();
         if (playerSubscriptionDao == null) {
             playerSubscriptionDao = new PlayerSubscriptionDao();
-            playerSubscriptionDao.setEm(em);
         }
         return playerSubscriptionDao;
     }
 
     public PlayerSubscriptionOptionDao playerSubscriptionOptionDao() {
-        touchEm();
         if (playerSubscriptionOptionDao == null) {
             playerSubscriptionOptionDao = new PlayerSubscriptionOptionDao();
-            playerSubscriptionOptionDao.setEm(em);
         }
         return playerSubscriptionOptionDao;
     }
 
     public PlayerPendingSubscriptionDao playerPendingSubscriptionDao() {
-        touchEm();
         if (playerPendingSubscriptionDao == null) {
             playerPendingSubscriptionDao = new PlayerPendingSubscriptionDao();
-            playerPendingSubscriptionDao.setEm(em);
         }
         return playerPendingSubscriptionDao;
     }
 
     public PaymentDao paymentDao() {
-        touchEm();
         if (paymentDao == null) {
             paymentDao = new PaymentDao();
-            paymentDao.setEm(em);
         }
         return paymentDao;
     }
@@ -574,24 +586,5 @@ public final class RequestContext {
             papiUlploadService = new PapiUlploadService();
         }
         return papiUlploadService;
-    }
-
-    public ChessEventService chessEventService() {
-        if (chessEventService == null) {
-            chessEventService = new ChessEventService(
-                    eventDao(),
-                    eventCollectionDao(),
-                    eventCollectionOptionDao(),
-                    playerSubscriptionDao(),
-                    AppContext.get().luceneDb());
-        }
-        return chessEventService;
-    }
-
-    public SharlySelectService sharlySelectService() {
-        if (sharlySelectService == null) {
-            sharlySelectService = new SharlySelectService(eventDao(), eventCollectionOptionDao());
-        }
-        return sharlySelectService;
     }
 }

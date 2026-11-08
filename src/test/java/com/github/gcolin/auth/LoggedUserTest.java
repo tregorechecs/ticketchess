@@ -215,14 +215,15 @@ public class LoggedUserTest {
     }
 
     @Test
-    public void testEventAdminInheritsArbitreRole() {
+    public void testArbitreCanManageEvents() {
         loggedUser.setEmail("arbiter@example.com");
         Mockito.when(config.getAdmins()).thenReturn(Collections.emptySet());
         Mockito.when(userAuthorizationDao.findActiveGlobalRoles("arbiter@example.com"))
-                .thenReturn(EnumSet.of(RoleCode.EVENT_ADMIN));
+                .thenReturn(EnumSet.of(RoleCode.ARBITRE));
 
         Assertions.assertTrue(loggedUser.hasRole(RoleCode.ARBITRE));
         Assertions.assertTrue(loggedUser.canViewEventConfig());
+        Assertions.assertTrue(loggedUser.canManageEvents());
         Assertions.assertFalse(loggedUser.hasRole(RoleCode.TRESORIER));
     }
 }

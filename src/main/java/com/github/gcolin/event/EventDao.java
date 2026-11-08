@@ -5,9 +5,9 @@ import com.github.gcolin.event.Event;
 import com.github.gcolin.event.EventCollection;
 import com.github.gcolin.event.EventCollectionOptionType;
 import com.github.gcolin.event.EventGroup;
-import com.github.gcolin.event.EventInfo;
 import com.github.gcolin.event.EventOption;
 import com.github.gcolin.event.EventOptionType;
+import com.github.gcolin.organisation.OrgEntityListener;
 import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.player.DisplayPlayer;
 import com.github.gcolin.event.EventStatus;
@@ -24,18 +24,32 @@ import org.slf4j.LoggerFactory;
 import com.github.gcolin.platform.AbstractDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionStatus;
-import jakarta.persistence.TypedQuery;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+import com.github.gcolin.platform.Db;
+import org.apache.commons.dbutils.ResultSetHandler;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class EventDao extends AbstractDao<Event> {
 
+    /** List/detail columns without the markdown {@code description} TEXT. */
+    static final String LIST_COLUMNS =
+            "id, org_id, name, start_date, end_date, pricecents, youngpricecents, status_id, event_type,"
+                    + " event_group_id, big_event_id";
+
+    static final String COLUMNS_WITH_DESCRIPTION = LIST_COLUMNS + ", description";
+
     private Find finder;
-    private Supplier<EventInfoDao> eventInfoService;
     private Supplier<EventGroupDao> eventGroupService;
     private Supplier<EventOptionDao> eventOptionDao;
     private Supplier<EventCollectionOptionDao> eventCollectionOptionDao;
@@ -44,15 +58,217 @@ public class EventDao extends AbstractDao<Event> {
     private static Logger logger = LoggerFactory.getLogger(EventDao.class);
 
     public EventDao() {
-        super(Event.class);
+        super(Event.class, "event");
+    }
+
+    @Override
+    protected boolean orgScoped() {
+        return true;
+    }
+
+    // ------------------------------------------------------------------
+    // Mapping (Event has legacy price/cents setters, so it is mapped by hand)
+    // ------------------------------------------------------------------
+
+    static Event mapRow(ResultSet rs) throws SQLException {
+        Event event = new Event();
+        event.setId(rs.getInt("id"));
+        event.setOrgId(intOrNull(rs, "org_id"));
+        event.setName(rs.getString("name"));
+        event.setStartDate(timestampOrNull(rs, "start_date"));
+        event.setEndDate(timestampOrNull(rs, "end_date"));
+        Long priceCents = longOrNull(rs, "pricecents");
+        if (priceCents != null) {
+            event.setPriceCents(priceCents);
+        }
+        Long youngPriceCents = longOrNull(rs, "youngpricecents");
+        if (youngPriceCents != null) {
+            event.setYoungPriceCents(youngPriceCents);
+        }
+        int statusOrdinal = rs.getInt("status_id");
+        event.setStatus(EventStatus.values()[statusOrdinal]);
+        int typeOrdinal = rs.getInt("event_type");
+        event.setEventType(EventType.values()[typeOrdinal]);
+        Integer groupId = intOrNull(rs, "event_group_id");
+        if (groupId != null) {
+            EventGroup group = new EventGroup();
+            group.setId(groupId);
+            event.setEventGroup(group);
+        }
+        Integer collectionId = intOrNull(rs, "big_event_id");
+        if (collectionId != null) {
+            EventCollection collection = new EventCollection();
+            collection.setId(collectionId);
+            event.setEventCollection(collection);
+        }
+        if (hasColumn(rs, "description")) {
+            event.setDescription(rs.getString("description"));
+        }
+        return event;
+    }
+
+    private static boolean hasColumn(ResultSet rs, String label) throws SQLException {
+        var meta = rs.getMetaData();
+        for (int i = 1; i <= meta.getColumnCount(); i++) {
+            if (label.equalsIgnoreCase(meta.getColumnLabel(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static final ResultSetHandler<List<Event>> LIST_HANDLER = rs -> {
+        List<Event> list = new ArrayList<>();
+        while (rs.next()) {
+            list.add(mapRow(rs));
+        }
+        return list;
+    };
+
+    @Override
+    protected List<Event> select(String sql, Object... params) {
+        List<Event> events = Db.query(sql, LIST_HANDLER, params);
+        hydrate(events);
+        return events;
+    }
+
+    /** Replaces group / collection id shells by loaded entities and installs the lazy subscription loader. */
+    void hydrate(List<Event> events) {
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        Set<Integer> groupIds = new LinkedHashSet<>();
+        Set<Integer> collectionIds = new LinkedHashSet<>();
+        for (Event event : events) {
+            if (event.getEventGroup() != null) {
+                groupIds.add(event.getEventGroup().getId());
+            }
+            if (event.getEventCollection() != null) {
+                collectionIds.add(event.getEventCollection().getId());
+            }
+        }
+        Map<Integer, EventGroup> groups = new EventGroupDao().findByIds(groupIds);
+        Map<Integer, EventCollection> collections = new EventCollectionDao().findByIds(collectionIds);
+        for (Event event : events) {
+            if (event.getEventGroup() != null) {
+                event.setEventGroup(groups.get(event.getEventGroup().getId()));
+            }
+            if (event.getEventCollection() != null) {
+                event.setEventCollection(collections.get(event.getEventCollection().getId()));
+            }
+            final Event owner = event;
+            event.setSubscriptionsLoader(() -> new PlayerSubscriptionDao().findByEvent(owner));
+        }
+    }
+
+    @Override
+    public Event find(Integer id) {
+        if (id == null) {
+            return null;
+        }
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(COLUMNS_WITH_DESCRIPTION)
+                .append(" FROM event WHERE id = ?");
+        List<Object> args = Db.args(id);
+        appendOrgFilter(sql, args, " AND ");
+        return first(select(sql.toString(), args.toArray()));
+    }
+
+    @Override
+    public java.util.Map<Integer, Event> findByIds(Collection<Integer> ids) {
+        java.util.Map<Integer, Event> result = new java.util.LinkedHashMap<>();
+        if (ids == null || ids.isEmpty()) {
+            return result;
+        }
+        for (Event event : select(
+                "SELECT " + LIST_COLUMNS + " FROM event WHERE id IN (" + placeholders(ids) + ")",
+                ids.toArray())) {
+            result.put(event.getId(), event);
+        }
+        return result;
+    }
+
+    public void updateDescription(Integer eventId, String description) {
+        if (eventId == null) {
+            return;
+        }
+        Db.update("UPDATE event SET description = ? WHERE id = ?", description, eventId);
+    }
+
+    public List<Event> findByCollectionId(Integer collectionId) {
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(LIST_COLUMNS)
+                .append(" FROM event WHERE big_event_id = ?");
+        List<Object> args = Db.args(collectionId);
+        appendOrgFilter(sql, args, " AND ");
+        sql.append(" ORDER BY id");
+        return select(sql.toString(), args.toArray());
+    }
+
+    public List<Event> findByGroupId(Integer groupId) {
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(LIST_COLUMNS)
+                .append(" FROM event WHERE event_group_id = ?");
+        List<Object> args = Db.args(groupId);
+        appendOrgFilter(sql, args, " AND ");
+        sql.append(" ORDER BY id");
+        return select(sql.toString(), args.toArray());
+    }
+
+    @Override
+    public void persist(Event event) {
+        if (event.getId() == null) {
+            OrgEntityListener.assignOrg(event);
+            int id = Db.insertReturningInt(
+                    "INSERT INTO event (org_id, name, start_date, end_date, pricecents, youngpricecents,"
+                            + " status_id, event_type, event_group_id, big_event_id)"
+                            + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    values(event));
+            event.setId(id);
+        } else {
+            update(event);
+        }
+    }
+
+    @Override
+    public Event merge(Event event) {
+        if (event.getId() == null) {
+            persist(event);
+        } else {
+            update(event);
+        }
+        return event;
+    }
+
+    private void update(Event event) {
+        Object[] values = values(event);
+        Object[] args = new Object[values.length + 1];
+        System.arraycopy(values, 0, args, 0, values.length);
+        args[values.length] = event.getId();
+        Db.update(
+                "UPDATE event SET org_id = ?, name = ?, start_date = ?, end_date = ?, pricecents = ?,"
+                        + " youngpricecents = ?, status_id = ?, event_type = ?,"
+                        + " event_group_id = ?, big_event_id = ? WHERE id = ?",
+                args);
+    }
+
+    private static Object[] values(Event event) {
+        return new Object[] {
+            event.getOrgId(),
+            event.getName(),
+            event.getStartDate(),
+            event.getEndDate(),
+            event.getPriceCents(),
+            event.getYoungPriceCents(),
+            Db.enumOrdinal(event.getStatus()),
+            Db.enumOrdinal(event.getEventType()),
+            Db.fkId(event.getEventGroup()),
+            Db.fkId(event.getEventCollection())
+        };
     }
 
     public void setFinder(Find finder) {
         this.finder = finder;
-    }
-
-    public void setEventInfoDao(Supplier<EventInfoDao> eventInfoService) {
-        this.eventInfoService = eventInfoService;
     }
 
     public void setEventGroupDao(Supplier<EventGroupDao> eventGroupService) {
@@ -77,24 +293,24 @@ public class EventDao extends AbstractDao<Event> {
 
     /** All events with the given status, including those in an event group. */
     public List<Event> findAllByStatus(EventStatus status) {
-        TypedQuery<Event> query = em.createQuery(
-                "SELECT e FROM Event e WHERE e.status = :status ORDER BY e.startDate ASC, e.name ASC",
-                Event.class);
-        query.setParameter("status", status);
-        return query.getResultList();
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(LIST_COLUMNS)
+                .append(" FROM event WHERE status_id = ?");
+        List<Object> args = Db.args(Db.enumOrdinal(status));
+        appendOrgFilter(sql, args, " AND ");
+        sql.append(" ORDER BY start_date ASC, name ASC");
+        return select(sql.toString(), args.toArray());
     }
 
     public List<Event> findByStatus(EventStatus status, SeasonScope scope) {
-        String jpql =
-                "SELECT e FROM Event e where e.status = :status and e.eventGroup is null";
-        if (scope.isFiltered()) {
-            jpql += " and e.startDate >= :seasonStart and e.startDate <= :seasonEnd";
-        }
-        jpql += " order by e.startDate ASC, e.name ASC";
-        TypedQuery<Event> query = em.createQuery(jpql, Event.class);
-        query.setParameter("status", status);
-        bindSeasonScope(query, scope);
-        return query.getResultList();
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(LIST_COLUMNS)
+                .append(" FROM event WHERE status_id = ? AND event_group_id IS NULL");
+        List<Object> args = Db.args(Db.enumOrdinal(status));
+        appendOrgFilter(sql, args, " AND ");
+        appendSeasonScope(sql, args, scope, "start_date", " AND ");
+        sql.append(" ORDER BY start_date ASC, name ASC");
+        return select(sql.toString(), args.toArray());
     }
 
     public List<Event> findByStatus(EventStatus status, EventGroup eventGroup) {
@@ -102,17 +318,14 @@ public class EventDao extends AbstractDao<Event> {
     }
 
     public List<Event> findByStatus(EventStatus status, EventGroup eventGroup, SeasonScope scope) {
-        String jpql =
-                "SELECT e FROM Event e where e.status = :status and e.eventGroup = :eventGroup";
-        if (scope.isFiltered()) {
-            jpql += " and e.startDate >= :seasonStart and e.startDate <= :seasonEnd";
-        }
-        jpql += " order by e.startDate ASC, e.name DESC";
-        TypedQuery<Event> query = em.createQuery(jpql, Event.class);
-        query.setParameter("status", status);
-        query.setParameter("eventGroup", eventGroup);
-        bindSeasonScope(query, scope);
-        return query.getResultList();
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(LIST_COLUMNS)
+                .append(" FROM event WHERE status_id = ? AND event_group_id = ?");
+        List<Object> args = Db.args(Db.enumOrdinal(status), Db.fkId(eventGroup));
+        appendOrgFilter(sql, args, " AND ");
+        appendSeasonScope(sql, args, scope, "start_date", " AND ");
+        sql.append(" ORDER BY start_date ASC, name DESC");
+        return select(sql.toString(), args.toArray());
     }
 
     public String buildCsv(Integer eventId) {
@@ -174,15 +387,11 @@ public class EventDao extends AbstractDao<Event> {
         cached.players = players;
         cached.missingPlayerCodes = missingPlayerCodes;
 
-        EventInfo eventInfo = eventInfoService.get().find(event);
-        if (eventInfo != null) {
-
+        if (event.getDescription() != null && !event.getDescription().isBlank()) {
             Parser parser = Parser.builder().build();
-            Node document = parser.parse(eventInfo.getDescription());
+            Node document = parser.parse(event.getDescription());
             HtmlRenderer renderer = HtmlRenderer.builder().escapeHtml(true).build();
-
-            String html = renderer.render(document);
-            cached.eventInfo = html;
+            cached.eventInfo = renderer.render(document);
         }
         detach(cached.event);
         event.setSubscriptions(new ArrayList<>());
@@ -192,7 +401,7 @@ public class EventDao extends AbstractDao<Event> {
 
     /**
      * Resolves a subscription to a DisplayPlayer. Custom / amical players (@id) and FFE
-     * licences missing from Lucene are still exported so Sharly receives every registration.
+     * licences missing from Lucene are still exported as placeholders.
      */
     private DisplayPlayer resolveDisplayPlayer(
             PlayerSubscription sub, Event event, List<String> missingPlayerCodes) {
@@ -299,7 +508,7 @@ public class EventDao extends AbstractDao<Event> {
             event.setEventGroup(eventGroupService.get().find(Integer.valueOf(eventgroupId)));
         }
         if (eventCollectionId != null && !eventCollectionId.isEmpty()) {
-            event.setEventCollection(em.find(EventCollection.class, Integer.valueOf(eventCollectionId)));
+            event.setEventCollection(new EventCollectionDao().find(Integer.valueOf(eventCollectionId)));
         } else {
             event.setEventCollection(null);
         }
@@ -367,16 +576,12 @@ public class EventDao extends AbstractDao<Event> {
     }
 
     public List<Event> findAllForAdmin(SeasonScope scope) {
-        String jpql = "SELECT e FROM Event e "
-                + "LEFT JOIN FETCH e.eventGroup "
-                + "LEFT JOIN FETCH e.eventCollection ";
-        if (scope.isFiltered()) {
-            jpql += "WHERE e.startDate >= :seasonStart AND e.startDate <= :seasonEnd ";
-        }
-        jpql += "ORDER BY e.startDate ASC, e.name ASC";
-        TypedQuery<Event> query = em.createQuery(jpql, Event.class);
-        bindSeasonScope(query, scope);
-        return query.getResultList();
+        StringBuilder sql = new StringBuilder("SELECT ").append(LIST_COLUMNS).append(" FROM event");
+        List<Object> args = Db.args();
+        appendOrgFilter(sql, args, " WHERE ");
+        appendSeasonScope(sql, args, scope, "start_date", args.isEmpty() ? " WHERE " : " AND ");
+        sql.append(" ORDER BY start_date ASC, name ASC");
+        return select(sql.toString(), args.toArray());
     }
 
     public List<Event> findClosestEvents(int limit) {
@@ -384,15 +589,15 @@ public class EventDao extends AbstractDao<Event> {
     }
 
     public List<Event> findClosestEvents(int limit, SeasonScope scope) {
-        String jpql = "SELECT e FROM Event e WHERE e.startDate > CURRENT_TIMESTAMP";
-        if (scope.isFiltered()) {
-            jpql += " AND e.startDate >= :seasonStart AND e.startDate <= :seasonEnd";
-        }
-        jpql += " ORDER BY e.startDate ASC";
-        TypedQuery<Event> query = em.createQuery(jpql, Event.class);
-        bindSeasonScope(query, scope);
-        query.setMaxResults(limit);
-        return query.getResultList();
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(LIST_COLUMNS)
+                .append(" FROM event WHERE start_date > ?");
+        List<Object> args = Db.args(LocalDateTime.now());
+        appendOrgFilter(sql, args, " AND ");
+        appendSeasonScope(sql, args, scope, "start_date", " AND ");
+        sql.append(" ORDER BY start_date ASC LIMIT ?");
+        args.add(limit);
+        return select(sql.toString(), args.toArray());
     }
 
     public List<Object[]> findTopEventsByParticipants(int limit) {
@@ -400,22 +605,39 @@ public class EventDao extends AbstractDao<Event> {
     }
 
     public List<Object[]> findTopEventsByParticipants(int limit, SeasonScope scope) {
-        String jpql = "SELECT e, COUNT(ps) as participantCount FROM Event e "
-                + "LEFT JOIN e.subscriptions ps ";
-        if (scope.isFiltered()) {
-            jpql += "WHERE e.startDate >= :seasonStart AND e.startDate <= :seasonEnd ";
+        String columns = "e.id, e.org_id, e.name, e.start_date, e.end_date, e.pricecents,"
+                + " e.youngpricecents, e.status_id, e.event_type, e.event_group_id, e.big_event_id";
+        StringBuilder sql = new StringBuilder("SELECT " + columns + ", COUNT(ps.id) AS participant_count FROM event e"
+                + " LEFT JOIN player_subscription ps ON ps.event_id = e.id");
+        List<Object> args = Db.args();
+        appendOrgFilter(sql, args, " WHERE ", "e");
+        appendSeasonScope(sql, args, scope, "e.start_date", args.isEmpty() ? " WHERE " : " AND ");
+        sql.append(" GROUP BY ").append(columns).append(" ORDER BY participant_count DESC LIMIT ?");
+        args.add(limit);
+        List<Object[]> rows = Db.query(
+                sql.toString(),
+                rs -> {
+                    List<Object[]> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(new Object[] {mapRow(rs), rs.getLong("participant_count")});
+                    }
+                    return list;
+                },
+                args.toArray());
+        List<Event> events = new ArrayList<>();
+        for (Object[] row : rows) {
+            events.add((Event) row[0]);
         }
-        jpql += "GROUP BY e.id ORDER BY participantCount DESC";
-        TypedQuery<Object[]> query = em.createQuery(jpql, Object[].class);
-        bindSeasonScope(query, scope);
-        query.setMaxResults(limit);
-        return query.getResultList();
+        hydrate(events);
+        return rows;
     }
 
-    private void bindSeasonScope(TypedQuery<?> query, SeasonScope scope) {
-        if (scope.isFiltered()) {
-            query.setParameter("seasonStart", scope.getStart());
-            query.setParameter("seasonEnd", scope.getEnd());
+    private static void appendSeasonScope(
+            StringBuilder sql, List<Object> args, SeasonScope scope, String column, String keyword) {
+        if (scope != null && scope.isFiltered()) {
+            sql.append(keyword).append(column).append(" >= ? AND ").append(column).append(" <= ?");
+            args.add(scope.getStart());
+            args.add(scope.getEnd());
         }
     }
 }

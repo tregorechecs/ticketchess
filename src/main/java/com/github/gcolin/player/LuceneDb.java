@@ -4,24 +4,18 @@ import com.github.gcolin.platform.Config;
 import com.github.gcolin.player.Club;
 import com.github.gcolin.player.ManualPlayerEntry;
 import com.github.gcolin.player.Player;
-import jakarta.json.bind.Jsonb;
-import jakarta.json.bind.JsonbBuilder;
-import jakarta.json.bind.JsonbConfig;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.LowerCaseFilter;
 import org.apache.lucene.analysis.TokenStream;
@@ -503,25 +497,20 @@ public class LuceneDb {
 
     private List<ManualPlayerEntry> readManualPlayersInternal() throws IOException {
         File file = getManualPlayersFile();
-        if (!file.exists()) {
+        if (!file.exists() || file.length() == 0) {
             return new ArrayList<>();
         }
 
-        if (file.length() == 0) {
-            return new ArrayList<>();
-        }
-
-        Jsonb jsonb = JsonbBuilder.create();
-        try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
-            ManualPlayerEntry[] array = jsonb.fromJson(reader, ManualPlayerEntry[].class);
-            if (array == null || array.length == 0) {
-                return new ArrayList<>();
-            }
+        try {
+            String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            JSONArray array = new JSONArray(text);
             List<ManualPlayerEntry> entries = new ArrayList<>();
-            for (ManualPlayerEntry entry : Arrays.asList(array)) {
-                if (entry == null) {
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject obj = array.optJSONObject(i);
+                if (obj == null) {
                     continue;
                 }
+                ManualPlayerEntry entry = fromManualPlayerJson(obj);
                 entry.normalize();
                 if (entry.getKey() != null && entry.getName() != null) {
                     entries.add(entry);
@@ -530,8 +519,6 @@ public class LuceneDb {
             return entries;
         } catch (RuntimeException e) {
             throw new IOException("cannot parse manual players JSON", e);
-        } finally {
-            closeJsonb(jsonb);
         }
     }
 
@@ -550,22 +537,62 @@ public class LuceneDb {
             }
         }
 
-        List<ManualPlayerEntry> normalized = new ArrayList<>(dedup.values());
-
-        JsonbConfig jsonbConfig = new JsonbConfig().withFormatting(true);
-        Jsonb jsonb = JsonbBuilder.create(jsonbConfig);
-        try (Writer writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
-            jsonb.toJson(normalized, writer);
-        } finally {
-            closeJsonb(jsonb);
+        JSONArray array = new JSONArray();
+        for (ManualPlayerEntry player : dedup.values()) {
+            array.put(toManualPlayerJson(player));
         }
+        Files.writeString(file.toPath(), array.toString(2) + System.lineSeparator(), StandardCharsets.UTF_8);
     }
 
-    private void closeJsonb(Jsonb jsonb) throws IOException {
-        try {
-            jsonb.close();
-        } catch (Exception e) {
-            throw new IOException("cannot close jsonb", e);
+    private static ManualPlayerEntry fromManualPlayerJson(JSONObject obj) {
+        ManualPlayerEntry entry = new ManualPlayerEntry();
+        entry.setNrffe(optString(obj, "nrffe"));
+        entry.setFide(optString(obj, "fide"));
+        entry.setName(optString(obj, "name"));
+        entry.setFirstname(optString(obj, "firstname"));
+        entry.setBirth(optString(obj, "birth"));
+        entry.setCategory(optString(obj, "category"));
+        entry.setAffType(optString(obj, "affType"));
+        entry.setFideCode(optString(obj, "fideCode"));
+        entry.setFideTitre(optString(obj, "fideTitre"));
+        entry.setFederation(optString(obj, "federation"));
+        entry.setClub(optString(obj, "club"));
+        entry.setEloStd(optString(obj, "eloStd"));
+        entry.setEloRapide(optString(obj, "eloRapide"));
+        entry.setEloBlitz(optString(obj, "eloBlitz"));
+        return entry;
+    }
+
+    private static JSONObject toManualPlayerJson(ManualPlayerEntry player) {
+        JSONObject obj = new JSONObject();
+        putIfPresent(obj, "nrffe", player.getNrffe());
+        putIfPresent(obj, "fide", player.getFide());
+        putIfPresent(obj, "name", player.getName());
+        putIfPresent(obj, "firstname", player.getFirstname());
+        putIfPresent(obj, "birth", player.getBirth());
+        putIfPresent(obj, "category", player.getCategory());
+        putIfPresent(obj, "affType", player.getAffType());
+        putIfPresent(obj, "fideCode", player.getFideCode());
+        putIfPresent(obj, "fideTitre", player.getFideTitre());
+        putIfPresent(obj, "federation", player.getFederation());
+        putIfPresent(obj, "club", player.getClub());
+        putIfPresent(obj, "eloStd", player.getEloStd());
+        putIfPresent(obj, "eloRapide", player.getEloRapide());
+        putIfPresent(obj, "eloBlitz", player.getEloBlitz());
+        return obj;
+    }
+
+    private static String optString(JSONObject obj, String key) {
+        if (!obj.has(key) || obj.isNull(key)) {
+            return null;
+        }
+        String value = obj.optString(key, null);
+        return value == null || value.isEmpty() ? null : value;
+    }
+
+    private static void putIfPresent(JSONObject obj, String key, String value) {
+        if (value != null) {
+            obj.put(key, value);
         }
     }
 

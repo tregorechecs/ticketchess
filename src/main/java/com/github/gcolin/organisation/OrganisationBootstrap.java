@@ -3,8 +3,9 @@ package com.github.gcolin.organisation;
 import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.platform.PropertiesFileUpdater;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
+import com.github.gcolin.platform.PersistenceService;
+import com.github.gcolin.platform.RequestContext;
+import javax.sql.DataSource;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -23,52 +24,47 @@ public class OrganisationBootstrap {
     private static final Logger logger = LoggerFactory.getLogger(OrganisationBootstrap.class);
 
     private final Config config;
-    private final EntityManagerFactory emf;
+    private final DataSource dataSource;
 
-    public OrganisationBootstrap(Config config, EntityManagerFactory emf) {
+    public OrganisationBootstrap(Config config, DataSource dataSource) {
         this.config = config;
-        this.emf = emf;
+        this.dataSource = dataSource;
+    }
+
+    public OrganisationBootstrap(Config config, PersistenceService persistence) {
+        this(config, persistence.getDataSource());
     }
 
     public void ensure() {
-        EntityManager em = emf.createEntityManager();
-        try {
-            em.getTransaction().begin();
-            List<Organisation> orgs =
-                    em.createQuery("SELECT o FROM Organisation o ORDER BY o.id", Organisation.class).getResultList();
-            Set<String> migrated = new LinkedHashSet<>();
+        Set<String> migrated = RequestContext.run(dataSource, () -> {
+            OrganisationDao dao = new OrganisationDao();
+            List<Organisation> orgs = dao.allOrdered();
+            Set<String> keys = new LinkedHashSet<>();
             if (orgs.isEmpty()) {
                 Organisation created = OrgConfig.seed(platformProperties());
-                em.persist(created);
-                em.flush();
-                migrated.addAll(collectMigratedKeys(platformProperties()));
+                dao.persist(created);
+                keys.addAll(collectMigratedKeys(platformProperties()));
                 logger.info(
-                        "Created default organisation id={} slug={} from params.properties (club/invoice/stripe/mail)",
+                        "Created default organisation id={} baseUrl={} from params.properties (club/invoice/stripe/mail)",
                         created.getId(),
-                        created.getSlug());
+                        created.getBaseUrl());
             } else {
                 Organisation target = orgs.get(0);
-                migrated.addAll(backfillFromPlatform(target));
-                if (!migrated.isEmpty()) {
+                keys.addAll(backfillFromPlatform(target));
+                if (!keys.isEmpty()) {
+                    dao.merge(target);
                     logger.info(
                             "Migrated {} club/invoice/stripe/mail keys from params.properties into organisation id={}",
-                            migrated.size(),
+                            keys.size(),
                             target.getId());
                 }
             }
-            em.getTransaction().commit();
-            if (!migrated.isEmpty()) {
-                purgePlatformKeys(migrated);
-            }
-            invalidateResolver();
-        } catch (RuntimeException e) {
-            if (em.getTransaction().isActive()) {
-                em.getTransaction().rollback();
-            }
-            throw e;
-        } finally {
-            em.close();
+            return keys;
+        });
+        if (!migrated.isEmpty()) {
+            purgePlatformKeys(migrated);
         }
+        invalidateResolver();
     }
 
     /** Copies platform club/invoice/stripe/mail values into {@code org} when the org value is blank. */

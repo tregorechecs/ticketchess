@@ -1,25 +1,24 @@
 package com.github.gcolin.event;
 
-import jakarta.persistence.*;
+import com.github.gcolin.organisation.OrgOwned;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
-@Entity
-@Table(name = "event_group")
-public class EventGroup {
+public class EventGroup implements OrgOwned {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(nullable = false, length = 255)
+    private Integer orgId;
+
     private String name;
 
-    @Column(nullable = false, length = 255)
     private String shortname;
 
-    @OneToMany(mappedBy = "eventGroup")
     private List<Event> events = new ArrayList<>();
+
+    /** Lazy loader installed by {@code EventGroupDao}; replaces JPA lazy loading of {@link #events}. */
+    private transient Supplier<List<Event>> eventsLoader;
 
     // =========================
     // Constructeurs
@@ -41,6 +40,16 @@ public class EventGroup {
         this.id = id;
     }
 
+    @Override
+    public Integer getOrgId() {
+        return orgId;
+    }
+
+    @Override
+    public void setOrgId(Integer orgId) {
+        this.orgId = orgId;
+    }
+
     public String getName() {
         return name;
     }
@@ -50,11 +59,21 @@ public class EventGroup {
     }
 
     public void setEvents(List<Event> events) {
+        this.eventsLoader = null;
         this.events = events;
     }
 
     public List<Event> getEvents() {
+        if (eventsLoader != null) {
+            Supplier<List<Event>> loader = eventsLoader;
+            eventsLoader = null;
+            events = loader.get();
+        }
         return events;
+    }
+
+    public void setEventsLoader(Supplier<List<Event>> eventsLoader) {
+        this.eventsLoader = eventsLoader;
     }
 
     public String getShortname() {

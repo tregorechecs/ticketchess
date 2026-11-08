@@ -1,6 +1,7 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.platform.Messages;
+import com.github.gcolin.platform.ServiceUtils;
 import com.github.gcolin.player.DisplayPlayer;
 import com.github.gcolin.registration.PlayerSubscriptionStatus;
 import java.net.URLEncoder;
@@ -102,10 +103,8 @@ public final class EventMustacheEnricher {
                 : new HashMap<>();
         model.put("eventOptions", eventOptions);
 
-        if (!model.containsKey("eventInfo")) {
-            Map<String, Object> emptyInfo = new HashMap<>();
-            emptyInfo.put("description", "");
-            model.put("eventInfo", emptyInfo);
+        if (event.getDescription() == null) {
+            event.setDescription("");
         }
 
         model.put("eventHasId", event.getId() != null);
@@ -306,8 +305,10 @@ public final class EventMustacheEnricher {
                                             "myevents.pendingQueue.ahead",
                                             pl.getPendingQueueAhead() != null ? pl.getPendingQueueAhead() : 0));
                 } else {
-                    Double price = pl.getPrice();
-                    playerRow.put("priceDisplay", price != null ? String.valueOf(price) : "");
+                    Long priceCents = pl.getPriceCents();
+                    playerRow.put(
+                            "priceDisplay",
+                            priceCents != null ? String.valueOf(ServiceUtils.toEuros(priceCents)) : "");
                     if (pl.getStatus() != null) {
                         playerRow.put("statusMessageKey", "playerStatus." + pl.getStatus().name());
                         playerRow.put("paid", pl.getStatus() == PlayerSubscriptionStatus.PAID);
@@ -340,7 +341,9 @@ public final class EventMustacheEnricher {
 
     private static Map<String, Object> toRegisterPlayerRow(DisplayPlayer pl) {
         Map<String, Object> row = basePlayerRow(pl);
-        row.put("price", pl.getPrice());
+        row.put(
+                "price",
+                pl.getPriceCents() != null ? ServiceUtils.toEuros(pl.getPriceCents()) : null);
         if (pl.getFideTitre() != null) {
             row.put("fideTitre", pl.getFideTitre());
             row.put("fideTitreMessageKey", "fidetitre." + pl.getFideTitre());

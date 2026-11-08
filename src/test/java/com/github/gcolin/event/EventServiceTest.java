@@ -1,9 +1,6 @@
 package com.github.gcolin.event;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,12 +12,11 @@ import com.github.gcolin.player.IPlayer;
 import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionStatus;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
+import com.github.gcolin.platform.TestDb;
+import java.sql.Connection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,106 +24,81 @@ import org.junit.jupiter.api.Test;
 
 class EventServiceTest {
 
-    private EntityManager em;
+    private Connection connection;
     private EventDao eventService;
     private EventOptionDao eventOptionDao;
     private Find finder;
-    private EventInfoDao eventInfoService;
     private EventGroupDao eventGroupService;
     private PlayerSubscriptionDao playerSubscriptionDao;
     private TestContext testContext;
 
     @BeforeEach
     void setUp() {
-        em = mock(EntityManager.class);
+        connection = TestDb.newConnection();
         eventOptionDao = mock(EventOptionDao.class);
         finder = mock(Find.class);
-        eventInfoService = mock(EventInfoDao.class);
         eventGroupService = mock(EventGroupDao.class);
         playerSubscriptionDao = mock(PlayerSubscriptionDao.class);
-        testContext = TestContext.open(em);
-        eventService = TestContext.createDao(EventDao.class, em);
+        testContext = TestContext.open(connection);
+        eventService = TestContext.createDao(EventDao.class, connection);
         eventService.setFinder(finder);
-        eventService.setEventInfoDao(() -> eventInfoService);
         eventService.setEventGroupDao(() -> eventGroupService);
         eventService.setEventOptionDao(() -> eventOptionDao);
         eventService.setPlayerSubscriptionDao(() -> playerSubscriptionDao);
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         testContext.close();
+        connection.close();
     }
 
-    @SuppressWarnings("unchecked")
+    private Event newEvent(String name, EventStatus status, EventGroup group) {
+        Event event = new Event();
+        event.setName(name);
+        event.setStatus(status);
+        event.setEventType(EventType.STANDARD);
+        event.setPriceCents(1000L);
+        event.setYoungPriceCents(500L);
+        event.setStartDate(java.time.LocalDate.of(2030, 1, 1).atStartOfDay());
+        event.setEndDate(java.time.LocalDate.of(2030, 1, 2).atStartOfDay());
+        event.setEventGroup(group);
+        eventService.persist(event);
+        return event;
+    }
+
     @Test
     void testFindByStatus() {
-        TypedQuery<Event> query = mock(TypedQuery.class);
-
-        Event event = new Event();
-        event.setId(1);
-        event.setName("Chess Tournament 2024");
-        event.setStatus(EventStatus.ACTIVE);
-
-        when(em.createQuery(
-                        "SELECT e FROM Event e where e.status = :status and e.eventGroup is null order by e.startDate ASC, e.name ASC",
-                        Event.class))
-                .thenReturn(query);
-        when(query.setParameter("status", EventStatus.ACTIVE)).thenReturn(query);
-        when(query.getResultList()).thenReturn(List.of(event));
+        Event active = newEvent("Chess Tournament 2024", EventStatus.ACTIVE, null);
+        newEvent("Closed one", EventStatus.COMPLETED, null);
 
         List<Event> result = eventService.findByStatus(EventStatus.ACTIVE);
 
         Assertions.assertEquals(1, result.size());
-        Assertions.assertSame(event, result.get(0));
-        verify(query).setParameter("status", EventStatus.ACTIVE);
+        Assertions.assertEquals(active.getId(), result.get(0).getId());
+        Assertions.assertEquals("Chess Tournament 2024", result.get(0).getName());
+        Assertions.assertEquals(EventStatus.ACTIVE, result.get(0).getStatus());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     void testFindByStatusWithEventGroup() {
-        TypedQuery<Event> query = mock(TypedQuery.class);
-
         EventGroup eventGroup = new EventGroup();
-        eventGroup.setId(10);
+        eventGroup.setName("Group");
+        eventGroup.setShortname("group");
+        new EventGroupDao().persist(eventGroup);
 
-        Event event = new Event();
-        event.setId(2);
-        event.setName("Group Tournament");
-        event.setStatus(EventStatus.ACTIVE);
-        event.setEventGroup(eventGroup);
-
-        when(em.createQuery(
-                        "SELECT e FROM Event e where e.status = :status and e.eventGroup = :eventGroup order by e.startDate ASC, e.name DESC",
-                        Event.class))
-                .thenReturn(query);
-        when(query.setParameter("status", EventStatus.ACTIVE)).thenReturn(query);
-        when(query.setParameter("eventGroup", eventGroup)).thenReturn(query);
-        when(query.getResultList()).thenReturn(List.of(event));
+        Event inGroup = newEvent("Group Tournament", EventStatus.ACTIVE, eventGroup);
+        newEvent("No group", EventStatus.ACTIVE, null);
 
         List<Event> result = eventService.findByStatus(EventStatus.ACTIVE, eventGroup);
 
         Assertions.assertEquals(1, result.size());
-        Assertions.assertSame(event, result.get(0));
-        verify(query).setParameter("status", EventStatus.ACTIVE);
-        verify(query).setParameter("eventGroup", eventGroup);
+        Assertions.assertEquals(inGroup.getId(), result.get(0).getId());
+        Assertions.assertEquals(eventGroup.getId(), result.get(0).getEventGroup().getId());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     void testSaveEvent() {
-        TypedQuery<EventGroup> query = mock(TypedQuery.class);
-        when(em.createQuery("SELECT e FROM EventGroup e where e.id = :id", EventGroup.class))
-                .thenReturn(query);
-
-        doAnswer(invocation -> {
-                    Event event = invocation.getArgument(0);
-                    event.setId(5);
-                    return null;
-                })
-                .when(em)
-                .persist(any(Event.class));
-
         Integer id = eventService.saveEvent(
                 null,
                 "New Tournament",
@@ -144,11 +115,15 @@ class EventServiceTest {
                 "Haley",
                 null);
 
-        Assertions.assertEquals(5, id);
-        verify(eventOptionDao).setOption(5, EventOptionType.ROUNDS, "7");
-        verify(eventOptionDao).setOption(5, EventOptionType.CADENCE, "90");
-        verify(eventOptionDao).setOption(5, EventOptionType.PAIRING, "Haley");
-        verify(eventOptionDao).setOption(5, EventOptionType.MAX_SUBSCRIPTIONS, "");
+        Assertions.assertNotNull(id);
+        Event saved = eventService.find(id);
+        Assertions.assertEquals("New Tournament", saved.getName());
+        Assertions.assertEquals(EventType.BLITZ, saved.getEventType());
+        Assertions.assertEquals(1500L, saved.getPriceCents());
+        verify(eventOptionDao).setOption(id, EventOptionType.ROUNDS, "7");
+        verify(eventOptionDao).setOption(id, EventOptionType.CADENCE, "90");
+        verify(eventOptionDao).setOption(id, EventOptionType.PAIRING, "Haley");
+        verify(eventOptionDao).setOption(id, EventOptionType.MAX_SUBSCRIPTIONS, "");
     }
 
     @Test
@@ -173,13 +148,9 @@ class EventServiceTest {
         Assertions.assertTrue(event1.getSubscriptions().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     void testBuildCache() {
-        Event event = new Event();
-        event.setId(1);
-        event.setName("Test Event");
-        event.setEventType(EventType.STANDARD);
+        Event event = newEvent("Test Event", EventStatus.ACTIVE, null);
         event.setSubscriptions(Collections.emptyList());
 
         PlayerSubscription sub = new PlayerSubscription();
@@ -195,24 +166,15 @@ class EventServiceTest {
         when(player.getFirstname()).thenReturn("John");
         when(player.getRating()).thenReturn("1500");
 
-        TypedQuery<Event> query = mock(TypedQuery.class);
-        when(em.createQuery(anyString(), eq(Event.class))).thenReturn(query);
-        when(query.setParameter("id", 1)).thenReturn(query);
-        when(query.getResultStream()).thenReturn(Stream.of(event));
-
         when(finder.player("123", EventType.STANDARD)).thenReturn(player);
 
-        EventInfo eventInfo = new EventInfo();
-        eventInfo.setDescription("**Test** description");
-        when(eventInfoService.find(event)).thenReturn(eventInfo);
-        when(playerSubscriptionDao.findByEvent(event)).thenReturn(event.getSubscriptions());
+        eventService.updateDescription(event.getId(), "**Test** description");
+        when(playerSubscriptionDao.findByEvent(any(Event.class))).thenReturn(List.of(sub));
 
-        doAnswer(invocation -> invocation.getArgument(0)).when(em).detach(any());
-
-        EventCache cache = eventService.buildCache(1);
+        EventCache cache = eventService.buildCache(event.getId());
 
         Assertions.assertNotNull(cache);
-        Assertions.assertSame(event, cache.event);
+        Assertions.assertEquals(event.getId(), cache.event.getId());
         Assertions.assertEquals(1, cache.players.size());
         DisplayPlayer dp = cache.players.get(0);
         Assertions.assertEquals("Doe", dp.getName());
@@ -225,9 +187,7 @@ class EventServiceTest {
 
     @Test
     void buildCacheShouldCollectMissingPlayerCodes() {
-        Event event = new Event();
-        event.setId(1);
-        event.setEventType(EventType.STANDARD);
+        Event event = newEvent("Missing codes", EventStatus.ACTIVE, null);
 
         PlayerSubscription found = new PlayerSubscription();
         found.setId(1);
@@ -247,20 +207,13 @@ class EventServiceTest {
         when(player.getFirstname()).thenReturn("John");
         when(player.getRating()).thenReturn("1500");
 
-        TypedQuery<Event> query = mock(TypedQuery.class);
-        when(em.createQuery(anyString(), eq(Event.class))).thenReturn(query);
-        when(query.setParameter("id", 1)).thenReturn(query);
-        when(query.getResultStream()).thenReturn(Stream.of(event));
-
         when(finder.player("123", EventType.STANDARD)).thenReturn(player);
         when(finder.player("MISSING", EventType.STANDARD)).thenReturn(null);
-        when(eventInfoService.find(event)).thenReturn(null);
-        when(playerSubscriptionDao.findByEvent(event)).thenReturn(event.getSubscriptions());
-        doAnswer(invocation -> invocation.getArgument(0)).when(em).detach(any());
+        when(playerSubscriptionDao.findByEvent(any(Event.class))).thenReturn(List.of(found, missing));
 
-        EventCache cache = eventService.buildCache(1);
+        EventCache cache = eventService.buildCache(event.getId());
 
-        // Missing FFE codes are still exported as placeholders (for Sharly) and listed separately.
+        // Missing FFE codes are still exported as placeholders and listed separately.
         Assertions.assertEquals(2, cache.players.size());
         Assertions.assertEquals("Doe", cache.players.get(0).getName());
         Assertions.assertEquals("MISSING", cache.players.get(1).getName());

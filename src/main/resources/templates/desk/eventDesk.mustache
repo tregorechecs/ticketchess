@@ -1063,7 +1063,7 @@
 
   function wsUrl() {
     const proto = location.protocol === 'https:' ? "wss:" : "ws:";
-    // Endpoint is /ws/... under the servlet context; /o/{slug} is only for HTTP tenant routing.
+    // Endpoint is /ws/... under the servlet context.
     const wsContext = CONTEXT_PATH.replace(/\/o\/[^/]+$/, '');
     return proto + '//' + location.host + wsContext + '/ws/event/' + currentEventId + '/desk?ticket=' + encodeURIComponent(DESK_TICKET);
   }

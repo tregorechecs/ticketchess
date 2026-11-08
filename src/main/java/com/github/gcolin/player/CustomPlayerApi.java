@@ -15,8 +15,6 @@ import com.github.gcolin.player.CustomPlayerDao;
 import com.github.gcolin.event.EventDao;
 import jakarta.inject.Inject;
 import jakarta.servlet.ServletException;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -25,6 +23,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -60,10 +59,16 @@ public class CustomPlayerApi {
     UriInfo uriInfo;
 
     @GET
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     public MustacheHtml players(
-            @QueryParam("page") @DefaultValue("1") @Min(1) Integer page,
-            @QueryParam("size") @DefaultValue("25") @Max(100) @Min(1) Integer size) {
+            @QueryParam("page") @DefaultValue("1") Integer page,
+            @QueryParam("size") @DefaultValue("25") Integer size) {
+        if (page < 1) {
+            throw new WebApplicationException("page must be >= 1", Response.Status.BAD_REQUEST);
+        }
+        if (size < 1 || size > 100) {
+            throw new WebApplicationException("size must be between 1 and 100", Response.Status.BAD_REQUEST);
+        }
         int start = (page - 1) * size;
 
         PagedList<CustomPlayer> paged = customPlayerService.pageSorted(start, size);
@@ -164,7 +169,7 @@ public class CustomPlayerApi {
 
         if (id != null) {
             player.setId(id);
-            if (loggerUser.hasRole(RoleCode.EVENT_ADMIN)) {
+            if (loggerUser.hasRole(RoleCode.ARBITRE)) {
                 player.setCreationUser(loggerUser.getEmail());
             }
         } else {

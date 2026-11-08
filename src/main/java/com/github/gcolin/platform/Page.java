@@ -5,6 +5,9 @@ public class Page {
     private String title;
     private String contactUrl;
     private boolean clubRegisterEnabled;
+    private boolean membershipsEnabled = true;
+    private boolean eventsEnabled = true;
+    private boolean paymentsEnabled = true;
     private String orgName;
     private String orgEmail;
     private String orgAddress;
@@ -45,6 +48,30 @@ public class Page {
 
     public void setClubRegisterEnabled(boolean clubRegisterEnabled) {
         this.clubRegisterEnabled = clubRegisterEnabled;
+    }
+
+    public boolean isMembershipsEnabled() {
+        return membershipsEnabled;
+    }
+
+    public void setMembershipsEnabled(boolean membershipsEnabled) {
+        this.membershipsEnabled = membershipsEnabled;
+    }
+
+    public boolean isEventsEnabled() {
+        return eventsEnabled;
+    }
+
+    public void setEventsEnabled(boolean eventsEnabled) {
+        this.eventsEnabled = eventsEnabled;
+    }
+
+    public boolean isPaymentsEnabled() {
+        return paymentsEnabled;
+    }
+
+    public void setPaymentsEnabled(boolean paymentsEnabled) {
+        this.paymentsEnabled = paymentsEnabled;
     }
 
     public String getOrgName() {
@@ -186,6 +213,7 @@ public class Page {
     @Override
     public String toString() {
         return "Page [title=" + title + ", contactUrl=" + contactUrl + ", clubRegisterEnabled="
-                + clubRegisterEnabled + ", orgName=" + orgName + "]";
+                + clubRegisterEnabled + ", membershipsEnabled=" + membershipsEnabled + ", eventsEnabled="
+                + eventsEnabled + ", paymentsEnabled=" + paymentsEnabled + ", orgName=" + orgName + "]";
     }
 }

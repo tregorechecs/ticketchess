@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,8 +39,34 @@ public class AdminApi {
 
     private static final Logger logger = LoggerFactory.getLogger(AdminApi.class);
 
-    private static final Set<String> MOVED_ORG_TABS = Set.of("club", "invoice", "files", "stripe");
+    /** Org settings edited under {@code /admin/organisations/{id}}. */
+    private static final Set<String> MOVED_ORG_TABS = Set.of(
+            "club",
+            "features",
+            "identity",
+            "contact",
+            "mail",
+            "invoice",
+            "stripe",
+            "payment",
+            "files",
+            "appearance");
 
+    private static String normalizeMovedOrgTab(String tab) {
+        if (tab == null || tab.isBlank()) {
+            return "features";
+        }
+        String t = tab.trim();
+        if ("club".equals(t)) {
+            return "features";
+        }
+        if ("invoice".equals(t) || "stripe".equals(t)) {
+            return "payment";
+        }
+        return t;
+    }
+
+    /** Platform / SSO settings edited on {@code /admin/org}. */
     static final Map<String, Set<String>> TAB_KEYS = Map.of(
             "oauth",
             Set.of(
@@ -59,11 +86,7 @@ public class AdminApi {
                     "db.name",
                     "db.user",
                     "db.pass",
-                    "db.type",
-                    "db.h2.loadPostgresDump",
-                    "db.h2.postgresDumpFile"));
-
-    static final Set<String> BOOLEAN_KEYS = Set.of("db.h2.loadPostgresDump");
+                    "db.type"));
 
     @Inject
     private LoggedUser user;
@@ -97,13 +120,29 @@ public class AdminApi {
         if (!user.canSeeAdminMenu()) {
             return Response.status(Response.Status.FORBIDDEN).build();
         }
+        Page page = config.pageForRequest();
+        boolean eventsOn = page.isEventsEnabled();
+        boolean membershipsOn = page.isMembershipsEnabled();
+        boolean paymentsOn = page.isPaymentsEnabled();
         Map<String, Object> model = new HashMap<>();
         model.put("success", success);
         model.put(
                 "adminSectionEvent",
-                user.canManageEvents() || user.isAdmin() || user.canManagePayments());
+                (eventsOn || paymentsOn)
+                        && (user.canManageEvents() || user.isAdmin() || user.canManagePayments()));
+        model.put("adminSectionMembership", membershipsOn && user.canManageMemberships());
         model.put("adminSectionUsers", user.canManageEvents() || user.isAdmin());
-        model.put("userCanViewStatistics", user.canManagePayments() || user.canManageEvents());
+        model.put(
+                "userCanViewStatistics",
+                (eventsOn || paymentsOn) && (user.canManagePayments() || user.canManageEvents()));
+        model.put("featureEvents", eventsOn);
+        model.put("featureMemberships", membershipsOn);
+        model.put("featurePayments", paymentsOn);
+        Organisation currentOrg = OrgScope.currentOrg();
+        if (currentOrg != null && currentOrg.getId() != null) {
+            model.put("currentOrgId", currentOrg.getId());
+            model.put("currentOrgName", currentOrg.getName());
+        }
         return Response.ok(new MustacheHtml(model, "platform/admin.mustache"))
                 .build();
     }
@@ -146,40 +185,42 @@ public class AdminApi {
             @QueryParam("success") @DefaultValue("") String success,
             @QueryParam("error") @DefaultValue("") String error,
             @QueryParam("tab") @DefaultValue("oauth") String tab) {
-        String effectiveTab = tab;
+        String effectiveTab = tab == null || tab.isBlank() ? "oauth" : tab.trim();
         if (MOVED_ORG_TABS.contains(effectiveTab)) {
             Organisation current = OrgScope.currentOrg();
             if (current != null && current.getId() != null) {
+                String orgTab = normalizeMovedOrgTab(effectiveTab);
                 var builder = uriInfo.getBaseUriBuilder()
                         .path("admin/organisations")
                         .path(String.valueOf(current.getId()))
-                        .queryParam("tab", effectiveTab);
+                        .queryParam("tab", orgTab);
                 if (success != null && !success.isBlank()) {
                     builder.queryParam("success", success);
                 }
                 if (error != null && !error.isBlank()) {
                     builder.queryParam("error", error);
                 }
-                return Response.seeOther(Redirects.toSameOriginRelative(builder.fragment(effectiveTab).build()))
+                return Response.seeOther(Redirects.toSameOriginRelative(builder.fragment(orgTab).build()))
                         .build();
             }
             effectiveTab = "oauth";
         }
-        boolean platformAdmin = user != null && user.isPlatformAdmin();
-        if ("system".equals(effectiveTab) && !platformAdmin) {
+        if (user == null || !user.isPlatformAdmin()) {
+            return Response.status(Response.Status.FORBIDDEN).build();
+        }
+        if (!TAB_KEYS.containsKey(effectiveTab)) {
             effectiveTab = "oauth";
         }
         Map<String, Object> model = new HashMap<>();
         model.put("success", success);
         model.put("error", error);
         model.put("tab", effectiveTab);
-        model.put("showSystemTab", platformAdmin);
+        model.put("showSystemTab", true);
         model.put("titleKey", "page.adminOrg");
         model.put("publicBaseUrl", config.getPublicBaseUrl());
-        var currentOrg = OrgScope.currentOrg();
+        Organisation currentOrg = OrgScope.currentOrg();
         if (currentOrg != null) {
             model.put("currentOrgName", currentOrg.getName());
-            model.put("currentOrgSlug", currentOrg.getSlug());
             model.put("currentOrgId", currentOrg.getId());
         }
         Map<String, String> cfg = new LinkedHashMap<>(config.getOrgFormValues());
@@ -188,8 +229,13 @@ public class AdminApi {
                 cfg.putIfAbsent(key, "");
             }
         }
-        if (platformAdmin) {
-            cfg.put("baseurl", config.platformProperty("baseurl", ""));
+        for (String key : TAB_KEYS.get("system")) {
+            if ("baseurl".equals(key)) {
+                cfg.put(key, config.platformProperty("baseurl", ""));
+            } else {
+                String platformValue = config.platformProperty(key);
+                cfg.put(key, platformValue == null ? "" : platformValue);
+            }
         }
         model.put("cfg", cfg);
         Map<String, Boolean> secrets = new LinkedHashMap<>();
@@ -206,21 +252,17 @@ public class AdminApi {
     @RequireRole(RoleCode.ADMIN)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response saveConfig(MultivaluedMap<String, String> form) {
+        if (user == null || !user.isPlatformAdmin()) {
+            return Response.status(Response.Status.FORBIDDEN).build();
+        }
         String tab = formValue(form, "tab");
         if (tab == null || !TAB_KEYS.containsKey(tab)) {
             return redirectToOrg("error", "configInvalid", "oauth");
         }
-        if ("system".equals(tab) && (user == null || !user.isPlatformAdmin())) {
-            return Response.status(Response.Status.FORBIDDEN).build();
-        }
         Map<String, String> updates = new LinkedHashMap<>();
         for (String key : TAB_KEYS.get(tab)) {
             String value = formValue(form, key);
-            if (BOOLEAN_KEYS.contains(key)) {
-                updates.put(key, value != null && !value.isBlank() && !"false".equalsIgnoreCase(value) ? "true" : "false");
-            } else {
-                updates.put(key, value == null ? "" : value.trim());
-            }
+            updates.put(key, value == null ? "" : value.trim());
         }
         try {
             config.updateProperties(updates);
@@ -399,8 +441,10 @@ public class AdminApi {
     }
 
     private Response jsonRedirectToOrgFiles(String queryName, String queryValue) {
-        return Response.ok(Map.of("redirect", orgFilesRedirectUri(queryName, queryValue).toString()))
-                .build();
+        String json = new JSONObject()
+                .put("redirect", orgFilesRedirectUri(queryName, queryValue).toString())
+                .toString();
+        return Response.ok(json).build();
     }
 
     private URI orgFilesRedirectUri(String queryName, String queryValue) {

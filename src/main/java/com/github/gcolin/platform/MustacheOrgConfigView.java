@@ -3,7 +3,7 @@ package com.github.gcolin.platform;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Precomputes Mustache-friendly flags and cfg field map for {@code platform/adminOrg.mustache}. */
+/** Precomputes Mustache-friendly flags and cfg field map for organisation admin settings tabs. */
 public final class MustacheOrgConfigView {
 
     private MustacheOrgConfigView() {}
@@ -38,13 +38,25 @@ public final class MustacheOrgConfigView {
         model.put("mailPasswordConfigured", secretConfigured(secrets, "mail.PASSWORD"));
         model.put("dbPassConfigured", secretConfigured(secrets, "db.pass"));
 
+        boolean featureMemberships = cfgTriStateDefaultTrue(cfg, "feature.memberships");
+        boolean featureEvents = cfgTriStateDefaultTrue(cfg, "feature.events");
         model.put("stripeSimuled", cfgIsTrue(cfg, "stripe.simuled", false));
-        model.put("stripeCardEvents", cfgTriStateDefaultTrue(cfg, "stripe.card.events"));
-        model.put("stripeCardMemberships", cfgTriStateDefaultTrue(cfg, "stripe.card.memberships"));
-        model.put("paymentTransferEvents", cfgTriStateDefaultTrue(cfg, "payment.transfer.events"));
-        model.put("paymentTransferMemberships", cfgTriStateDefaultTrue(cfg, "payment.transfer.memberships"));
+        model.put("featureMemberships", featureMemberships);
+        model.put("featureEvents", featureEvents);
+        model.put("featurePayments", cfgTriStateDefaultTrue(cfg, "feature.payments"));
+        model.put(
+                "stripeCardEvents",
+                featureEvents && cfgTriStateDefaultTrue(cfg, "stripe.card.events"));
+        model.put(
+                "stripeCardMemberships",
+                featureMemberships && cfgTriStateDefaultTrue(cfg, "stripe.card.memberships"));
+        model.put(
+                "paymentTransferEvents",
+                featureEvents && cfgTriStateDefaultTrue(cfg, "payment.transfer.events"));
+        model.put(
+                "paymentTransferMemberships",
+                featureMemberships && cfgTriStateDefaultTrue(cfg, "payment.transfer.memberships"));
         model.put("dbTypePostgres", "postgres".equals(String.valueOf(cfg.get("db.type"))));
-        model.put("dbH2LoadPostgresDump", cfgIsTrue(cfg, "db.h2.loadPostgresDump", false));
     }
 
     private static boolean secretConfigured(Map<String, Boolean> secrets, String key) {

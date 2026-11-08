@@ -28,7 +28,7 @@ import java.util.Map;
 import com.github.gcolin.platform.MustacheHtml;
 
 @Path("eventcollection")
-@RequireRole(RoleCode.EVENT_ADMIN)
+@RequireRole(RoleCode.ARBITRE)
 public class EventCollectionApi {
 
     @Inject
@@ -68,8 +68,7 @@ public class EventCollectionApi {
             @FormParam("action") String action,
             @FormParam("id") Integer id,
             @FormParam("name") String name,
-            @FormParam("maxSubscribe") String maxSubscribe,
-            @FormParam("chessEventId") String chessEventId) {
+            @FormParam("maxSubscribe") String maxSubscribe) {
 
         String normalizedMaxSubscribe = normalizeOptionalInteger(maxSubscribe);
         if (maxSubscribe != null && normalizedMaxSubscribe == null) {
@@ -97,10 +96,6 @@ public class EventCollectionApi {
                     eventCollection.getId(),
                     EventCollectionOptionType.MAX_SUBSCRIPTIONS,
                     normalizedMaxSubscribe);
-            eventCollectionOptionService.setOption(
-                    eventCollection.getId(),
-                    EventCollectionOptionType.CHESS_EVENT_ID,
-                    trim(chessEventId));
             invalidateEventCaches();
             registerService.promoteNextPendingSubscriptionInCollection(eventCollection);
             return redirectToEdit(eventCollection.getId(), "save");
@@ -116,6 +111,10 @@ public class EventCollectionApi {
             }
             if (eventCollectionService.countLinkedEvents(id) > 0) {
                 return redirect("error", "linkedEvents");
+            }
+            // no cascade anymore: drop the collection options (FK big_event_id) before the collection itself
+            for (EventCollectionOptionType optionType : EventCollectionOptionType.values()) {
+                eventCollectionOptionService.setOption(eventCollection.getId(), optionType, null);
             }
             eventCollectionService.remove(eventCollection);
             invalidateEventCaches();
@@ -134,8 +133,6 @@ public class EventCollectionApi {
                 eventCollection.getId(),
                 EventCollectionOptionType.MAX_SUBSCRIPTIONS,
                 normalizedMaxSubscribe);
-        eventCollectionOptionService.setOption(
-                eventCollection.getId(), EventCollectionOptionType.CHESS_EVENT_ID, trim(chessEventId));
         invalidateEventCaches();
         return redirectToEdit(eventCollection.getId(), "save");
     }
@@ -147,7 +144,6 @@ public class EventCollectionApi {
         model.put("eventCollection", new EventCollection());
         model.put("createMode", true);
         model.put("error", error);
-        model.put("chessEventId", "");
         return new MustacheHtml(model, "event/eventcollectionEdit.mustache");
     }
 
@@ -170,10 +166,6 @@ public class EventCollectionApi {
         model.put("success", success);
         model.put("error", error);
         model.put("createMode", false);
-        model.put(
-                "chessEventId",
-                eventCollectionOptionService.findOptionValue(
-                        eventCollection.getId(), EventCollectionOptionType.CHESS_EVENT_ID));
         return new MustacheHtml(model, "event/eventcollectionEdit.mustache");
     }
 

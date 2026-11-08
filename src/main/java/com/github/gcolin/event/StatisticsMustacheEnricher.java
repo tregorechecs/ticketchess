@@ -1,6 +1,7 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.platform.Messages;
+import com.github.gcolin.platform.ServiceUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -70,10 +71,12 @@ public final class StatisticsMustacheEnricher {
         if (!model.containsKey("totalPayments") || !model.containsKey("closestEvents")) {
             return;
         }
-        double totalPayments = toDouble(model.get("totalPayments"));
-        double unpaid = toDouble(model.get("unpaidPlayerSubscriptions"));
-        model.put("totalPaymentsFormatted", formatEuro(totalPayments));
-        model.put("totalWithUnpaidFormatted", formatEuro(totalPayments + unpaid));
+        long totalPaymentsCents = toLong(model.get("totalPayments"));
+        long unpaidCents = toLong(model.get("unpaidPlayerSubscriptions"));
+        model.put("totalPaymentsFormatted", formatEuro(ServiceUtils.toEuros(totalPaymentsCents)));
+        model.put(
+                "totalWithUnpaidFormatted",
+                formatEuro(ServiceUtils.toEuros(totalPaymentsCents + unpaidCents)));
 
         @SuppressWarnings("unchecked")
         List<?> closest = (List<?>) model.get("closestEvents");
@@ -194,6 +197,13 @@ public final class StatisticsMustacheEnricher {
             return number.doubleValue();
         }
         return 0.0;
+    }
+
+    private static long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return 0L;
     }
 
     private static int intValue(Object value) {

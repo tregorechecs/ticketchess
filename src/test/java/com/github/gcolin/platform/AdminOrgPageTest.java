@@ -17,24 +17,24 @@ public class AdminOrgPageTest extends PlaywrightBaseTest {
         Page page = browserContext.newPage();
         try {
             login(page);
-            page.navigate(BASE_URL + "/admin/organisations/1?tab=club");
+            page.navigate(BASE_URL + "/admin/organisations/1?tab=identity");
 
             assertEquals(BASE_URL + "/admin/organisations/1", getBaseUrl(page.url()));
             assertThat(page.locator("h1")).containsText("organisation");
 
-            Locator orgName = page.locator("#club input[name='org.name']");
-            Locator title = page.locator("#club input[name='title']");
+            Locator orgName = page.locator("#identity input[name='org.name']");
+            Locator title = page.locator("#identity input[name='title']");
             assertTrue(orgName.inputValue().length() > 0, "org.name should be prefilled");
             assertTrue(title.inputValue().length() > 0, "title should be prefilled");
 
             String updatedName = orgName.inputValue() + " Playwright";
             orgName.fill(updatedName);
-            page.locator("#club button[type='submit']").click();
+            page.locator("#identity button[type='submit']").click();
             page.waitForLoadState();
 
             assertTrue(page.url().contains("success=configSaved"), page.url());
             assertThat(page.locator(".alert-success")).containsText("enregist");
-            assertEquals(updatedName, page.locator("#club input[name='org.name']").inputValue());
+            assertEquals(updatedName, page.locator("#identity input[name='org.name']").inputValue());
         } finally {
             page.close();
         }

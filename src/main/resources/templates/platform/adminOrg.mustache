@@ -28,10 +28,10 @@
             <h1 class="h3 mb-1">{{#i18n}}page.adminOrg{{/i18n}}</h1>
           <p class="text-body-secondary mb-0">{{#i18n}}help.adminOrg{{/i18n}}</p>
           {{#currentOrgName}}
-          <p class="text-body-secondary mb-0 mt-1"><span class="badge text-bg-secondary">{{currentOrgName}}{{#currentOrgSlug}} ({{currentOrgSlug}}){{/currentOrgSlug}}</span></p>
+          <p class="text-body-secondary mb-0 mt-1"><span class="badge text-bg-secondary">{{currentOrgName}}</span></p>
           {{/currentOrgName}}
           {{#currentOrgId}}
-          <p class="mb-0 mt-2"><a href="{{contextPath}}/admin/organisations/{{currentOrgId}}?tab=club">{{#i18n}}admin.tab.club{{/i18n}} / {{#i18n}}admin.tab.invoice{{/i18n}} / {{#i18n}}admin.tab.files{{/i18n}} / {{#i18n}}admin.tab.stripe{{/i18n}}</a></p>
+          <p class="mb-0 mt-2"><a href="{{contextPath}}/admin/organisations/{{currentOrgId}}?tab=features">{{#i18n}}admin.tab.features{{/i18n}} / {{#i18n}}admin.tab.identity{{/i18n}} / {{#i18n}}admin.tab.payment{{/i18n}} / {{#i18n}}admin.tab.files{{/i18n}}</a></p>
           {{/currentOrgId}}
           </div>
         </div>
@@ -112,16 +112,6 @@
                 {{/dbTypePostgres}}
               </select>
             </div>
-            <div class="form-check mb-3">
-              {{#dbH2LoadPostgresDump}}
-              <input class="form-check-input" type="checkbox" name="db.h2.loadPostgresDump" value="true" id="db.h2.loadPostgresDump" checked>
-              {{/dbH2LoadPostgresDump}}{{^dbH2LoadPostgresDump}}
-              <input class="form-check-input" type="checkbox" name="db.h2.loadPostgresDump" value="true" id="db.h2.loadPostgresDump">
-              {{/dbH2LoadPostgresDump}}
-              <label class="form-check-label" for="db.h2.loadPostgresDump">{{#i18n}}admin.field.dbH2LoadDump{{/i18n}}</label>
-            </div>
-            <div class="mb-3"><label class="form-label">{{#i18n}}admin.field.dbH2DumpFile{{/i18n}}</label>
-              <input class="form-control" name="db.h2.postgresDumpFile" value="{{cfgu.db_h2_postgresDumpFile}}"></div>
             <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
           </form>
         </div>

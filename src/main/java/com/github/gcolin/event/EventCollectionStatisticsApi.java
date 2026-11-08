@@ -20,7 +20,7 @@ import java.util.List;
 import com.github.gcolin.platform.MustacheHtml;
 
 @Path("eventcollection/{id:\\d+}/statistics")
-@RequireRole(RoleCode.EVENT_ADMIN)
+@RequireRole(RoleCode.ARBITRE)
 public class EventCollectionStatisticsApi {
 
     @Inject

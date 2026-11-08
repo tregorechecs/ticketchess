@@ -11,7 +11,7 @@
           <li class="breadcrumb-item"><a href="{{contextPath}}/admin/organisations">{{#i18n}}breadcrumb.organisations{{/i18n}}</a></li>
           {{/canEditIdentity}}
           {{^canEditIdentity}}
-          <li class="breadcrumb-item"><a href="{{contextPath}}/admin/org">{{#i18n}}page.adminOrg{{/i18n}}</a></li>
+          <li class="breadcrumb-item"><a href="{{contextPath}}/admin/organisations/{{organisation.id}}">{{#i18n}}page.adminOrg{{/i18n}}</a></li>
           {{/canEditIdentity}}
           <li class="breadcrumb-item active" aria-current="page">{{title}}</li>
         </ol>
@@ -79,39 +79,42 @@
       {{/errorIsConfigSaveFailed}}{{#errorIsConfigInvalid}}
         <div class="alert alert-danger mb-3" role="alert">{{#i18n}}admin.configInvalid{{/i18n}}</div>
       {{/errorIsConfigInvalid}}
-      <div id="rib-status" class="alert d-none mb-3" role="alert"></div>
+      <div id="org-file-status" class="alert d-none mb-3" role="alert"></div>
 
       <div class="admin-table-panel mb-4">
-        <h1 class="h3 mb-3">{{title}}</h1>
+        <div class="d-flex align-items-start gap-3">
+          <i class="bi bi-building fs-2 text-primary"></i>
+          <div>
+            <h1 class="h3 mb-1">{{title}}</h1>
+            {{#editMode}}
+            <p class="text-body-secondary mb-0">{{#i18n}}help.organisationEdit{{/i18n}}</p>
+            {{#organisation.name}}
+            <p class="mb-0 mt-1"><span class="badge text-bg-secondary">{{organisation.name}}</span></p>
+            {{/organisation.name}}
+            {{/editMode}}
+            {{^editMode}}
+            <p class="text-body-secondary mb-0">{{#i18n}}help.organisationNew{{/i18n}}</p>
+            {{/editMode}}
+          </div>
+        </div>
+      </div>
 
-        {{^editMode}}
+      {{^editMode}}
+      <div class="admin-table-panel mb-4">
         <form method="post" action="{{contextPath}}/admin/organisations">
           <div class="row g-3">
-            <div class="col-12 col-md-6">
-              <label for="org_slug" class="form-label">{{#i18n}}label.slug{{/i18n}}</label>
-              <input id="org_slug" type="text" name="slug" class="form-control" value="{{organisation.slug}}" required maxlength="100" pattern="[a-z0-9][a-z0-9-]*">
-            </div>
-            <div class="col-12 col-md-6">
+            <div class="col-12">
               <label for="org_name" class="form-label">{{#i18n}}label.orgName{{/i18n}}</label>
               <input id="org_name" type="text" name="name" class="form-control" value="{{organisation.name}}" required maxlength="255">
             </div>
             <div class="col-12">
               <label for="org_base_url" class="form-label">{{#i18n}}label.baseUrl{{/i18n}}</label>
               <input id="org_base_url" type="url" name="base_url" class="form-control" value="{{organisation.baseUrl}}" required maxlength="500" placeholder="https://club.example.org">
+              <div class="form-text">{{#i18n}}help.orgBaseUrl{{/i18n}}</div>
             </div>
             <div class="col-12">
               <label for="org_super_user_email" class="form-label">{{#i18n}}label.superUserEmail{{/i18n}}</label>
               <input id="org_super_user_email" type="email" name="super_user_email" class="form-control" value="{{organisation.superUserEmail}}" required maxlength="320">
-            </div>
-            <div class="col-12">
-              <label for="org_clone" class="form-label">{{#i18n}}label.cloneFromOrganisation{{/i18n}}</label>
-              <select id="org_clone" name="cloneFromOrgId" class="form-select">
-                <option value="">{{#i18n}}label.none{{/i18n}}</option>
-                {{#organisations}}
-                  <option value="{{id}}" {{#cloneSelected}}selected{{/cloneSelected}}>{{name}} ({{slug}})</option>
-                {{/organisations}}
-              </select>
-              <div class="form-text">{{#i18n}}help.cloneFromOrganisation{{/i18n}}</div>
             </div>
           </div>
           <div class="d-flex justify-content-end gap-2 mt-4">
@@ -119,31 +122,75 @@
             <button type="submit" class="btn btn-primary">{{#i18n}}action.createOrganisation{{/i18n}}</button>
           </div>
         </form>
-        {{/editMode}}
+      </div>
+      {{/editMode}}
 
-        {{#editMode}}
+      {{#editMode}}
+      <div class="admin-table-panel mb-4">
         <ul class="nav nav-tabs rounded-top-2" id="org-tabs" role="tablist">
           <li class="nav-item" role="presentation">
-            <button class="nav-link {{#tabIsclub}}active{{/tabIsclub}}" id="club-tab" data-bs-toggle="tab" data-bs-target="#club" type="button" role="tab">{{#i18n}}admin.tab.club{{/i18n}}</button>
+            <button class="nav-link {{#tabIsfeatures}}active{{/tabIsfeatures}}" id="features-tab" data-bs-toggle="tab" data-bs-target="#features" type="button" role="tab" aria-controls="features" aria-selected="{{#tabIsfeatures}}true{{/tabIsfeatures}}{{^tabIsfeatures}}false{{/tabIsfeatures}}">{{#i18n}}admin.tab.features{{/i18n}}</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link {{#tabIsappearance}}active{{/tabIsappearance}}" id="appearance-tab" data-bs-toggle="tab" data-bs-target="#appearance" type="button" role="tab">{{#i18n}}admin.tab.appearance{{/i18n}}</button>
+            <button class="nav-link {{#tabIsidentity}}active{{/tabIsidentity}}" id="identity-tab" data-bs-toggle="tab" data-bs-target="#identity" type="button" role="tab" aria-controls="identity" aria-selected="{{#tabIsidentity}}true{{/tabIsidentity}}{{^tabIsidentity}}false{{/tabIsidentity}}">{{#i18n}}admin.tab.identity{{/i18n}}</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link {{#tabIsinvoice}}active{{/tabIsinvoice}}" id="invoice-tab" data-bs-toggle="tab" data-bs-target="#invoice" type="button" role="tab">{{#i18n}}admin.tab.invoice{{/i18n}}</button>
+            <button class="nav-link {{#tabIscontact}}active{{/tabIscontact}}" id="contact-tab" data-bs-toggle="tab" data-bs-target="#contact" type="button" role="tab" aria-controls="contact" aria-selected="{{#tabIscontact}}true{{/tabIscontact}}{{^tabIscontact}}false{{/tabIscontact}}">{{#i18n}}admin.tab.contact{{/i18n}}</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link {{#tabIsfiles}}active{{/tabIsfiles}}" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab">{{#i18n}}admin.tab.files{{/i18n}}</button>
+            <button class="nav-link {{#tabIsmail}}active{{/tabIsmail}}" id="mail-tab" data-bs-toggle="tab" data-bs-target="#mail" type="button" role="tab" aria-controls="mail" aria-selected="{{#tabIsmail}}true{{/tabIsmail}}{{^tabIsmail}}false{{/tabIsmail}}">{{#i18n}}admin.tab.mail{{/i18n}}</button>
+          </li>
+          {{#featurePayments}}
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {{#tabIspayment}}active{{/tabIspayment}}" id="payment-tab" data-bs-toggle="tab" data-bs-target="#payment" type="button" role="tab" aria-controls="payment" aria-selected="{{#tabIspayment}}true{{/tabIspayment}}{{^tabIspayment}}false{{/tabIspayment}}">{{#i18n}}admin.tab.payment{{/i18n}}</button>
+          </li>
+          {{/featurePayments}}
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {{#tabIsappearance}}active{{/tabIsappearance}}" id="appearance-tab" data-bs-toggle="tab" data-bs-target="#appearance" type="button" role="tab" aria-controls="appearance" aria-selected="{{#tabIsappearance}}true{{/tabIsappearance}}{{^tabIsappearance}}false{{/tabIsappearance}}">{{#i18n}}admin.tab.appearance{{/i18n}}</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link {{#tabIsstripe}}active{{/tabIsstripe}}" id="stripe-tab" data-bs-toggle="tab" data-bs-target="#stripe" type="button" role="tab">{{#i18n}}admin.tab.stripe{{/i18n}}</button>
+            <button class="nav-link {{#tabIsfiles}}active{{/tabIsfiles}}" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab" aria-controls="files" aria-selected="{{#tabIsfiles}}true{{/tabIsfiles}}{{^tabIsfiles}}false{{/tabIsfiles}}">{{#i18n}}admin.tab.files{{/i18n}}</button>
           </li>
         </ul>
 
         <div class="tab-content rounded-bottom p-3 border border-top-0">
-          <div class="tab-pane fade {{#tabIsclub}}show active{{/tabIsclub}}" id="club" role="tabpanel">
+          <div class="tab-pane fade {{#tabIsfeatures}}show active{{/tabIsfeatures}}" id="features" role="tabpanel" aria-labelledby="features-tab">
             <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
-              <input type="hidden" name="tab" value="club">
+              <input type="hidden" name="tab" value="features">
+              <p class="text-body-secondary small mb-3">{{#i18n}}help.adminFeatures{{/i18n}}</p>
+              <div class="form-check mb-2">
+                {{#featureMemberships}}
+                <input class="form-check-input" type="checkbox" name="feature.memberships" value="true" id="feature.memberships" checked>
+                {{/featureMemberships}}{{^featureMemberships}}
+                <input class="form-check-input" type="checkbox" name="feature.memberships" value="true" id="feature.memberships">
+                {{/featureMemberships}}
+                <label class="form-check-label" for="feature.memberships">{{#i18n}}admin.features.memberships{{/i18n}}</label>
+              </div>
+              <div class="form-check mb-2">
+                {{#featureEvents}}
+                <input class="form-check-input" type="checkbox" name="feature.events" value="true" id="feature.events" checked>
+                {{/featureEvents}}{{^featureEvents}}
+                <input class="form-check-input" type="checkbox" name="feature.events" value="true" id="feature.events">
+                {{/featureEvents}}
+                <label class="form-check-label" for="feature.events">{{#i18n}}admin.features.events{{/i18n}}</label>
+              </div>
+              <div class="form-check mb-3">
+                {{#featurePayments}}
+                <input class="form-check-input" type="checkbox" name="feature.payments" value="true" id="feature.payments" checked>
+                {{/featurePayments}}{{^featurePayments}}
+                <input class="form-check-input" type="checkbox" name="feature.payments" value="true" id="feature.payments">
+                {{/featurePayments}}
+                <label class="form-check-label" for="feature.payments">{{#i18n}}admin.features.payments{{/i18n}}</label>
+              </div>
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="tab-pane fade {{#tabIsidentity}}show active{{/tabIsidentity}}" id="identity" role="tabpanel" aria-labelledby="identity-tab">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
+              <input type="hidden" name="tab" value="identity">
               <div class="mb-3"><label class="form-label" for="title">{{#i18n}}admin.field.title{{/i18n}}</label>
                 <input class="form-control" id="title" name="title" value="{{cfgu.title}}"></div>
               <div class="mb-3"><label class="form-label" for="org.name">{{#i18n}}admin.field.orgName{{/i18n}}</label>
@@ -152,53 +199,290 @@
               <div class="mb-3">
                 <label for="org_base_url" class="form-label">{{#i18n}}label.baseUrl{{/i18n}}</label>
                 <input id="org_base_url" type="url" name="base_url" class="form-control" value="{{organisation.baseUrl}}" required maxlength="500" placeholder="https://club.example.org">
+                <div class="form-text">{{#i18n}}help.orgBaseUrl{{/i18n}} — {{#i18n}}admin.field.publicBaseUrl{{/i18n}}: <code>{{publicBaseUrl}}</code></div>
               </div>
               <div class="mb-3">
                 <label for="org_super_user_email" class="form-label">{{#i18n}}label.superUserEmail{{/i18n}}</label>
                 <input id="org_super_user_email" type="email" name="super_user_email" class="form-control" value="{{organisation.superUserEmail}}" required maxlength="320">
               </div>
+              {{/canEditIdentity}}
+              {{^canEditIdentity}}
               <div class="mb-3">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="org_active" name="active" value="true" {{#organisation.active}}checked{{/organisation.active}}>
-                  <label class="form-check-label" for="org_active">{{#i18n}}label.active{{/i18n}}</label>
-                </div>
+                <label class="form-label" for="org_public_base_url">{{#i18n}}label.baseUrl{{/i18n}}</label>
+                <input id="org_public_base_url" class="form-control" value="{{publicBaseUrl}}" readonly>
+                <div class="form-text">{{#i18n}}help.adminField.publicBaseUrl{{/i18n}}</div>
               </div>
               {{/canEditIdentity}}
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="tab-pane fade {{#tabIscontact}}show active{{/tabIscontact}}" id="contact" role="tabpanel" aria-labelledby="contact-tab">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
+              <input type="hidden" name="tab" value="contact">
               <div class="mb-3"><label class="form-label" for="contact.url">{{#i18n}}admin.field.contactUrl{{/i18n}}</label>
                 <input class="form-control" id="contact.url" name="contact.url" value="{{cfgu.contact_url}}"></div>
-              <div class="mb-3"><label class="form-label" for="source.url">{{#i18n}}admin.field.sourceUrl{{/i18n}}</label>
-                <input class="form-control" id="source.url" name="source.url" type="url" value="{{cfgu.source_url}}" placeholder="https://github.com/owner/ticketchess">
-                <div class="form-text">{{#i18n}}help.adminField.sourceUrl{{/i18n}}</div></div>
               <div class="mb-3"><label class="form-label" for="org.email">{{#i18n}}admin.field.orgEmail{{/i18n}}</label>
                 <input class="form-control" id="org.email" name="org.email" type="email" value="{{cfgu.org_email}}"></div>
               <div class="mb-3"><label class="form-label" for="org.address">{{#i18n}}admin.field.orgAddress{{/i18n}}</label>
                 <input class="form-control" id="org.address" name="org.address" value="{{cfgu.org_address}}"></div>
-              <div class="mb-3"><label class="form-label" for="org.hosting.address">{{#i18n}}admin.field.orgHosting{{/i18n}}</label>
-                <input class="form-control" id="org.hosting.address" name="org.hosting.address" value="{{cfgu.org_hosting_address}}"></div>
-              <div class="mb-3">
-                <label class="form-label" for="membership.notif.emails">{{#i18n}}admin.field.membershipNotifEmails{{/i18n}}</label>
-                {{#clubRegisterEnabled}}<span class="badge text-bg-success mb-1">{{#i18n}}admin.clubRegister.enabled{{/i18n}}</span>{{/clubRegisterEnabled}}{{^clubRegisterEnabled}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.clubRegister.disabled{{/i18n}}</span>{{/clubRegisterEnabled}}
-                <input class="form-control" id="membership.notif.emails" name="membership.notif.emails" value="{{cfgu.membership_notif_emails}}" placeholder="admin@club.fr, tresorier@club.fr">
-                <div class="form-text">{{#i18n}}help.adminField.membershipNotifEmails{{/i18n}}</div>
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
               </div>
+            </form>
+          </div>
+
+          <div class="tab-pane fade {{#tabIsmail}}show active{{/tabIsmail}}" id="mail" role="tabpanel" aria-labelledby="mail-tab">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
+              <input type="hidden" name="tab" value="mail">
               <div class="mb-3"><label class="form-label" for="mail.USER_NAME">{{#i18n}}admin.field.mailUser{{/i18n}}</label>
                 <input class="form-control" id="mail.USER_NAME" name="mail.USER_NAME" value="{{cfgu.mail_USER_NAME}}"></div>
               <div class="mb-3"><label class="form-label" for="mail.PASSWORD">{{#i18n}}admin.field.mailPassword{{/i18n}}</label>
                 {{#mailPasswordConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/mailPasswordConfigured}}{{^mailPasswordConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/mailPasswordConfigured}}
                 <input class="form-control" id="mail.PASSWORD" type="password" name="mail.PASSWORD" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}"></div>
+              {{#featureMemberships}}
               <div class="mb-3">
-                <label class="form-label">{{#i18n}}admin.field.publicBaseUrl{{/i18n}}</label>
-                <input class="form-control" value="{{publicBaseUrl}}" readonly>
-                <div class="form-text">{{#i18n}}help.adminField.publicBaseUrl{{/i18n}}</div>
+                <label class="form-label" for="membership.notif.emails">{{#i18n}}admin.field.membershipNotifEmails{{/i18n}}</label>
+                <input class="form-control" id="membership.notif.emails" name="membership.notif.emails" value="{{cfgu.membership_notif_emails}}" placeholder="admin@club.fr, tresorier@club.fr">
+                <div class="form-text">{{#i18n}}help.adminField.membershipNotifEmails{{/i18n}}</div>
               </div>
-              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+              {{/featureMemberships}}
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+              </div>
             </form>
           </div>
 
-          <div class="tab-pane fade {{#tabIsappearance}}show active{{/tabIsappearance}}" id="appearance" role="tabpanel">
+          {{#featurePayments}}
+          <div class="tab-pane fade {{#tabIspayment}}show active{{/tabIspayment}}" id="payment" role="tabpanel" aria-labelledby="payment-tab">
+            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config" id="org-stripe-form">
+              <input type="hidden" name="tab" value="payment">
+
+              <fieldset class="mb-4">
+                <legend class="h6">{{#i18n}}admin.section.paymentStripe{{/i18n}}</legend>
+                <div class="form-check mb-3">
+                  {{#stripeSimuled}}
+                  <input class="form-check-input" type="checkbox" name="stripe.simuled" value="true" id="stripe.simuled" checked>
+                  {{/stripeSimuled}}{{^stripeSimuled}}
+                  <input class="form-check-input" type="checkbox" name="stripe.simuled" value="true" id="stripe.simuled">
+                  {{/stripeSimuled}}
+                  <label class="form-check-label" for="stripe.simuled">{{#i18n}}admin.field.stripeSimuled{{/i18n}}</label>
+                </div>
+                <div class="mb-3" id="stripe-public-wrap">
+                  <label class="form-label" for="stripe.public" id="stripe-public-label">{{#i18n}}admin.field.stripePublic{{/i18n}}</label>
+                  <input class="form-control" id="stripe.public" name="stripe.public" value="{{cfgu.stripe_public}}">
+                </div>
+                <div class="mb-3" id="stripe-secret-wrap">
+                  <label class="form-label" for="stripe.secret" id="stripe-secret-label">{{#i18n}}admin.field.stripeSecret{{/i18n}}</label>
+                  {{#stripeSecretConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/stripeSecretConfigured}}{{^stripeSecretConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/stripeSecretConfigured}}
+                  <input class="form-control" id="stripe.secret" type="password" name="stripe.secret" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}">
+                </div>
+                <div class="mb-0" id="stripe-prefix-wrap">
+                  <label class="form-label" for="stripe.keyprefix" id="stripe-prefix-label">{{#i18n}}admin.field.stripePrefix{{/i18n}}</label>
+                  <input class="form-control" id="stripe.keyprefix" name="stripe.keyprefix" value="{{cfgu.stripe_keyprefix}}">
+                </div>
+              </fieldset>
+
+              <fieldset class="mb-4">
+                <legend class="h6">{{#i18n}}admin.section.paymentMethods{{/i18n}}</legend>
+                {{#featureEvents}}
+                <div class="form-check mb-3">
+                  {{#stripeCardEvents}}
+                  <input class="form-check-input" type="checkbox" name="stripe.card.events" value="true" id="stripe.card.events" checked>
+                  {{/stripeCardEvents}}{{^stripeCardEvents}}
+                  <input class="form-check-input" type="checkbox" name="stripe.card.events" value="true" id="stripe.card.events">
+                  {{/stripeCardEvents}}
+                  <label class="form-check-label" for="stripe.card.events" id="stripe-card-events-label">{{#i18n}}admin.field.stripeCardEvents{{/i18n}}</label>
+                </div>
+                {{/featureEvents}}
+                {{#featureMemberships}}
+                <div class="form-check mb-3">
+                  {{#stripeCardMemberships}}
+                  <input class="form-check-input" type="checkbox" name="stripe.card.memberships" value="true" id="stripe.card.memberships" checked>
+                  {{/stripeCardMemberships}}{{^stripeCardMemberships}}
+                  <input class="form-check-input" type="checkbox" name="stripe.card.memberships" value="true" id="stripe.card.memberships">
+                  {{/stripeCardMemberships}}
+                  <label class="form-check-label" for="stripe.card.memberships" id="stripe-card-memberships-label">{{#i18n}}admin.field.stripeCardMemberships{{/i18n}}</label>
+                </div>
+                {{/featureMemberships}}
+                {{^ribAvailable}}
+                {{#featureEvents}}
+                <div class="alert alert-warning mb-3" role="alert">
+                  {{#i18n}}admin.stripeTransferRequiresRibBefore{{/i18n}}
+                  <a href="#files">{{#i18n}}admin.tab.files{{/i18n}}</a>{{#i18n}}admin.stripeTransferRequiresRibAfter{{/i18n}}
+                </div>
+                {{/featureEvents}}
+                {{^featureEvents}}{{#featureMemberships}}
+                <div class="alert alert-warning mb-3" role="alert">
+                  {{#i18n}}admin.stripeTransferRequiresRibBefore{{/i18n}}
+                  <a href="#files">{{#i18n}}admin.tab.files{{/i18n}}</a>{{#i18n}}admin.stripeTransferRequiresRibAfter{{/i18n}}
+                </div>
+                {{/featureMemberships}}{{/featureEvents}}
+                {{/ribAvailable}}
+                {{#featureEvents}}
+                <div class="form-check mb-3">
+                  {{^ribAvailable}}
+                  <input class="form-check-input" type="checkbox" value="true" id="payment.transfer.events" disabled>
+                  {{/ribAvailable}}{{#ribAvailable}}{{#paymentTransferEvents}}
+                  <input class="form-check-input" type="checkbox" name="payment.transfer.events" value="true" id="payment.transfer.events" checked>
+                  {{/paymentTransferEvents}}{{^paymentTransferEvents}}
+                  <input class="form-check-input" type="checkbox" name="payment.transfer.events" value="true" id="payment.transfer.events">
+                  {{/paymentTransferEvents}}{{/ribAvailable}}
+                  <label class="form-check-label {{^ribAvailable}}text-body-secondary{{/ribAvailable}}" for="payment.transfer.events">{{#i18n}}admin.field.paymentTransferEvents{{/i18n}}</label>
+                </div>
+                {{/featureEvents}}
+                {{#featureMemberships}}
+                <div class="form-check mb-0">
+                  {{^ribAvailable}}
+                  <input class="form-check-input" type="checkbox" value="true" id="payment.transfer.memberships" disabled>
+                  {{/ribAvailable}}{{#ribAvailable}}{{#paymentTransferMemberships}}
+                  <input class="form-check-input" type="checkbox" name="payment.transfer.memberships" value="true" id="payment.transfer.memberships" checked>
+                  {{/paymentTransferMemberships}}{{^paymentTransferMemberships}}
+                  <input class="form-check-input" type="checkbox" name="payment.transfer.memberships" value="true" id="payment.transfer.memberships">
+                  {{/paymentTransferMemberships}}{{/ribAvailable}}
+                  <label class="form-check-label {{^ribAvailable}}text-body-secondary{{/ribAvailable}}" for="payment.transfer.memberships">{{#i18n}}admin.field.paymentTransferMemberships{{/i18n}}</label>
+                </div>
+                {{/featureMemberships}}
+              </fieldset>
+
+              <fieldset class="mb-4">
+                <legend class="h6">{{#i18n}}admin.section.invoiceAddress{{/i18n}}</legend>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label" for="invoice.seller.address2">{{#i18n}}admin.field.sellerAddress2{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.address2" name="invoice.seller.address2" value="{{cfgu.invoice_seller_address2}}">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label" for="invoice.seller.zip">{{#i18n}}admin.field.sellerZip{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.zip" name="invoice.seller.zip" value="{{cfgu.invoice_seller_zip}}">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label" for="invoice.seller.city">{{#i18n}}admin.field.sellerCity{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.city" name="invoice.seller.city" value="{{cfgu.invoice_seller_city}}">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="invoice.seller.country">{{#i18n}}admin.field.sellerCountry{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.country" name="invoice.seller.country" value="{{cfgu.invoice_seller_country}}">
+                  </div>
+                  <div class="col-md-8">
+                    <label class="form-label" for="invoice.seller.phone">{{#i18n}}admin.field.sellerPhone{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.phone" name="invoice.seller.phone" value="{{cfgu.invoice_seller_phone}}">
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="mb-4">
+                <legend class="h6">{{#i18n}}admin.section.invoiceLegal{{/i18n}}</legend>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label" for="invoice.seller.siret">{{#i18n}}admin.field.sellerSiret{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.siret" name="invoice.seller.siret" value="{{cfgu.invoice_seller_siret}}">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="invoice.seller.rna">{{#i18n}}admin.field.sellerRna{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.rna" name="invoice.seller.rna" value="{{cfgu.invoice_seller_rna}}">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label" for="invoice.seller.prefecture">{{#i18n}}admin.field.sellerPrefecture{{/i18n}}</label>
+                    <input class="form-control" id="invoice.seller.prefecture" name="invoice.seller.prefecture" value="{{cfgu.invoice_seller_prefecture}}">
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="mb-4">
+                <legend class="h6">{{#i18n}}admin.section.invoiceSettings{{/i18n}}</legend>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label" for="invoice.number.prefix">{{#i18n}}admin.field.invoicePrefix{{/i18n}}</label>
+                    <input class="form-control" id="invoice.number.prefix" name="invoice.number.prefix" value="{{cfgu.invoice_number_prefix}}">
+                  </div>
+                  <div class="col-md-8">
+                    <label class="form-label" for="invoice.footer">{{#i18n}}admin.field.invoiceFooter{{/i18n}}</label>
+                    <input class="form-control" id="invoice.footer" name="invoice.footer" value="{{cfgu.invoice_footer}}">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label" for="invoice.vat.notice">{{#i18n}}admin.field.invoiceVat{{/i18n}}</label>
+                    <input class="form-control" id="invoice.vat.notice" name="invoice.vat.notice" value="{{cfgu.invoice_vat_notice}}">
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="mb-4">
+                <legend class="h6">{{#i18n}}admin.section.donationAttestation{{/i18n}}</legend>
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label" for="invoice.donation.object">{{#i18n}}admin.field.donationObject{{/i18n}}</label>
+                    <input class="form-control" id="invoice.donation.object" name="invoice.donation.object" value="{{cfgu.invoice_donation_object}}">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="invoice.donation.signatory">{{#i18n}}admin.field.donationSignatory{{/i18n}}</label>
+                    <input class="form-control" id="invoice.donation.signatory" name="invoice.donation.signatory" value="{{cfgu.invoice_donation_signatory}}">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="invoice.donation.signatoryTitle">{{#i18n}}admin.field.donationSignatoryTitle{{/i18n}}</label>
+                    <input class="form-control" id="invoice.donation.signatoryTitle" name="invoice.donation.signatoryTitle" value="{{cfgu.invoice_donation_signatoryTitle}}">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="invoice.donation.prefix">{{#i18n}}admin.field.donationPrefix{{/i18n}}</label>
+                    <input class="form-control" id="invoice.donation.prefix" name="invoice.donation.prefix" value="{{cfgu.invoice_donation_prefix}}">
+                  </div>
+                </div>
+              </fieldset>
+
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+              </div>
+            </form>
+            <script>
+              (function () {
+                var simuled = document.getElementById('stripe.simuled');
+                var publicKey = document.getElementById('stripe.public');
+                var secretKey = document.getElementById('stripe.secret');
+                var prefix = document.getElementById('stripe.keyprefix');
+                var cardEvents = document.getElementById('stripe.card.events');
+                var cardMemberships = document.getElementById('stripe.card.memberships');
+                var keyFields = [
+                  { input: publicKey, label: document.getElementById('stripe-public-label') },
+                  { input: secretKey, label: document.getElementById('stripe-secret-label') },
+                  { input: prefix, label: document.getElementById('stripe-prefix-label') }
+                ];
+                var cardFields = [
+                  { input: cardEvents, label: document.getElementById('stripe-card-events-label') },
+                  { input: cardMemberships, label: document.getElementById('stripe-card-memberships-label') }
+                ];
+                function setDisabled(fields, disabled, uncheckWhenDisabled) {
+                  fields.forEach(function (field) {
+                    if (!field.input) return;
+                    field.input.disabled = disabled;
+                    if (disabled && uncheckWhenDisabled) {
+                      field.input.checked = false;
+                    }
+                    if (field.label) {
+                      field.label.classList.toggle('text-body-secondary', disabled);
+                    }
+                  });
+                }
+                function syncStripeForm() {
+                  if (!simuled) return;
+                  var simulate = simuled.checked;
+                  setDisabled(keyFields, simulate, false);
+                  var publicBlank = !publicKey || !publicKey.value.trim();
+                  setDisabled(cardFields, !simulate && publicBlank, true);
+                }
+                if (simuled) simuled.addEventListener('change', syncStripeForm);
+                if (publicKey) publicKey.addEventListener('input', syncStripeForm);
+                syncStripeForm();
+              })();
+            </script>
+          </div>
+          {{/featurePayments}}
+
+          <div class="tab-pane fade {{#tabIsappearance}}show active{{/tabIsappearance}}" id="appearance" role="tabpanel" aria-labelledby="appearance-tab">
             <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config" id="org-appearance-form">
               <input type="hidden" name="tab" value="appearance">
-              <p class="text-muted mb-3">{{#i18n}}help.adminField.appearance{{/i18n}}</p>
+              <p class="text-body-secondary mb-3">{{#i18n}}help.adminField.appearance{{/i18n}}</p>
               <div class="row g-3 mb-4">
                 <div class="col-12 col-md-4">
                   <label class="form-label" for="ui_primaryColor">{{#i18n}}admin.field.primaryColor{{/i18n}}</label>
@@ -226,12 +510,14 @@
               <div id="ui-appearance-preview" class="rounded border p-3 mb-4" style="background: color-mix(in srgb, var(--preview-secondary, {{cfgu.ui_secondaryColor}}) 35%, white);">
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                   <strong id="ui-preview-title" style="color: var(--preview-primary, {{cfgu.ui_primaryColor}});">{{#i18n}}admin.appearance.preview{{/i18n}}</strong>
-                  <button type="button" class="btn btn-sm btn-primary" id="ui-preview-btn" style="background-color: var(--preview-primary, {{cfgu.ui_primaryColor}}); border-color: var(--preview-primary, {{cfgu.ui_primaryColor}});">{{#i18n}}action.save{{/i18n}}</button>
+                  <button type="button" class="btn btn-sm btn-primary" id="ui-preview-btn" style="background-color: var(--preview-primary, {{cfgu.ui_primaryColor}}); border-color: var(--preview-primary, {{cfgu.ui_primaryColor}});">{{#i18n}}admin.appearance.sampleAction{{/i18n}}</button>
                   <span class="badge" id="ui-preview-badge" style="background-color: var(--preview-secondary, {{cfgu.ui_secondaryColor}}); color: #2d1d15;">{{#i18n}}admin.tab.appearance{{/i18n}}</span>
                 </div>
                 <p class="mb-0 small" id="ui-preview-text">{{#i18n}}help.adminField.appearancePreview{{/i18n}}</p>
               </div>
-              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
+              </div>
             </form>
             <script>
               (function () {
@@ -284,236 +570,117 @@
             </script>
           </div>
 
-          <div class="tab-pane fade {{#tabIsinvoice}}show active{{/tabIsinvoice}}" id="invoice" role="tabpanel">
-            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
-              <input type="hidden" name="tab" value="invoice">
-              <div class="row">
-                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerAddress2{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.address2" value="{{cfgu.invoice_seller_address2}}"></div>
-                <div class="col-md-3 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerZip{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.zip" value="{{cfgu.invoice_seller_zip}}"></div>
-                <div class="col-md-5 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerCity{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.city" value="{{cfgu.invoice_seller_city}}"></div>
-                <div class="col-md-4 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerCountry{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.country" value="{{cfgu.invoice_seller_country}}"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerPhone{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.phone" value="{{cfgu.invoice_seller_phone}}"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerSiret{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.siret" value="{{cfgu.invoice_seller_siret}}"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerRna{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.rna" value="{{cfgu.invoice_seller_rna}}"></div>
-                <div class="col-12 mb-3"><label class="form-label">{{#i18n}}admin.field.sellerPrefecture{{/i18n}}</label>
-                  <input class="form-control" name="invoice.seller.prefecture" value="{{cfgu.invoice_seller_prefecture}}"></div>
-                <div class="col-md-4 mb-3"><label class="form-label">{{#i18n}}admin.field.invoicePrefix{{/i18n}}</label>
-                  <input class="form-control" name="invoice.number.prefix" value="{{cfgu.invoice_number_prefix}}"></div>
-                <div class="col-md-8 mb-3"><label class="form-label">{{#i18n}}admin.field.invoiceFooter{{/i18n}}</label>
-                  <input class="form-control" name="invoice.footer" value="{{cfgu.invoice_footer}}"></div>
-                <div class="col-12 mb-3"><label class="form-label">{{#i18n}}admin.field.invoiceVat{{/i18n}}</label>
-                  <input class="form-control" name="invoice.vat.notice" value="{{cfgu.invoice_vat_notice}}"></div>
-                <div class="col-12"><hr class="my-2"><h6 class="text-body-secondary">{{#i18n}}admin.section.donationAttestation{{/i18n}}</h6></div>
-                <div class="col-12 mb-3"><label class="form-label">{{#i18n}}admin.field.donationObject{{/i18n}}</label>
-                  <input class="form-control" name="invoice.donation.object" value="{{cfgu.invoice_donation_object}}"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.donationSignatory{{/i18n}}</label>
-                  <input class="form-control" name="invoice.donation.signatory" value="{{cfgu.invoice_donation_signatory}}"></div>
-                <div class="col-md-6 mb-3"><label class="form-label">{{#i18n}}admin.field.donationSignatoryTitle{{/i18n}}</label>
-                  <input class="form-control" name="invoice.donation.signatoryTitle" value="{{cfgu.invoice_donation_signatoryTitle}}"></div>
-                <div class="col-md-4 mb-3"><label class="form-label">{{#i18n}}admin.field.donationPrefix{{/i18n}}</label>
-                  <input class="form-control" name="invoice.donation.prefix" value="{{cfgu.invoice_donation_prefix}}"></div>
-              </div>
-              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
-            </form>
-          </div>
-
-          <div class="tab-pane fade {{#tabIsfiles}}show active{{/tabIsfiles}}" id="files" role="tabpanel">
+          <div class="tab-pane fade {{#tabIsfiles}}show active{{/tabIsfiles}}" id="files" role="tabpanel" aria-labelledby="files-tab">
             <div class="row g-4">
               <div class="col-md-6 col-xl-3">
-                <h2 class="h5 mb-3">{{#i18n}}admin.logo.current{{/i18n}}</h2>
-                {{#logoAvailable}}
-                  <img src="{{contextPath}}/admin/organisations/{{organisation.id}}/files/logo" alt="" class="img-fluid mb-3 border rounded" style="max-height: 80px;">
-                  <div class="mb-3">
-                    <button class="btn btn-outline-danger" type="button" id="logo-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                <div class="card h-100">
+                  <div class="card-body d-flex flex-column">
+                    <h2 class="h5 mb-3">{{#i18n}}admin.logo.current{{/i18n}}</h2>
+                    <div class="mb-3 d-flex align-items-center justify-content-center border rounded bg-body-tertiary" style="min-height: 96px;">
+                      {{#logoAvailable}}
+                        <img src="{{contextPath}}/admin/organisations/{{organisation.id}}/files/logo" alt="{{#i18n}}admin.logo.current{{/i18n}}" class="img-fluid" style="max-height: 80px;">
+                      {{/logoAvailable}}{{^logoAvailable}}
+                        <p class="text-body-secondary mb-0 small px-2 text-center">{{#i18n}}admin.logo.missing{{/i18n}}</p>
+                      {{/logoAvailable}}
+                    </div>
+                    {{#logoAvailable}}
+                    <div class="mb-3">
+                      <button class="btn btn-outline-danger btn-sm" type="button" id="logo-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                    </div>
+                    {{/logoAvailable}}
+                    <form id="logo-upload-form" class="mt-auto">
+                      <div class="mb-3">
+                        <label class="form-label" for="logo-file">{{#i18n}}admin.logo.fileLabel{{/i18n}}</label>
+                        <input class="form-control" type="file" id="logo-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
+                      </div>
+                      <button class="btn btn-primary" type="submit" id="logo-upload-btn">{{#i18n}}admin.logo.upload{{/i18n}}</button>
+                    </form>
                   </div>
-                {{/logoAvailable}}{{^logoAvailable}}
-                  <p class="text-body-secondary">{{#i18n}}admin.logo.missing{{/i18n}}</p>
-                {{/logoAvailable}}
-                <form id="logo-upload-form">
-                  <div class="mb-3">
-                    <label class="form-label" for="logo-file">{{#i18n}}admin.logo.fileLabel{{/i18n}}</label>
-                    <input class="form-control" type="file" id="logo-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
-                  </div>
-                  <button class="btn btn-primary" type="submit" id="logo-upload-btn">{{#i18n}}admin.logo.upload{{/i18n}}</button>
-                </form>
+                </div>
               </div>
               <div class="col-md-6 col-xl-3">
-                <h2 class="h5 mb-3">{{#i18n}}admin.signature.current{{/i18n}}</h2>
-                {{#signatureAvailable}}
-                  <img src="{{contextPath}}/admin/organisations/{{organisation.id}}/files/signature" alt="" class="img-fluid mb-3 border rounded bg-white" style="max-height: 80px;">
-                  <div class="mb-3">
-                    <button class="btn btn-outline-danger" type="button" id="signature-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                <div class="card h-100">
+                  <div class="card-body d-flex flex-column">
+                    <h2 class="h5 mb-3">{{#i18n}}admin.signature.current{{/i18n}}</h2>
+                    <div class="mb-3 d-flex align-items-center justify-content-center border rounded bg-white" style="min-height: 96px;">
+                      {{#signatureAvailable}}
+                        <img src="{{contextPath}}/admin/organisations/{{organisation.id}}/files/signature" alt="{{#i18n}}admin.signature.current{{/i18n}}" class="img-fluid" style="max-height: 80px;">
+                      {{/signatureAvailable}}{{^signatureAvailable}}
+                        <p class="text-body-secondary mb-0 small px-2 text-center">{{#i18n}}admin.signature.missing{{/i18n}}</p>
+                      {{/signatureAvailable}}
+                    </div>
+                    <p class="form-text">{{#i18n}}help.adminSignature{{/i18n}}</p>
+                    {{#signatureAvailable}}
+                    <div class="mb-3">
+                      <button class="btn btn-outline-danger btn-sm" type="button" id="signature-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                    </div>
+                    {{/signatureAvailable}}
+                    <form id="signature-upload-form" class="mt-auto">
+                      <div class="mb-3">
+                        <label class="form-label" for="signature-file">{{#i18n}}admin.signature.fileLabel{{/i18n}}</label>
+                        <input class="form-control" type="file" id="signature-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
+                      </div>
+                      <button class="btn btn-primary" type="submit" id="signature-upload-btn">{{#i18n}}admin.signature.upload{{/i18n}}</button>
+                    </form>
                   </div>
-                {{/signatureAvailable}}{{^signatureAvailable}}
-                  <p class="text-body-secondary">{{#i18n}}admin.signature.missing{{/i18n}}</p>
-                {{/signatureAvailable}}
-                <p class="form-text">{{#i18n}}help.adminSignature{{/i18n}}</p>
-                <form id="signature-upload-form">
-                  <div class="mb-3">
-                    <label class="form-label" for="signature-file">{{#i18n}}admin.signature.fileLabel{{/i18n}}</label>
-                    <input class="form-control" type="file" id="signature-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
-                  </div>
-                  <button class="btn btn-primary" type="submit" id="signature-upload-btn">{{#i18n}}admin.signature.upload{{/i18n}}</button>
-                </form>
+                </div>
               </div>
               <div class="col-md-6 col-xl-3">
-                <h2 class="h5 mb-3">{{#i18n}}admin.background.current{{/i18n}}</h2>
-                {{#backgroundAvailable}}
-                  <div class="mb-3 border rounded overflow-hidden" style="height: 80px; background: url('{{contextPath}}/admin/organisations/{{organisation.id}}/files/background') center / cover no-repeat;"></div>
-                  <div class="mb-3">
-                    <button class="btn btn-outline-danger" type="button" id="background-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                <div class="card h-100">
+                  <div class="card-body d-flex flex-column">
+                    <h2 class="h5 mb-3">{{#i18n}}admin.background.current{{/i18n}}</h2>
+                    {{#backgroundAvailable}}
+                      <div class="mb-3 border rounded overflow-hidden" style="min-height: 96px; height: 96px; background: url('{{contextPath}}/admin/organisations/{{organisation.id}}/files/background') center / cover no-repeat;" role="img" aria-label="{{#i18n}}admin.background.current{{/i18n}}"></div>
+                      <div class="mb-3">
+                        <button class="btn btn-outline-danger btn-sm" type="button" id="background-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                      </div>
+                    {{/backgroundAvailable}}{{^backgroundAvailable}}
+                      <p class="text-body-secondary mb-2 small">{{#i18n}}admin.background.missing{{/i18n}}</p>
+                      <div class="mb-3 border rounded overflow-hidden" style="min-height: 96px; height: 96px; background: url('{{contextPath}}/assets/6.jpg') center / cover no-repeat;" role="img" aria-label="{{#i18n}}admin.background.current{{/i18n}}"></div>
+                    {{/backgroundAvailable}}
+                    <form id="background-upload-form" class="mt-auto">
+                      <div class="mb-3">
+                        <label class="form-label" for="background-file">{{#i18n}}admin.background.fileLabel{{/i18n}}</label>
+                        <input class="form-control" type="file" id="background-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
+                      </div>
+                      <button class="btn btn-primary" type="submit" id="background-upload-btn">{{#i18n}}admin.background.upload{{/i18n}}</button>
+                    </form>
                   </div>
-                {{/backgroundAvailable}}{{^backgroundAvailable}}
-                  <p class="text-body-secondary mb-3">{{#i18n}}admin.background.missing{{/i18n}}</p>
-                  <div class="mb-3 border rounded overflow-hidden" style="height: 80px; background: url('{{contextPath}}/assets/6.jpg') center / cover no-repeat;"></div>
-                {{/backgroundAvailable}}
-                <form id="background-upload-form">
-                  <div class="mb-3">
-                    <label class="form-label" for="background-file">{{#i18n}}admin.background.fileLabel{{/i18n}}</label>
-                    <input class="form-control" type="file" id="background-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" required>
-                  </div>
-                  <button class="btn btn-primary" type="submit" id="background-upload-btn">{{#i18n}}admin.background.upload{{/i18n}}</button>
-                </form>
+                </div>
               </div>
               <div class="col-md-6 col-xl-3">
-                <h2 class="h5 mb-3">{{#i18n}}admin.rib.current{{/i18n}}</h2>
-                {{#ribAvailable}}
-                  <p class="mb-3">{{#i18n}}admin.rib.available{{/i18n}}{{#ribSize}} ({{ribSize}}){{/ribSize}}</p>
-                  <div class="d-flex flex-wrap gap-2 mb-3">
-                    <a class="btn btn-outline-primary" href="{{contextPath}}/admin/organisations/{{organisation.id}}/files/rib" target="_blank">{{#i18n}}payment.downloadRIB{{/i18n}}</a>
-                    <button class="btn btn-outline-danger" type="button" id="rib-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                <div class="card h-100">
+                  <div class="card-body d-flex flex-column">
+                    <h2 class="h5 mb-3">{{#i18n}}admin.rib.current{{/i18n}}</h2>
+                    <div class="mb-3 d-flex align-items-center justify-content-center border rounded bg-body-tertiary px-2" style="min-height: 96px;">
+                      {{#ribAvailable}}
+                        <p class="mb-0 small text-center">{{#i18n}}admin.rib.available{{/i18n}}{{#ribSize}} ({{ribSize}}){{/ribSize}}</p>
+                      {{/ribAvailable}}{{^ribAvailable}}
+                        <p class="text-body-secondary mb-0 small text-center">{{#i18n}}admin.rib.missing{{/i18n}}</p>
+                      {{/ribAvailable}}
+                    </div>
+                    {{#ribAvailable}}
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                      <a class="btn btn-outline-primary btn-sm" href="{{contextPath}}/admin/organisations/{{organisation.id}}/files/rib" target="_blank">{{#i18n}}payment.downloadRIB{{/i18n}}</a>
+                      <button class="btn btn-outline-danger btn-sm" type="button" id="rib-delete-btn">{{#i18n}}action.remove{{/i18n}}</button>
+                    </div>
+                    {{/ribAvailable}}
+                    <form id="rib-upload-form" class="mt-auto">
+                      <div class="mb-3">
+                        <label class="form-label" for="rib-file">{{#i18n}}admin.rib.fileLabel{{/i18n}}</label>
+                        <input class="form-control" type="file" id="rib-file" name="file" accept="application/pdf,.pdf" required>
+                      </div>
+                      <button class="btn btn-primary" type="submit" id="rib-upload-btn">{{#i18n}}admin.rib.upload{{/i18n}}</button>
+                    </form>
                   </div>
-                {{/ribAvailable}}{{^ribAvailable}}
-                  <p class="text-body-secondary">{{#i18n}}admin.rib.missing{{/i18n}}</p>
-                {{/ribAvailable}}
-                <form id="rib-upload-form">
-                  <div class="mb-3">
-                    <label class="form-label" for="rib-file">{{#i18n}}admin.rib.fileLabel{{/i18n}}</label>
-                    <input class="form-control" type="file" id="rib-file" name="file" accept="application/pdf,.pdf" required>
-                  </div>
-                  <button class="btn btn-primary" type="submit" id="rib-upload-btn">{{#i18n}}admin.rib.upload{{/i18n}}</button>
-                </form>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="tab-pane fade {{#tabIsstripe}}show active{{/tabIsstripe}}" id="stripe" role="tabpanel">
-            <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config" id="org-stripe-form">
-              <input type="hidden" name="tab" value="stripe">
-              <div class="form-check mb-3">
-                {{#stripeSimuled}}
-                <input class="form-check-input" type="checkbox" name="stripe.simuled" value="true" id="stripe.simuled" checked>
-                {{/stripeSimuled}}{{^stripeSimuled}}
-                <input class="form-check-input" type="checkbox" name="stripe.simuled" value="true" id="stripe.simuled">
-                {{/stripeSimuled}}
-                <label class="form-check-label" for="stripe.simuled">{{#i18n}}admin.field.stripeSimuled{{/i18n}}</label>
-              </div>
-              <div class="mb-3" id="stripe-public-wrap">
-                <label class="form-label" for="stripe.public" id="stripe-public-label">{{#i18n}}admin.field.stripePublic{{/i18n}}</label>
-                <input class="form-control" id="stripe.public" name="stripe.public" value="{{cfgu.stripe_public}}">
-              </div>
-              <div class="mb-3" id="stripe-secret-wrap">
-                <label class="form-label" for="stripe.secret" id="stripe-secret-label">{{#i18n}}admin.field.stripeSecret{{/i18n}}</label>
-                {{#stripeSecretConfigured}}<span class="badge text-bg-secondary mb-1">{{#i18n}}admin.secret.configured{{/i18n}}</span>{{/stripeSecretConfigured}}{{^stripeSecretConfigured}}<span class="badge text-bg-warning mb-1">{{#i18n}}admin.secret.missing{{/i18n}}</span>{{/stripeSecretConfigured}}
-                <input class="form-control" id="stripe.secret" type="password" name="stripe.secret" autocomplete="new-password" placeholder="{{#i18n}}admin.secret.placeholder{{/i18n}}">
-              </div>
-              <div class="mb-3" id="stripe-prefix-wrap">
-                <label class="form-label" for="stripe.keyprefix" id="stripe-prefix-label">{{#i18n}}admin.field.stripePrefix{{/i18n}}</label>
-                <input class="form-control" id="stripe.keyprefix" name="stripe.keyprefix" value="{{cfgu.stripe_keyprefix}}">
-              </div>
-              <div class="form-check mb-3">
-                {{#stripeCardEvents}}
-                <input class="form-check-input" type="checkbox" name="stripe.card.events" value="true" id="stripe.card.events" checked>
-                {{/stripeCardEvents}}{{^stripeCardEvents}}
-                <input class="form-check-input" type="checkbox" name="stripe.card.events" value="true" id="stripe.card.events">
-                {{/stripeCardEvents}}
-                <label class="form-check-label" for="stripe.card.events" id="stripe-card-events-label">{{#i18n}}admin.field.stripeCardEvents{{/i18n}}</label>
-              </div>
-              <div class="form-check mb-3">
-                {{#stripeCardMemberships}}
-                <input class="form-check-input" type="checkbox" name="stripe.card.memberships" value="true" id="stripe.card.memberships" checked>
-                {{/stripeCardMemberships}}{{^stripeCardMemberships}}
-                <input class="form-check-input" type="checkbox" name="stripe.card.memberships" value="true" id="stripe.card.memberships">
-                {{/stripeCardMemberships}}
-                <label class="form-check-label" for="stripe.card.memberships" id="stripe-card-memberships-label">{{#i18n}}admin.field.stripeCardMemberships{{/i18n}}</label>
-              </div>
-              {{^ribAvailable}}
-              <div class="alert alert-warning mb-3" role="alert">
-                {{#i18n}}admin.stripeTransferRequiresRibBefore{{/i18n}}
-                <a href="#files">{{#i18n}}admin.tab.files{{/i18n}}</a>{{#i18n}}admin.stripeTransferRequiresRibAfter{{/i18n}}
-              </div>
-              {{/ribAvailable}}
-              <div class="form-check mb-3">
-                {{^ribAvailable}}
-                <input class="form-check-input" type="checkbox" value="true" id="payment.transfer.events" disabled>
-                {{/ribAvailable}}{{#ribAvailable}}{{#paymentTransferEvents}}
-                <input class="form-check-input" type="checkbox" name="payment.transfer.events" value="true" id="payment.transfer.events" checked>
-                {{/paymentTransferEvents}}{{^paymentTransferEvents}}
-                <input class="form-check-input" type="checkbox" name="payment.transfer.events" value="true" id="payment.transfer.events">
-                {{/paymentTransferEvents}}{{/ribAvailable}}
-                <label class="form-check-label {{^ribAvailable}}text-body-secondary{{/ribAvailable}}" for="payment.transfer.events">{{#i18n}}admin.field.paymentTransferEvents{{/i18n}}</label>
-              </div>
-              <div class="form-check mb-3">
-                {{^ribAvailable}}
-                <input class="form-check-input" type="checkbox" value="true" id="payment.transfer.memberships" disabled>
-                {{/ribAvailable}}{{#ribAvailable}}{{#paymentTransferMemberships}}
-                <input class="form-check-input" type="checkbox" name="payment.transfer.memberships" value="true" id="payment.transfer.memberships" checked>
-                {{/paymentTransferMemberships}}{{^paymentTransferMemberships}}
-                <input class="form-check-input" type="checkbox" name="payment.transfer.memberships" value="true" id="payment.transfer.memberships">
-                {{/paymentTransferMemberships}}{{/ribAvailable}}
-                <label class="form-check-label {{^ribAvailable}}text-body-secondary{{/ribAvailable}}" for="payment.transfer.memberships">{{#i18n}}admin.field.paymentTransferMemberships{{/i18n}}</label>
-              </div>
-              <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
-            </form>
-            <script>
-              (function () {
-                var simuled = document.getElementById('stripe.simuled');
-                var publicKey = document.getElementById('stripe.public');
-                var secretKey = document.getElementById('stripe.secret');
-                var prefix = document.getElementById('stripe.keyprefix');
-                var cardEvents = document.getElementById('stripe.card.events');
-                var cardMemberships = document.getElementById('stripe.card.memberships');
-                var keyFields = [
-                  { input: publicKey, label: document.getElementById('stripe-public-label') },
-                  { input: secretKey, label: document.getElementById('stripe-secret-label') },
-                  { input: prefix, label: document.getElementById('stripe-prefix-label') }
-                ];
-                var cardFields = [
-                  { input: cardEvents, label: document.getElementById('stripe-card-events-label') },
-                  { input: cardMemberships, label: document.getElementById('stripe-card-memberships-label') }
-                ];
-                function setDisabled(fields, disabled) {
-                  fields.forEach(function (field) {
-                    if (!field.input) return;
-                    field.input.disabled = disabled;
-                    if (field.label) {
-                      field.label.classList.toggle('text-body-secondary', disabled);
-                    }
-                  });
-                }
-                function syncStripeForm() {
-                  if (!simuled) return;
-                  var simulate = simuled.checked;
-                  setDisabled(keyFields, simulate);
-                  var publicBlank = !publicKey || !publicKey.value.trim();
-                  setDisabled(cardFields, !simulate && publicBlank);
-                }
-                if (simuled) simuled.addEventListener('change', syncStripeForm);
-                if (publicKey) publicKey.addEventListener('input', syncStripeForm);
-                syncStripeForm();
-              })();
-            </script>
-          </div>
         </div>
-        {{/editMode}}
       </div>
+      {{/editMode}}
     </main>
     {{> platform/footer}}
 
@@ -541,7 +708,7 @@
         if (!form) return;
         const fileInput = document.getElementById(inputId);
         const button = document.getElementById(buttonId);
-        const statusEl = document.getElementById('rib-status');
+        const statusEl = document.getElementById('org-file-status');
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           const file = fileInput.files[0];
@@ -567,7 +734,7 @@
       function bindDelete(buttonId, url, confirmMessage) {
         const button = document.getElementById(buttonId);
         if (!button) return;
-        const statusEl = document.getElementById('rib-status');
+        const statusEl = document.getElementById('org-file-status');
         button.addEventListener('click', async () => {
           if (!window.confirm(confirmMessage)) {
             return;

@@ -16,8 +16,16 @@ import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.event.EventStatus;
 import com.github.gcolin.membership.LicensePriceCalculator;
 import com.github.gcolin.registration.PlayerSubscriptionStatus;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
+import com.github.gcolin.club.ClubSeasonDao;
+import com.github.gcolin.event.EventDao;
+import com.github.gcolin.event.EventGroupDao;
+import com.github.gcolin.event.EventOptionDao;
+import com.github.gcolin.membership.LicenseDao;
+import com.github.gcolin.membership.LicensePriceDao;
+import com.github.gcolin.membership.MembershipOptionDao;
+import com.github.gcolin.player.CustomPlayerDao;
+import com.github.gcolin.registration.PlayerSubscriptionDao;
+import javax.sql.DataSource;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -28,35 +36,47 @@ import com.github.gcolin.event.EventType;
 
 public class DbInit {
 
-    private final EntityManagerFactory emf;
+    private final DataSource dataSource;
 
     private Logger logger = LoggerFactory.getLogger(DbInit.class);
 
-    public DbInit(EntityManagerFactory emf) {
-        this.emf = emf;
+    public DbInit(DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
-    /** EM with org filter disabled — required for License/ClubSeason {@code @AdditionalCriteria}. */
-    private EntityManager createEm() {
-        EntityManager em = emf.createEntityManager();
-        OrgScope.disableFilter(em);
-        return em;
+    public DbInit(PersistenceService persistence) {
+        this(persistence.getDataSource());
+    }
+
+    /** Runs {@code action} in its own transaction with the org filter disabled (all organisations visible). */
+    private void inTransaction(Runnable action) {
+        RequestContext.run(dataSource, () -> {
+            OrgScope.disableFilter();
+            action.run();
+        });
     }
 
     public void initEvents() {
-        EntityManager em = createEm();
-        Long count = em.createQuery("select count(e) from Event e", Long.class).getSingleResult();
+        inTransaction(this::doInitEvents);
+    }
+
+    private void doInitEvents() {
+        EventGroupDao eventGroupDao = new EventGroupDao();
+        EventDao eventDao = new EventDao();
+        EventOptionDao eventOptionDao = new EventOptionDao();
+        CustomPlayerDao customPlayerDao = new CustomPlayerDao();
+        PlayerSubscriptionDao playerSubscriptionDao = new PlayerSubscriptionDao();
+        long count = Db.scalarLongOrZero("SELECT COUNT(*) FROM event");
 
         if (count == 0) {
             Event evt = null;
             Event evt2 = null;
             Event evt9 = null;
-            em.getTransaction().begin();
             EventGroup evg = new EventGroup();
             evg.setName("a super group");
             evg.setShortname("aaa");
 
-            em.persist(evg);
+            eventGroupDao.persist(evg);
 
             for (int i = 0; i < 10; i++) {
                 Event event1 = new Event();
@@ -91,15 +111,14 @@ public class DbInit {
                     evt9 = event1;
                 }
 
-                em.persist(event1);
-                em.flush(); // assign IDENTITY ids in loop order (Sample Event N -> id N)
+                eventDao.persist(event1);
 
                 if (i == 1) {
                     EventOption maxSubsOption = new EventOption();
                     maxSubsOption.setEvent(event1);
                     maxSubsOption.setOptionType(EventOptionType.MAX_SUBSCRIPTIONS);
                     maxSubsOption.setValue("0");
-                    em.persist(maxSubsOption);
+                    eventOptionDao.persist(maxSubsOption);
                 }
             }
             List<CustomPlayer> players = new ArrayList<>();
@@ -112,8 +131,7 @@ public class DbInit {
                 player.setGender(true);
                 player.setLicence("12345" + i);
                 player.setName("Doe");
-                em.persist(player);
-                em.flush(); // IDENTITY id required for nrFfe "@{id}"
+                customPlayerDao.persist(player);
 
                 PlayerSubscription sub = new PlayerSubscription();
                 sub.setCreationUser("seed@test.com");
@@ -121,7 +139,7 @@ public class DbInit {
                 sub.setNrFfe("@" + player.getId());
                 sub.setAmountCents(1000L);
                 sub.setStatus(PlayerSubscriptionStatus.PAID);
-                em.persist(sub);
+                playerSubscriptionDao.persist(sub);
                 players.add(player);
             }
             {
@@ -131,7 +149,7 @@ public class DbInit {
                 sub.setNrFfe("X82897");
                 sub.setAmountCents(1000L);
                 sub.setStatus(PlayerSubscriptionStatus.PAID);
-                em.persist(sub);
+                playerSubscriptionDao.persist(sub);
             }
             for (int i = 0; i < 3; i++) {
                 PlayerSubscription sub = new PlayerSubscription();
@@ -140,28 +158,30 @@ public class DbInit {
                 sub.setNrFfe("@" + players.get(i).getId());
                 sub.setAmountCents(1000L);
                 sub.setStatus(PlayerSubscriptionStatus.values()[i]);
-                em.persist(sub);
+                playerSubscriptionDao.persist(sub);
             }
-            em.getTransaction().commit();
             logger.info("database initialized with default events");
         }
     }
 
     public void initMembershipOptions() {
-        EntityManager em = createEm();
-        Long count = em.createQuery("select count(m) from MembershipOption m", Long.class).getSingleResult();
+        inTransaction(this::doInitMembershipOptions);
+    }
+
+    private void doInitMembershipOptions() {
+        MembershipOptionDao membershipOptionDao = new MembershipOptionDao();
+        long count = Db.scalarLongOrZero("SELECT COUNT(*) FROM membership_option");
 
         if (count == 0) {
-            List<License> all = em.createQuery("select l from License l", License.class).getResultList();
+            List<License> all = new LicenseDao().all();
             License licenseA = all.stream().filter(l -> "A".equals(l.getName())).findFirst().orElse(null);
-            em.getTransaction().begin();
 
             MembershipOption option1 = new MembershipOption();
             option1.setOptionType(MembershipOptionType.COURSES);
             option1.setOptionValue("Cours adulte Mardi 19h00/19h50");
             option1.setAmountCents(12500);
             option1.setAccessRule(MembershipOptionAccessRule.NON_YOUNG_ONLY);
-            em.persist(option1);
+            membershipOptionDao.persist(option1);
 
             MembershipOption option2 = new MembershipOption();
             option2.setOptionType(MembershipOptionType.COURSES);
@@ -169,35 +189,35 @@ public class DbInit {
             option2.setAmountCents(12500);
             option2.setAccessRule(MembershipOptionAccessRule.YOUNG_ONLY);
             option2.setLicense(licenseA); // Assuming license A
-            em.persist(option2);
+            membershipOptionDao.persist(option2);
 
             MembershipOption option3 = new MembershipOption();
             option3.setOptionType(MembershipOptionType.COURSES);
             option3.setOptionValue("Cours débutant enfant Mercredi 14h00/14h50 ou 15h00/15h50");
             option3.setAmountCents(5000);
             option3.setAccessRule(MembershipOptionAccessRule.YOUNG_ONLY);
-            em.persist(option3);
+            membershipOptionDao.persist(option3);
 
             /*MembershipOption option4 = new MembershipOption();
             option4.setOptionType(MembershipOptionType.CLUB_CHAMPIONSHIP);
             option4.setOptionValue("Interclub");
             option4.setAmountCents(0);
             option4.setLicense(licenseA); // Assuming license A
-            em.persist(option4);
+            membershipOptionDao.persist(option4);
 
             MembershipOption option5 = new MembershipOption();
             option5.setOptionType(MembershipOptionType.CLUB_CHAMPIONSHIP);
             option5.setOptionValue("Coupe loubatière");
             option5.setAmountCents(0);
             option5.setLicense(licenseA); // Assuming license A
-            em.persist(option5);
+            membershipOptionDao.persist(option5);
 
             MembershipOption option6 = new MembershipOption();
             option6.setOptionType(MembershipOptionType.CLUB_CHAMPIONSHIP);
             option6.setOptionValue("Championnat individuel");
             option6.setAmountCents(0);
             option6.setLicense(licenseA); // Assuming license A
-            em.persist(option6);*/
+            membershipOptionDao.persist(option6);*/
 
             MembershipOption option7 = new MembershipOption();
             option7.setOptionType(MembershipOptionType.COURSES);
@@ -205,7 +225,7 @@ public class DbInit {
             option7.setAmountCents(12500);
             option7.setAccessRule(MembershipOptionAccessRule.ADMIN);
             option7.setLicense(licenseA); // Assuming license A
-            em.persist(option7);
+            membershipOptionDao.persist(option7);
 
             MembershipOption option8 = new MembershipOption();
             option8.setOptionType(MembershipOptionType.COURSES);
@@ -213,7 +233,7 @@ public class DbInit {
             option8.setAmountCents(12500);
             option8.setAccessRule(MembershipOptionAccessRule.ADMIN);
             option8.setLicense(licenseA); // Assuming license A
-            em.persist(option8);
+            membershipOptionDao.persist(option8);
 
             MembershipOption option9 = new MembershipOption();
             option9.setOptionType(MembershipOptionType.COURSES);
@@ -221,59 +241,62 @@ public class DbInit {
             option9.setAmountCents(12500);
             option9.setAccessRule(MembershipOptionAccessRule.ADMIN);
             option9.setLicense(licenseA); // Assuming license A
-            em.persist(option9);
+            membershipOptionDao.persist(option9);
 
             MembershipOption option10 = new MembershipOption();
             option10.setOptionType(MembershipOptionType.COURSES);
             option10.setOptionValue("Cours Mercredi 14h00/14h50");
             option10.setAmountCents(5000);
             option10.setAccessRule(MembershipOptionAccessRule.ADMIN);
-            em.persist(option10);
+            membershipOptionDao.persist(option10);
 
             MembershipOption option11 = new MembershipOption();
             option11.setOptionType(MembershipOptionType.COURSES);
             option11.setOptionValue("Cours Mercredi 15h00/15h50");
             option11.setAmountCents(5000);
             option11.setAccessRule(MembershipOptionAccessRule.ADMIN);
-            em.persist(option11);
-
-            em.getTransaction().commit();
+            membershipOptionDao.persist(option11);
             logger.info("database initialized with membership options");
         }
     }
 
     public void initClubSeason() {
-        EntityManager em = createEm();
-        Long count = em.createQuery("select count(s) from ClubSeason s", Long.class).getSingleResult();
+        inTransaction(this::doInitClubSeason);
+    }
+
+    private void doInitClubSeason() {
+        ClubSeasonDao clubSeasonDao = new ClubSeasonDao();
+        long count = Db.scalarLongOrZero("SELECT COUNT(*) FROM club_season");
         if (count == 0) {
-            em.getTransaction().begin();
             int year = LocalDate.now().getMonthValue() >= 9 ? LocalDate.now().getYear() : LocalDate.now().getYear() - 1;
             ClubSeason season = new ClubSeason();
             season.setName(year + "/" + (year + 1));
             season.setStartDate(LocalDate.of(year, 9, 1));
             season.setEndDate(LocalDate.of(year + 1, 8, 31));
             season.setCurrent(true);
-            em.persist(season);
-            em.getTransaction().commit();
+            clubSeasonDao.persist(season);
             logger.info("database initialized with default club season {}", season.getName());
         }
     }
 
     public void initLicenses() {
-        EntityManager em = createEm();
-        Long count = em.createQuery("select count(l) from License l", Long.class).getSingleResult();
+        inTransaction(this::doInitLicenses);
+    }
+
+    private void doInitLicenses() {
+        LicenseDao licenseDao = new LicenseDao();
+        LicensePriceDao licensePriceDao = new LicensePriceDao();
+        long count = Db.scalarLongOrZero("SELECT COUNT(*) FROM license");
 
         if (count == 0) {
-            em.getTransaction().begin();
 
             // Create licenses
             License licenseA = new License("A");
             licenseA.setAccessRule(MembershipOptionAccessRule.ALL);
             License licenseB = new License("B");
             licenseB.setAccessRule(MembershipOptionAccessRule.ALL);
-            em.persist(licenseA);
-            em.persist(licenseB);
-            em.flush(); // Ensure IDs are generated
+            licenseDao.persist(licenseA);
+            licenseDao.persist(licenseB);
 
             // Define all categories for which we need prices
             String[] allCategories = {"PpoM", "PpoF", "PouM", "PouF", "PupM", "PupF",
@@ -287,15 +310,13 @@ public class DbInit {
                 // License A prices
                 int priceA = LicensePriceCalculator.getPriceForLicenseA(category) + clubPrice;
                 LicensePrice priceAEntity = new LicensePrice(category, priceA, licenseA);
-                em.persist(priceAEntity);
+                licensePriceDao.persist(priceAEntity);
 
                 // License B prices
                 int priceB = LicensePriceCalculator.getPriceForLicenseB(category) + clubPrice;
                 LicensePrice priceBEntity = new LicensePrice(category, priceB, licenseB);
-                em.persist(priceBEntity);
+                licensePriceDao.persist(priceBEntity);
             }
-
-            em.getTransaction().commit();
             logger.info("database initialized with licenses and license prices");
         }
     }

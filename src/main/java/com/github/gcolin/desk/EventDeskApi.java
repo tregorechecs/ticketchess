@@ -10,8 +10,6 @@ import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.event.EventDao;
 import io.jsonwebtoken.Jwts;
 import jakarta.inject.Inject;
-import jakarta.json.bind.Jsonb;
-import jakarta.json.bind.JsonbBuilder;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -26,8 +24,6 @@ import com.github.gcolin.platform.MustacheHtml;
 @Path("event/{id:\\d+}/desk")
 @RequireRole(RoleCode.ARBITRE)
 public class EventDeskApi {
-
-    private static final Jsonb JSONB = JsonbBuilder.create();
 
     @Inject
     private EventDao eventDao;
@@ -60,7 +56,7 @@ public class EventDeskApi {
                 .compact();
         Map<String, Object> model = new HashMap<>();
         model.put("event", event);
-        model.put("eventsJson", JSONB.toJson(events));
+        model.put("eventsJson", EventDeskJson.toJson(events));
         model.put("hasCollection", events.size() > 1);
         model.put("deskTicket", deskTicket);
         return new MustacheHtml(model, "desk/eventDesk.mustache");

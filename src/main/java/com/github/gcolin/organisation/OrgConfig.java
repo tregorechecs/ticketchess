@@ -13,7 +13,11 @@ import java.util.function.Function;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-/** Property-style view of an {@link Organisation}: typed columns first, then {@code settings_json}. */
+/**
+ * Property-style view of an {@link Organisation}.
+ * SQL columns are only {@code id}/{@code base_url}/{@code active}/{@code settings_json};
+ * typed keys (name, stripe, oauth, mail, …) live in {@code settings_json} via {@link OrganisationSettings}.
+ */
 public class OrgConfig {
 
     public static final String KEY_SUPER_USER_EMAIL = "org.superUserEmail";
@@ -21,10 +25,17 @@ public class OrgConfig {
     private static final Set<String> GLOBAL_KEYS =
             Set.of("jwt.key", "testmode", "admins", "pendingQueueOffset", "auth.USER_EMAIL", "auth.USER_NAME");
     private static final List<String> GLOBAL_PREFIXES = List.of("db.");
+    public static final String FEATURE_MEMBERSHIPS = "feature.memberships";
+    public static final String FEATURE_EVENTS = "feature.events";
+    public static final String FEATURE_PAYMENTS = "feature.payments";
+
+    /** Public source repository URL (AGPL). Not configurable per organisation. */
+    public static final String SOURCE_URL = "https://github.com/gcolin/ticketchess";
+
     private static final Set<String> SCOPED_KEYS =
-            Set.of("title", "contact.url", "source.url", "membership.notif.emails");
+            Set.of("title", "contact.url", "membership.notif.emails");
     private static final List<String> SCOPED_PREFIXES =
-            List.of("invoice.", "org.", "keycloak.", "stripe.", "oauth.", "ui.");
+            List.of("invoice.", "org.", "keycloak.", "stripe.", "oauth.", "ui.", "feature.");
     private static final Set<String> SECRET_KEYS = Set.of("stripe.secret", "oauth.clientSecret", "mail.PASSWORD");
 
     private record Accessor(Function<Organisation, String> get, BiConsumer<Organisation, String> set) {}
@@ -129,8 +140,9 @@ public class OrgConfig {
     }
 
     /**
-     * Keys for {@code /admin/org} tabs club, invoice and stripe (including mail on the club tab).
-     * Stored on {@link Organisation} columns / {@code settings_json}. OAuth and system stay separate.
+     * Keys for organisation settings tabs club, invoice and stripe (including mail on the club tab).
+     * Stored on {@link Organisation} / {@code settings_json}. OAuth and system keys are edited under
+     * {@code /admin/org} (OAuth may still be stored on the current organisation via typed fields).
      */
     public static boolean isClubInvoiceStripeSettingsKey(String key) {
         if (key == null || isPlatformGlobal(key)) {
@@ -151,6 +163,20 @@ public class OrgConfig {
 
     public static boolean isSecret(String key) {
         return SECRET_KEYS.contains(key);
+    }
+
+    /**
+     * Feature toggles default to enabled when unset/blank. Only an explicit {@code false} disables.
+     */
+    public static boolean isFeatureEnabled(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return true;
+        }
+        return !"false".equalsIgnoreCase(raw.trim());
+    }
+
+    public boolean isFeatureEnabledKey(String key) {
+        return isFeatureEnabled(getProperty(key));
     }
 
     public String getProperty(String key) {
@@ -243,10 +269,6 @@ public class OrgConfig {
         return organisation.getId() == null ? OrgScope.DEFAULT_ORG_ID : organisation.getId();
     }
 
-    public String getSlug() {
-        return organisation.getSlug();
-    }
-
     public String getName() {
         return organisation.getName();
     }
@@ -303,7 +325,6 @@ public class OrgConfig {
     /** Builds a new (unsaved) organisation from platform properties: typed keys to columns, the rest to JSON. */
     public static Organisation seed(Properties properties) {
         Organisation org = new Organisation();
-        org.setSlug("default");
         String baseUrl = properties.getProperty("baseurl", "http://localhost:8080");
         org.setBaseUrl(normalizeBaseUrl(isBlank(baseUrl) ? "http://localhost:8080" : baseUrl));
         String name = firstNonBlank(properties.getProperty("org.name"), properties.getProperty("title"), "TicketChess");
@@ -352,7 +373,6 @@ public class OrgConfig {
         putIfBlank(config, "org.email", admin);
         putIfBlank(config, "org.address", "1 rue Test, 00000 Ville, France");
         putIfBlank(config, "contact.url", "http://localhost:8080/contact");
-        putIfBlank(config, "source.url", "https://github.com/gcolin/ticketchess");
         putIfBlank(config, "mail.USER_NAME", admin);
     }
 

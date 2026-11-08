@@ -24,7 +24,7 @@
       <div class="admin-table-panel mb-4">
   <h2 class="h5 mb-2">{{#i18n}}admin.section.event{{/i18n}}</h2>
         <div class="row g-3">
-          {{#user.canManageEvents}}
+          {{#featureEvents}}{{#user.canManageEvents}}
             <div class="col-12 col-md-6 col-xl-4">
               <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/events">
                 <div class="card-body">
@@ -51,8 +51,8 @@
                 </div>
               </a>
             </div>
-          {{/user.canManageEvents}}
-          {{#user.canManagePayments}}
+          {{/user.canManageEvents}}{{/featureEvents}}
+          {{#featurePayments}}{{#user.canManagePayments}}
             <div class="col-12 col-md-6 col-xl-4">
               <a class="card h-100 text-decoration-none" href="{{contextPath}}/payment">
                 <div class="card-body">
@@ -66,8 +66,8 @@
                 </div>
               </a>
             </div>
-          {{/user.canManagePayments}}
-          {{#user.canManageEvents}}
+          {{/user.canManagePayments}}{{/featurePayments}}
+          {{#featureEvents}}{{#user.canManageEvents}}
             <div class="col-12 col-md-6 col-xl-4">
               <a class="card h-100 text-decoration-none" href="{{contextPath}}/dashboard">
                 <div class="card-body">
@@ -81,7 +81,7 @@
                 </div>
               </a>
             </div>
-          {{/user.canManageEvents}}
+          {{/user.canManageEvents}}{{/featureEvents}}
           {{#userCanViewStatistics}}
             <div class="col-12 col-md-6 col-xl-4">
               <a class="card h-100 text-decoration-none" href="{{contextPath}}/statistics">
@@ -191,7 +191,7 @@
         </div>
     {{/adminSectionUsers}}
 
-    {{#user.canManageMemberships}}
+    {{#adminSectionMembership}}
       <div class="admin-table-panel mb-4">
   <h2 class="h5 mb-2">{{#i18n}}admin.section.membership{{/i18n}}</h2>
         <div class="row g-3">
@@ -251,7 +251,7 @@
             {{/user.canManagePayments}}
         </div>
         </div>
-    {{/user.canManageMemberships}}
+    {{/adminSectionMembership}}
 
     {{#user.admin}}
       <div class="admin-table-panel mb-4">
@@ -272,6 +272,22 @@
             </a>
           </div>
           {{/user.platformAdmin}}
+          {{#currentOrgId}}
+          <div class="col-12 col-md-6 col-xl-4">
+            <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/organisations/{{currentOrgId}}">
+              <div class="card-body">
+                <div class="d-flex align-items-start gap-3">
+                  <i class="bi bi-building-gear fs-3 text-primary"></i>
+                  <div>
+                    <h3 class="h5 mb-1">{{#i18n}}page.organisationEdit{{/i18n}}</h3>
+                    <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.currentOrganisationDesc{{/i18n}}</p>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
+          {{/currentOrgId}}
+          {{#user.platformAdmin}}
           <div class="col-12 col-md-6 col-xl-4">
             <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/org">
               <div class="card-body">
@@ -279,12 +295,13 @@
                   <i class="bi bi-bank fs-3 text-primary"></i>
                   <div>
                     <h3 class="h5 mb-1">{{#i18n}}page.adminOrg{{/i18n}}</h3>
-                    <p class="text-body-secondary mb-0">{{#i18n}}admin.tile.ribDesc{{/i18n}}</p>
+                    <p class="text-body-secondary mb-0">{{#i18n}}help.adminOrg{{/i18n}}</p>
                   </div>
                 </div>
               </div>
             </a>
           </div>
+          {{/user.platformAdmin}}
           <div class="col-12 col-md-6 col-xl-4">
             <a class="card h-100 text-decoration-none" href="{{contextPath}}/admin/clear-cache">
               <div class="card-body">

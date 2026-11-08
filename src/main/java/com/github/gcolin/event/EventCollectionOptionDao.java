@@ -1,26 +1,37 @@
 package com.github.gcolin.event;
 
-import com.github.gcolin.event.EventCollection;
-import com.github.gcolin.event.EventCollectionOption;
-import com.github.gcolin.event.EventCollectionOptionType;
-import com.github.gcolin.platform.Transactional;
-import jakarta.persistence.TypedQuery;
 import com.github.gcolin.platform.AbstractDao;
+import com.github.gcolin.platform.Db;
+import java.util.List;
 
 public class EventCollectionOptionDao extends AbstractDao<EventCollectionOption> {
 
     public EventCollectionOptionDao() {
-        super(EventCollectionOption.class);
+        super(EventCollectionOption.class, "eventcollectionoption");
+    }
+
+    @Override
+    protected List<EventCollectionOption> select(String sql, Object... params) {
+        List<EventCollectionOption> options = selectWith(
+                (option, rs) -> {
+                    Integer collectionId = intOrNull(rs, "big_event_id");
+                    if (collectionId != null) {
+                        EventCollection collection = new EventCollection();
+                        collection.setId(collectionId);
+                        option.setEventCollection(collection);
+                    }
+                },
+                sql,
+                params);
+        return options;
     }
 
     public EventCollectionOption findByEventCollectionIdAndOptionType(
             int eventCollectionId, EventCollectionOptionType optionType) {
-        TypedQuery<EventCollectionOption> query = em.createQuery(
-                "SELECT o FROM EventCollectionOption o WHERE o.eventCollection.id = :eventCollectionId AND o.optionType = :optionType",
-                EventCollectionOption.class);
-        query.setParameter("eventCollectionId", eventCollectionId);
-        query.setParameter("optionType", optionType);
-        return query.getResultStream().findFirst().orElse(null);
+        return selectOne(
+                "SELECT * FROM eventcollectionoption WHERE big_event_id = ? AND option_type = ? ORDER BY id LIMIT 1",
+                eventCollectionId,
+                optionType);
     }
 
     public void setOption(int eventCollectionId, EventCollectionOptionType optionType, String value) {
@@ -32,7 +43,7 @@ public class EventCollectionOptionDao extends AbstractDao<EventCollectionOption>
             return;
         }
         if (option == null) {
-            EventCollection eventCollection = em.find(EventCollection.class, eventCollectionId);
+            EventCollection eventCollection = new EventCollectionDao().find(eventCollectionId);
             option = new EventCollectionOption();
             option.setEventCollection(eventCollection);
             option.setOptionType(optionType);
@@ -40,6 +51,7 @@ public class EventCollectionOptionDao extends AbstractDao<EventCollectionOption>
             persist(option);
         } else {
             option.setValue(value);
+            merge(option);
         }
     }
 
@@ -60,16 +72,28 @@ public class EventCollectionOptionDao extends AbstractDao<EventCollectionOption>
         }
     }
 
-    public EventCollection findByOptionValue(EventCollectionOptionType optionType, String value) {
-        if (value == null || value.isBlank()) {
-            return null;
+    @Override
+    public void persist(EventCollectionOption option) {
+        if (option.getId() == null) {
+            int id = Db.insertReturningInt(
+                    "INSERT INTO eventcollectionoption (option_type, option_value, big_event_id) VALUES (?, ?, ?)",
+                    option.getOptionType(),
+                    option.getValue(),
+                    Db.fkId(option.getEventCollection()));
+            option.setId(id);
+        } else {
+            Db.update(
+                    "UPDATE eventcollectionoption SET option_type = ?, option_value = ?, big_event_id = ? WHERE id = ?",
+                    option.getOptionType(),
+                    option.getValue(),
+                    Db.fkId(option.getEventCollection()),
+                    option.getId());
         }
-        TypedQuery<EventCollection> query = em.createQuery(
-                "SELECT o.eventCollection FROM EventCollectionOption o"
-                        + " WHERE o.optionType = :optionType AND o.value = :value",
-                EventCollection.class);
-        query.setParameter("optionType", optionType);
-        query.setParameter("value", value.trim());
-        return query.getResultStream().findFirst().orElse(null);
+    }
+
+    @Override
+    public EventCollectionOption merge(EventCollectionOption option) {
+        persist(option);
+        return option;
     }
 }

@@ -26,9 +26,12 @@ import com.github.gcolin.platform.Caches;
 import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.event.EventCache;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.TypedQuery;
+import com.github.gcolin.event.EventDao;
+import com.github.gcolin.payment.PaymentDao;
+import com.github.gcolin.registration.PlayerSubscriptionDao;
+import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
+import java.util.function.Supplier;
+import javax.sql.DataSource;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -46,12 +49,17 @@ public class EventDeskService {
     private static final Logger logger = LoggerFactory.getLogger(EventDeskService.class);
     private static final DateTimeFormatter ATTENDANCE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-    private EntityManagerFactory emf;
+    private DataSource dataSource;
     private Caches caches;
     private SendMail mail;
 
-    public void setEmf(EntityManagerFactory emf) {
-        this.emf = emf;
+    public void setDataSource(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    /** Runs {@code action} on its own connection / transaction (fresh view of committed data). */
+    private <T> T inContext(Supplier<T> action) {
+        return RequestContext.run(dataSource, action);
     }
 
     public void setCaches(Caches caches) {
@@ -63,24 +71,17 @@ public class EventDeskService {
     }
 
     public List<EventDeskPlayerDto> snapshot(Integer eventId) {
-        EntityManager em = emf.createEntityManager();
-        try {
-            return toDtos(em, buildCache(em, eventId));
-        } finally {
-            em.close();
-        }
+        return inContext(() -> toDtos(buildCache(eventId)));
     }
 
     public List<EventDeskEventDto> collectionSnapshots(Integer eventId) {
-        EntityManager em = emf.createEntityManager();
-        try {
-            Event event = em.find(Event.class, eventId);
+        return inContext(() -> {
+            Event event = new EventDao().find(eventId);
             if (event == null) {
-                return List.of();
+                return List.<EventDeskEventDto>of();
             }
             List<Event> events = new ArrayList<>();
             if (event.getEventCollection() != null) {
-                event.getEventCollection().getEvents().size();
                 events.addAll(event.getEventCollection().getEvents());
             } else {
                 events.add(event);
@@ -93,25 +94,21 @@ public class EventDeskService {
                 dto.setId(sibling.getId());
                 dto.setName(sibling.getName());
                 dto.setFree(sibling.isFree());
-                dto.setPlayers(toDtos(em, buildCache(em, sibling.getId())));
+                dto.setPlayers(toDtos(buildCache(sibling.getId())));
                 result.add(dto);
             }
             return result;
-        } finally {
-            em.close();
-        }
+        });
     }
 
     public List<Integer> collectionEventIds(Integer eventId) {
-        EntityManager em = emf.createEntityManager();
-        try {
-            Event event = em.find(Event.class, eventId);
+        return inContext(() -> {
+            Event event = new EventDao().find(eventId);
             if (event == null) {
-                return List.of();
+                return List.<Integer>of();
             }
             List<Event> events = new ArrayList<>();
             if (event.getEventCollection() != null) {
-                event.getEventCollection().getEvents().size();
                 events.addAll(event.getEventCollection().getEvents());
             } else {
                 events.add(event);
@@ -123,9 +120,7 @@ public class EventDeskService {
                 ids.add(sibling.getId());
             }
             return ids;
-        } finally {
-            em.close();
-        }
+        });
     }
 
     public List<String> applyOps(Integer eventId, List<EventDeskOp> ops) {
@@ -136,12 +131,12 @@ public class EventDeskService {
         List<EventDeskOp> ordered = new ArrayList<>(ops);
         ordered.sort(Comparator.comparing(op -> op.getClientTs() == null ? 0L : op.getClientTs()));
 
-        EntityManager em = emf.createEntityManager();
-        try {
-            em.getTransaction().begin();
+        inContext(() -> {
+            PlayerSubscriptionDao subscriptionDao = new PlayerSubscriptionDao();
+            PlayerSubscriptionOptionDao optionDao = new PlayerSubscriptionOptionDao();
             for (EventDeskOp op : ordered) {
                 if (op.getOptionId() != null) {
-                    PlayerSubscriptionOption option = em.find(PlayerSubscriptionOption.class, op.getOptionId());
+                    PlayerSubscriptionOption option = optionDao.find(op.getOptionId());
                     if (option == null
                             || option.getPlayerSubscription() == null
                             || option.getPlayerSubscription().getEvent() == null
@@ -158,7 +153,7 @@ public class EventDeskService {
                         option.setStatus(next);
                         if (previousStatus == PlayerSubscriptionOptionStatus.NOT_PAID
                                 && next == PlayerSubscriptionOptionStatus.PAID) {
-                            attachCashPayment(em, option);
+                            attachCashPayment(option);
                             logger.info(
                                     "[email={},player={},event={},option={}] desk option payment marked PAID ({} cents)",
                                     option.getPlayerSubscription().getCreationUser(),
@@ -167,7 +162,7 @@ public class EventDeskService {
                                     option.getId(),
                                     option.getAmountCents());
                         }
-                        em.merge(option);
+                        optionDao.merge(option);
                     }
                     if (op.getId() != null) {
                         acked.add(op.getId());
@@ -177,7 +172,7 @@ public class EventDeskService {
                 if (op.getSubId() == null) {
                     continue;
                 }
-                PlayerSubscription sub = em.find(PlayerSubscription.class, op.getSubId());
+                PlayerSubscription sub = subscriptionDao.find(op.getSubId());
                 if (sub == null || sub.getEvent() == null || !eventId.equals(sub.getEvent().getId())) {
                     logger.warn("desk op ignored: sub {} not in event {}", op.getSubId(), eventId);
                     if (op.getId() != null) {
@@ -200,7 +195,7 @@ public class EventDeskService {
                     PlayerSubscriptionStatus next = PlayerSubscriptionStatus.valueOf(op.getStatus());
                     sub.setStatus(next);
                     if (previousStatus == PlayerSubscriptionStatus.NOT_PAID && next == PlayerSubscriptionStatus.PAID) {
-                        attachCashPayment(em, sub);
+                        attachCashPayment(sub);
                         logger.info(
                                 "[email={},player={},event={},sub={}] desk payment marked PAID ({} cents)",
                                 sub.getCreationUser(),
@@ -211,21 +206,13 @@ public class EventDeskService {
                         sendPaymentMail(sub);
                     }
                 }
-                em.merge(sub);
+                subscriptionDao.merge(sub);
                 if (op.getId() != null) {
                     acked.add(op.getId());
                 }
             }
-            em.flush();
-            em.getTransaction().commit();
-        } catch (RuntimeException e) {
-            if (em.getTransaction().isActive()) {
-                em.getTransaction().rollback();
-            }
-            throw e;
-        } finally {
-            em.close();
-        }
+            return null;
+        });
         caches.getEvent().invalidate(String.valueOf(eventId));
         caches.getDebtCache().invalidateAll();
         return acked;
@@ -237,39 +224,34 @@ public class EventDeskService {
         }
         Config config = AppContext.get().config();
         Caches caches = AppContext.get().caches();
-        EntityManager em = emf.createEntityManager();
-        try {
-            UserAuthorizationDao dao = new UserAuthorizationDao();
-            dao.setEm(em);
-            RoleResolver roleResolver = new RoleResolver(config, dao, caches.getRoleCache());
+        return inContext(() -> {
+            RoleResolver roleResolver = new RoleResolver(config, new UserAuthorizationDao(), caches.getRoleCache());
             return roleResolver.hasRole(email, RoleCode.ARBITRE);
-        } finally {
-            em.close();
-        }
+        });
     }
 
-    private void attachCashPayment(EntityManager em, PlayerSubscription sub) {
+    private void attachCashPayment(PlayerSubscription sub) {
         long cents = sub.getAmountCents() == null ? 0L : sub.getAmountCents();
-        Payment payment = createCashPayment(em, sub.getCreationUser(), cents);
+        Payment payment = createCashPayment(sub.getCreationUser(), cents);
         payment.setSubscriptions(List.of(sub));
         sub.setPayment(payment);
     }
 
-    private void attachCashPayment(EntityManager em, PlayerSubscriptionOption option) {
+    private void attachCashPayment(PlayerSubscriptionOption option) {
         long cents = option.getAmountCents() == null ? 0L : option.getAmountCents();
         PlayerSubscription parent = option.getPlayerSubscription();
         String email = parent == null ? null : parent.getCreationUser();
-        Payment payment = createCashPayment(em, email, cents);
+        Payment payment = createCashPayment(email, cents);
         option.setPayment(payment);
     }
 
-    private Payment createCashPayment(EntityManager em, String email, long amountCents) {
+    private Payment createCashPayment(String email, long amountCents) {
         Payment payment = new Payment();
         payment.setUserEmail(email == null || email.isBlank() ? "cash@desk" : email.trim());
         payment.setStatus(PaymentStatus.PAID);
         payment.setType(PaymentType.CASH);
         payment.setAmount(ServiceUtils.toEuros(amountCents));
-        em.persist(payment);
+        new PaymentDao().persist(payment);
         return payment;
     }
 
@@ -304,18 +286,15 @@ public class EventDeskService {
         }
     }
 
-    private EventCache buildCache(EntityManager em, Integer eventId) {
+    private EventCache buildCache(Integer eventId) {
         EventCache cached = new EventCache();
-        Event event = em.find(Event.class, eventId);
+        Event event = new EventDao().find(eventId);
         if (event == null) {
             cached.event = null;
             cached.players = List.of();
             return cached;
         }
-        TypedQuery<PlayerSubscription> query = em.createQuery(
-                "SELECT e FROM PlayerSubscription e WHERE e.event = :event", PlayerSubscription.class);
-        query.setParameter("event", event);
-        List<PlayerSubscription> subscriptions = query.getResultList();
+        List<PlayerSubscription> subscriptions = new PlayerSubscriptionDao().findByEvent(event);
         List<DisplayPlayer> players = new ArrayList<>();
         for (PlayerSubscription sub : subscriptions) {
             if (sub.getStatus() == PlayerSubscriptionStatus.CANCELLED) {
@@ -346,9 +325,9 @@ public class EventDeskService {
             player.setBirthDate(p.getBirthDate());
             player.setClubRef(p.getClubRef());
             if (sub.getAmountCents() != null) {
-                player.setPrice(ServiceUtils.toEuros(sub.getAmountCents()));
+                player.setPriceCents(sub.getAmountCents());
             } else {
-                player.setPrice(ServiceUtils.toEuros(ServiceUtils.calculatePrice(p, event)));
+                player.setPriceCents(ServiceUtils.calculatePrice(p, event));
             }
             if (event.getEventType() == EventType.RAPID) {
                 player.setRating(p.getRapidRating());
@@ -368,24 +347,17 @@ public class EventDeskService {
         });
         cached.event = event;
         cached.players = players;
-        em.detach(event);
         return cached;
     }
 
-    private List<EventDeskPlayerDto> toDtos(EntityManager em, EventCache cache) {
+    private List<EventDeskPlayerDto> toDtos(EventCache cache) {
         List<EventDeskPlayerDto> result = new ArrayList<>();
         if (cache == null || cache.players == null) {
             return result;
         }
         Map<Integer, List<PlayerSubscriptionOption>> optionsBySubId = new HashMap<>();
         if (cache.event != null && cache.event.getId() != null) {
-            TypedQuery<PlayerSubscriptionOption> optionQuery = em.createQuery(
-                    "SELECT e FROM PlayerSubscriptionOption e"
-                            + " join fetch e.playerSubscription"
-                            + " WHERE e.playerSubscription.event.id = :eventId ORDER BY e.id",
-                    PlayerSubscriptionOption.class);
-            optionQuery.setParameter("eventId", cache.event.getId());
-            for (PlayerSubscriptionOption option : optionQuery.getResultList()) {
+            for (PlayerSubscriptionOption option : new PlayerSubscriptionOptionDao().findByEvent(cache.event.getId())) {
                 if (option.getPlayerSubscription() == null || option.getPlayerSubscription().getId() == null) {
                     continue;
                 }
@@ -410,8 +382,8 @@ public class EventDeskService {
             if (player.getAttendanceAt() != null) {
                 dto.setAttendanceAt(player.getAttendanceAt().format(ATTENDANCE_FMT));
             }
-            if (player.getPrice() != null) {
-                dto.setAmountCents(Math.round(player.getPrice() * 100));
+            if (player.getPriceCents() != null) {
+                dto.setAmountCents(player.getPriceCents());
             }
             result.add(dto);
 

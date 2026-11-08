@@ -4,13 +4,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Locale;
 
-/** Resolves the organisation of a request from the path {@code /o/{slug}/...} or from the Host header. */
+/** Resolves the organisation of a request from the Host header against {@code organisation.base_url}. */
 public class OrganisationResolver {
 
     private static final long TTL_MS = 5_000;
-    private static final String SLUG_PREFIX = "/o/";
 
-    public record Resolution(Organisation organisation, String pathPrefix, boolean notFound) {}
+    public record Resolution(Organisation organisation, boolean notFound) {}
 
     private volatile List<Organisation> cached;
     private volatile long loadedAt;
@@ -22,31 +21,17 @@ public class OrganisationResolver {
     public Resolution resolve(HttpServletRequest request, OrganisationDao dao) {
         List<Organisation> organisations = organisations(dao);
         if (organisations.isEmpty()) {
-            return new Resolution(null, null, false);
-        }
-        String path = pathWithinContext(request);
-        if (path.startsWith(SLUG_PREFIX)) {
-            int end = path.indexOf('/', SLUG_PREFIX.length());
-            String slug = (end < 0 ? path.substring(SLUG_PREFIX.length()) : path.substring(SLUG_PREFIX.length(), end))
-                    .toLowerCase(Locale.ROOT);
-            Organisation bySlug = organisations.stream()
-                    .filter(o -> slug.equals(o.getSlug()))
-                    .findFirst()
-                    .orElse(null);
-            if (bySlug == null || !bySlug.isActive()) {
-                return new Resolution(null, null, true);
-            }
-            return new Resolution(bySlug, SLUG_PREFIX + slug, false);
+            return new Resolution(null, false);
         }
         Organisation byHost = matchHost(organisations, requestHost(request));
         if (byHost != null) {
-            return byHost.isActive() ? new Resolution(byHost, null, false) : new Resolution(null, null, true);
+            return byHost.isActive() ? new Resolution(byHost, false) : new Resolution(null, true);
         }
         Organisation fallback = organisations.stream()
                 .filter(Organisation::isActive)
                 .findFirst()
                 .orElse(null);
-        return new Resolution(fallback, null, fallback == null);
+        return new Resolution(fallback, fallback == null);
     }
 
     static Organisation matchHost(List<Organisation> organisations, String host) {
@@ -88,17 +73,6 @@ public class OrganisationResolver {
         }
         String host = request.getHeader("Host");
         return host != null && !host.isBlank() ? host : request.getServerName();
-    }
-
-    private static String pathWithinContext(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (uri == null) {
-            return "/";
-        }
-        return contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath)
-                ? uri.substring(contextPath.length())
-                : uri;
     }
 
     private static String stripPort(String host) {

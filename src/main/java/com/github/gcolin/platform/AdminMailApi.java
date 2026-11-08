@@ -25,10 +25,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Path("admin/mail")
 @RequireRole(RoleCode.ADMIN)
 public class AdminMailApi {
+
+    private static final Logger logger = LoggerFactory.getLogger(AdminMailApi.class);
 
     @Inject
     private SendMail sendMail;
@@ -79,7 +83,7 @@ public class AdminMailApi {
             String html = new MailTemplate().render(mail.getTemplate(), mail);
             return Response.ok(html, MediaType.TEXT_HTML).build();
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error generating mail preview: {}", e.getMessage());
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity("Error generating preview: " + e.getMessage())
                     .type(MediaType.TEXT_PLAIN)
@@ -114,7 +118,7 @@ public class AdminMailApi {
             }
             sendMail.send(mail, to, subject);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error sending email: {}", e.getMessage());
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity("Error sending email: " + e.getMessage())
                     .build();

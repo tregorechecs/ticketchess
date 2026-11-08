@@ -118,29 +118,7 @@ mvn package -P pack,war
 mvn clean test -P jacoco
 ```
 
-## 5. Base H2 avec une sauvegarde PostgreSQL
-
-Vous pouvez démarrer en H2 et charger les données depuis une sauvegarde PostgreSQL locale (`db.sql`, non versionnée).
-
-### Avec `params.properties`
-
-```properties
-db.type=h2
-db.h2.loadPostgresDump=true
-db.h2.postgresDumpFile=./db.sql
-```
-
-Puis :
-
-```bash
-mvn compile exec:java
-```
-
-### Avec `CONFIG_DIR`
-
-Si `CONFIG_DIR` est défini, l'application cherchera `db.sql` dans ce dossier quand `db.h2.loadPostgresDump=true`.
-
-## 6. PostgreSQL en local (Docker)
+## 5. PostgreSQL en local (Docker)
 
 ```bash
 cd src/docker
@@ -159,7 +137,7 @@ db.type=postgres
 
 Voir [src/docker/docker-compose.yml](src/docker/docker-compose.yml) pour les valeurs par défaut.
 
-## 7. Exemple de déploiement en production sur un Raspberry Pi
+## 6. Exemple de déploiement en production sur un Raspberry Pi
 
 Cet exemple déploie le JAR sur `pi@<hôte-integration>` (adresse IP ou nom DNS de votre serveur) dans
 `/mnt/nvme/ticketchess`. Les secrets ne figurent ni dans les commandes ni
@@ -319,7 +297,7 @@ ssh pi@<hôte-integration> \
   "cd /mnt/nvme/ticketchess && docker compose logs --tail=100 app"
 ```
 
-## 8. Documentation MkDocs
+## 7. Documentation MkDocs
 
 Depuis `src/main/doc` :
 

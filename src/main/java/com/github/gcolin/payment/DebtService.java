@@ -127,6 +127,11 @@ public class DebtService {
 
         paymentService.persist(payment);
 
+        // no cascade: write payment_id (and amountCents) of the linked subscriptions now that the payment has an id
+        for (PlayerSubscription sub : subs) {
+            playerSubscriptionService.persist(sub);
+        }
+
         for (PlayerSubscriptionOption option : playerSubscriptionOptionService.findNotPaidByCreationUser(email)) {
             PlayerSubscription parent = option.getPlayerSubscription();
             if (parent == null || !isPayableEvent(parent.getEvent())) {
@@ -153,10 +158,13 @@ public class DebtService {
         for (Membership membership : membershipDao.findApprovedUnpaidByUser(email, scope)) {
             memberships.add(membership);
             membership.setPayment(payment);
-            membershipDao.merge(membership);
         }
         payment.setMemberships(memberships);
         paymentService.persist(payment);
+        // the payment needs its id before the memberships can reference it
+        for (Membership membership : memberships) {
+            membershipDao.merge(membership);
+        }
         return payment;
     }
 

@@ -3,8 +3,6 @@ package com.github.gcolin.organisation;
 import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.auth.RoleCode;
-import com.github.gcolin.club.ClubSeason;
-import com.github.gcolin.membership.License;
 import com.github.gcolin.payment.RibService;
 import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.BackgroundService;
@@ -19,7 +17,6 @@ import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.platform.ServiceUtils;
 import com.github.gcolin.platform.SignatureService;
 import jakarta.inject.Inject;
-import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
@@ -48,6 +45,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,24 +54,25 @@ import org.slf4j.LoggerFactory;
 public class OrganisationAdminApi {
 
     private static final Logger logger = LoggerFactory.getLogger(OrganisationAdminApi.class);
-    private static final Pattern SLUG = Pattern.compile("[a-z0-9][a-z0-9-]{0,98}[a-z0-9]|[a-z0-9]");
     private static final Pattern EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
 
-    /** Club / invoice / stripe settings (moved from {@code AdminApi}). */
+    /** Organisation settings tabs (moved from {@code AdminApi} club/invoice/stripe). */
     static final Map<String, Set<String>> SETTINGS_TAB_KEYS = Map.of(
-            "club",
+            "features",
             Set.of(
-                    "title",
+                    OrgConfig.FEATURE_MEMBERSHIPS,
+                    OrgConfig.FEATURE_EVENTS,
+                    OrgConfig.FEATURE_PAYMENTS),
+            "identity",
+            Set.of("title", "org.name"),
+            "contact",
+            Set.of(
                     "contact.url",
-                    "source.url",
-                    "org.name",
                     "org.email",
-                    "org.address",
-                    "org.hosting.address",
-                    "membership.notif.emails",
-                    "mail.USER_NAME",
-                    "mail.PASSWORD"),
-            "invoice",
+                    "org.address"),
+            "mail",
+            Set.of("mail.USER_NAME", "mail.PASSWORD", "membership.notif.emails"),
+            "payment",
             Set.of(
                     "invoice.seller.address2",
                     "invoice.seller.zip",
@@ -89,9 +88,7 @@ public class OrganisationAdminApi {
                     "invoice.donation.object",
                     "invoice.donation.signatory",
                     "invoice.donation.signatoryTitle",
-                    "invoice.donation.prefix"),
-            "stripe",
-            Set.of(
+                    "invoice.donation.prefix",
                     "stripe.public",
                     "stripe.secret",
                     "stripe.keyprefix",
@@ -108,9 +105,30 @@ public class OrganisationAdminApi {
             "stripe.card.events",
             "stripe.card.memberships",
             "payment.transfer.events",
-            "payment.transfer.memberships");
+            "payment.transfer.memberships",
+            OrgConfig.FEATURE_MEMBERSHIPS,
+            OrgConfig.FEATURE_EVENTS,
+            OrgConfig.FEATURE_PAYMENTS);
 
-    private static final Set<String> SETTINGS_TABS = Set.of("club", "invoice", "files", "stripe", "appearance");
+    private static final Set<String> SETTINGS_TABS = Set.of(
+            "features", "identity", "contact", "mail", "payment", "appearance", "files");
+
+    /** Legacy query-tab names kept for redirects / bookmarks. */
+    private static String normalizeSettingsTab(String tab) {
+        if (tab == null || tab.isBlank()) {
+            return "features";
+        }
+        String t = tab.trim();
+        if ("club".equals(t)) {
+            return "features";
+        }
+        if ("invoice".equals(t) || "stripe".equals(t)) {
+            return "payment";
+        }
+        return t;
+    }
+
+    private static final Set<String> PLATFORM_SETTINGS_TABS = Set.of("oauth", "system");
 
     @Inject
     private OrganisationDao organisationDao;
@@ -160,7 +178,7 @@ public class OrganisationAdminApi {
         if (denied != null) {
             return denied;
         }
-        return Response.ok(form(new Organisation(), null, null, "identity", "", "")).build();
+        return Response.ok(form(new Organisation(), null, "identity", "", "")).build();
     }
 
     @GET
@@ -178,41 +196,42 @@ public class OrganisationAdminApi {
         if (denied != null) {
             return denied;
         }
-        return Response.ok(form(org, null, null, tab, success, error)).build();
+        String requestedTab = tab == null ? "" : tab.trim();
+        if (PLATFORM_SETTINGS_TABS.contains(requestedTab)) {
+            var builder = uriInfo.getBaseUriBuilder().path("admin/org").queryParam("tab", requestedTab);
+            if (success != null && !success.isBlank()) {
+                builder.queryParam("success", success);
+            }
+            if (error != null && !error.isBlank()) {
+                builder.queryParam("error", error);
+            }
+            return Response.seeOther(Redirects.toSameOriginRelative(builder.fragment(requestedTab).build()))
+                    .build();
+        }
+        return Response.ok(form(org, null, tab, success, error)).build();
     }
 
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response create(
-            @FormParam("slug") String slug,
             @FormParam("base_url") String baseUrl,
             @FormParam("name") String name,
-            @FormParam("super_user_email") String superUserEmail,
-            @FormParam("cloneFromOrgId") String cloneFromOrgId) {
+            @FormParam("super_user_email") String superUserEmail) {
         Response denied = requirePlatformAdmin();
         if (denied != null) {
             return denied;
         }
         Organisation org = new Organisation();
-        applyIdentity(org, slug, baseUrl, name, superUserEmail);
-        Integer sourceId = parseId(cloneFromOrgId);
+        applyIdentity(org, baseUrl, name, superUserEmail);
 
         String error = validate(org);
         if (error != null) {
-            return Response.ok(form(org, sourceId, error, "identity", "", "")).build();
+            return Response.ok(form(org, error, "identity", "", "")).build();
         }
 
-        Organisation source = sourceId == null ? null : organisationDao.find(sourceId);
-        if (source != null) {
-            copySettings(source, org);
-        }
         organisationDao.persist(org);
-        RequestContext.require().em().flush();
-        if (source != null) {
-            cloneData(source.getId(), org.getId());
-        }
         AppContext.get().organisationResolver().invalidate();
-        logger.info("Created organisation {} ({})", org.getSlug(), org.getBaseUrl());
+        logger.info("Created organisation {} ({})", org.getName(), org.getBaseUrl());
         return Response.seeOther(Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
                         .path("admin/organisations")
                         .queryParam("success", "created")
@@ -225,11 +244,9 @@ public class OrganisationAdminApi {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response update(
             @PathParam("id") int id,
-            @FormParam("slug") String slug,
             @FormParam("base_url") String baseUrl,
             @FormParam("name") String name,
-            @FormParam("super_user_email") String superUserEmail,
-            @FormParam("active") String active) {
+            @FormParam("super_user_email") String superUserEmail) {
         Response denied = requirePlatformAdmin();
         if (denied != null) {
             return denied;
@@ -238,22 +255,21 @@ public class OrganisationAdminApi {
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
-        applyIdentity(org, slug, baseUrl, name, superUserEmail);
-        org.setActive("true".equalsIgnoreCase(active) || "on".equalsIgnoreCase(active));
+        applyIdentity(org, baseUrl, name, superUserEmail);
 
         String error = validate(org);
         if (error != null) {
-            return Response.ok(form(org, null, error, "club", "", "")).build();
+            return Response.ok(form(org, error, "identity", "", "")).build();
         }
 
-        RequestContext.require().em().flush();
+        organisationDao.merge(org);
         AppContext.get().organisationResolver().invalidate();
-        logger.info("Updated organisation {} ({})", org.getSlug(), org.getBaseUrl());
+        logger.info("Updated organisation {} ({})", org.getName(), org.getBaseUrl());
         return Response.seeOther(Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
                         .path("admin/organisations")
                         .path(String.valueOf(org.getId()))
                         .queryParam("success", "updated")
-                        .queryParam("tab", "club")
+                        .queryParam("tab", "identity")
                         .build()))
                 .build();
     }
@@ -270,25 +286,25 @@ public class OrganisationAdminApi {
         if (denied != null) {
             return denied;
         }
-        String tab = formValue(form, "tab");
-        if (tab == null || !SETTINGS_TAB_KEYS.containsKey(tab)) {
-            return redirectToEdit(org, "error", "configInvalid", "club");
+        String tab = normalizeSettingsTab(formValue(form, "tab"));
+        if (!SETTINGS_TAB_KEYS.containsKey(tab)) {
+            return redirectToEdit(org, "error", "configInvalid", "features");
         }
-        if ("club".equals(tab) && user != null && user.isPlatformAdmin()) {
+        if ("payment".equals(tab) && !new OrgConfig(org).isFeatureEnabledKey(OrgConfig.FEATURE_PAYMENTS)) {
+            return redirectToEdit(org, "error", "configInvalid", "features");
+        }
+        if ("identity".equals(tab) && user != null && user.isPlatformAdmin()) {
             String name = formValue(form, "org.name");
             applyIdentity(
                     org,
-                    org.getSlug(),
                     formValue(form, "base_url"),
                     name != null && !name.isBlank() ? name : org.getName(),
                     formValue(form, "super_user_email"));
-            String active = formValue(form, "active");
-            org.setActive("true".equalsIgnoreCase(active) || "on".equalsIgnoreCase(active));
             String identityError = validate(org);
             if (identityError != null) {
-                return Response.ok(form(org, null, identityError, "club", "", "")).build();
+                return Response.ok(form(org, identityError, "identity", "", "")).build();
             }
-            RequestContext.require().em().flush();
+            organisationDao.merge(org);
             AppContext.get().organisationResolver().invalidate();
         }
         Map<String, String> updates = new LinkedHashMap<>();
@@ -311,7 +327,24 @@ public class OrganisationAdminApi {
                     OrgUiStyle.sanitizeColor(updates.get(OrgUiStyle.KEY_SECONDARY), OrgUiStyle.DEFAULT_SECONDARY));
             updates.put(OrgUiStyle.KEY_FONT, OrgUiStyle.sanitizeFontId(updates.get(OrgUiStyle.KEY_FONT)));
         }
-        if ("stripe".equals(tab)) {
+        if ("features".equals(tab)) {
+            if (!"true".equals(updates.get(OrgConfig.FEATURE_EVENTS))) {
+                updates.put("stripe.card.events", "false");
+                updates.put("payment.transfer.events", "false");
+            }
+            if (!"true".equals(updates.get(OrgConfig.FEATURE_MEMBERSHIPS))) {
+                updates.put("stripe.card.memberships", "false");
+                updates.put("payment.transfer.memberships", "false");
+            }
+        }
+        if ("mail".equals(tab) && !new OrgConfig(org).isFeatureEnabledKey(OrgConfig.FEATURE_MEMBERSHIPS)) {
+            // Field is hidden when memberships are off — keep the stored value.
+            updates.remove("membership.notif.emails");
+        }
+        if ("payment".equals(tab)) {
+            OrgConfig orgConfig = new OrgConfig(org);
+            boolean eventsOn = orgConfig.isFeatureEnabledKey(OrgConfig.FEATURE_EVENTS);
+            boolean membershipsOn = orgConfig.isFeatureEnabledKey(OrgConfig.FEATURE_MEMBERSHIPS);
             boolean simuled = "true".equals(updates.get("stripe.simuled"));
             if (simuled) {
                 // Disabled key fields are omitted from the POST — keep existing values.
@@ -325,15 +358,23 @@ public class OrganisationAdminApi {
                     updates.put("stripe.card.memberships", "false");
                 }
             }
+            if (!eventsOn) {
+                updates.put("stripe.card.events", "false");
+                updates.put("payment.transfer.events", "false");
+            }
+            if (!membershipsOn) {
+                updates.put("stripe.card.memberships", "false");
+                updates.put("payment.transfer.memberships", "false");
+            }
         }
         try {
             withOrgScope(org, () -> {
-                if ("stripe".equals(tab) && !ribService.exists()) {
+                if ("payment".equals(tab) && !ribService.exists()) {
                     updates.put("payment.transfer.events", "false");
                     updates.put("payment.transfer.memberships", "false");
                 }
                 config.updateProperties(updates);
-                if ("club".equals(tab) && sendMail != null) {
+                if ("mail".equals(tab) && sendMail != null) {
                     sendMail.reloadCredentials();
                 }
             });
@@ -585,21 +626,14 @@ public class OrganisationAdminApi {
         return withOrgScope(org, supplier);
     }
 
-    private static void applyIdentity(
-            Organisation org, String slug, String baseUrl, String name, String superUserEmail) {
-        org.setSlug(slug == null ? null : slug.trim().toLowerCase(Locale.ROOT));
+    private static void applyIdentity(Organisation org, String baseUrl, String name, String superUserEmail) {
         org.setBaseUrl(OrgConfig.normalizeBaseUrl(baseUrl));
         org.setName(name == null ? null : name.trim());
         org.setSuperUserEmail(superUserEmail == null ? null : superUserEmail.trim().toLowerCase(Locale.ROOT));
     }
 
     private MustacheHtml form(
-            Organisation organisation,
-            Integer cloneFromOrgId,
-            String identityError,
-            String tab,
-            String success,
-            String queryError) {
+            Organisation organisation, String identityError, String tab, String success, String queryError) {
         Map<String, Object> model = new HashMap<>();
         boolean editMode = organisation != null && organisation.getId() != null;
         boolean canEditIdentity = user != null && user.isPlatformAdmin();
@@ -608,19 +642,6 @@ public class OrganisationAdminApi {
         model.put("canEditIdentity", canEditIdentity);
         model.put("titleKey", editMode ? "page.organisationEdit" : "page.organisationNew");
         model.put("activePageTitleKey", editMode ? "page.organisationEdit" : "page.organisationNew");
-        List<Map<String, Object>> orgRows = new java.util.ArrayList<>();
-        if (!editMode) {
-            for (Organisation source : organisationDao.allOrdered()) {
-                Map<String, Object> row = new HashMap<>();
-                row.put("id", source.getId());
-                row.put("name", source.getName());
-                row.put("slug", source.getSlug());
-                row.put("cloneSelected", cloneFromOrgId != null && cloneFromOrgId.equals(source.getId()));
-                orgRows.add(row);
-            }
-        }
-        model.put("organisations", orgRows);
-        model.put("cloneFromOrgId", cloneFromOrgId);
 
         String effectiveError = identityError != null && !identityError.isBlank()
                 ? identityError
@@ -639,11 +660,14 @@ public class OrganisationAdminApi {
     }
 
     private void enrichSettings(Map<String, Object> model, Organisation organisation, String tab) {
-        String effectiveTab = tab == null || tab.isBlank() ? null : tab.trim();
-        if (effectiveTab == null
-                || "identity".equals(effectiveTab)
-                || !SETTINGS_TABS.contains(effectiveTab)) {
-            effectiveTab = "club";
+        OrgConfig orgConfig = new OrgConfig(organisation);
+        boolean paymentsEnabled = orgConfig.isFeatureEnabledKey(OrgConfig.FEATURE_PAYMENTS);
+        String effectiveTab = normalizeSettingsTab(tab);
+        if (!SETTINGS_TABS.contains(effectiveTab)) {
+            effectiveTab = "features";
+        }
+        if (!paymentsEnabled && "payment".equals(effectiveTab)) {
+            effectiveTab = "features";
         }
         model.put("tab", effectiveTab);
         model.put(
@@ -661,7 +685,6 @@ public class OrganisationAdminApi {
                 model.put("publicBaseUrl", config.getPublicBaseUrl());
                 model.put("clubRegisterEnabled", config.pageForRequest().isClubRegisterEnabled());
 
-                OrgConfig orgConfig = new OrgConfig(organisation);
                 Map<String, String> cfg = new LinkedHashMap<>(orgConfig.toMap(false));
                 for (Set<String> keys : SETTINGS_TAB_KEYS.values()) {
                     for (String key : keys) {
@@ -710,8 +733,6 @@ public class OrganisationAdminApi {
                 }
                 secrets.put("stripe.secret", blankToNull(orgConfig.getProperty("stripe.secret")) != null);
                 secrets.put("mail.PASSWORD", blankToNull(orgConfig.getProperty("mail.PASSWORD")) != null);
-                secrets.put(
-                        "oauth.clientSecret", blankToNull(orgConfig.getProperty("oauth.clientSecret")) != null);
                 model.put("secretsConfigured", secrets);
 
                 if (ribAvailable) {
@@ -729,18 +750,12 @@ public class OrganisationAdminApi {
     }
 
     private String validate(Organisation org) {
-        if (org.getSlug() == null
-                || !SLUG.matcher(org.getSlug()).matches()
-                || OrgConfig.hostOf(org.getBaseUrl()) == null
+        if (OrgConfig.hostOf(org.getBaseUrl()) == null
                 || org.getName() == null
                 || org.getName().isBlank()
                 || org.getSuperUserEmail() == null
                 || !EMAIL.matcher(org.getSuperUserEmail()).matches()) {
             return "invalid";
-        }
-        Organisation bySlug = organisationDao.findBySlug(org.getSlug());
-        if (bySlug != null && !bySlug.getId().equals(org.getId())) {
-            return "slugTaken";
         }
         Organisation byBaseUrl = organisationDao.findByBaseUrl(org.getBaseUrl());
         if (byBaseUrl != null && !byBaseUrl.getId().equals(org.getId())) {
@@ -776,58 +791,6 @@ public class OrganisationAdminApi {
                 .build();
     }
 
-    /** Copies non-secret settings: Stripe options, OAuth endpoints and the settings JSON. */
-    private static void copySettings(Organisation from, Organisation to) {
-        to.setStripeKeyprefix(from.getStripeKeyprefix());
-        to.setStripeSimuled(from.isStripeSimuled());
-        to.setStripeCardEvents(from.isStripeCardEvents());
-        to.setStripeCardMemberships(from.isStripeCardMemberships());
-        to.setPaymentTransferEvents(from.isPaymentTransferEvents());
-        to.setPaymentTransferMemberships(from.isPaymentTransferMemberships());
-        to.setOauthAuthorizationUrl(from.getOauthAuthorizationUrl());
-        to.setOauthTokenUrl(from.getOauthTokenUrl());
-        to.setOauthScope(from.getOauthScope());
-        to.setOauthLogoutUrl(from.getOauthLogoutUrl());
-        to.setOauthAccountUrl(from.getOauthAccountUrl());
-        to.setOauthUserinfoUrl(from.getOauthUserinfoUrl());
-        to.setSettingsJson(from.getSettingsJson());
-    }
-
-    /** Copies licenses and club seasons; the org filter is lifted to read the source organisation. */
-    private void cloneData(int fromOrgId, int toOrgId) {
-        EntityManager em = RequestContext.require().em();
-        OrgScope.disableFilter(em);
-        try {
-            List<License> licenses = em.createQuery("SELECT l FROM License l WHERE l.orgId = :org", License.class)
-                    .setParameter("org", fromOrgId)
-                    .getResultList();
-            for (License source : licenses) {
-                License copy = new License(source.getName());
-                copy.setAccessRule(source.getAccessRule());
-                copy.setOrgId(toOrgId);
-                em.persist(copy);
-            }
-            List<ClubSeason> seasons = em.createQuery("SELECT s FROM ClubSeason s WHERE s.orgId = :org", ClubSeason.class)
-                    .setParameter("org", fromOrgId)
-                    .getResultList();
-            for (ClubSeason source : seasons) {
-                ClubSeason copy = new ClubSeason();
-                copy.setName(source.getName());
-                copy.setStartDate(source.getStartDate());
-                copy.setEndDate(source.getEndDate());
-                copy.setCurrent(source.isCurrent());
-                copy.setOrgId(toOrgId);
-                em.persist(copy);
-            }
-            em.flush();
-        } finally {
-            Integer currentOrgId = OrgScope.currentOrgId();
-            if (currentOrgId != null) {
-                OrgScope.enableFilter(em, currentOrgId);
-            }
-        }
-    }
-
     Response withOrgScope(Organisation org, ResponseSupplier action) {
         RequestContext ctx = RequestContext.require();
         Organisation previous = ctx.organisation();
@@ -855,8 +818,10 @@ public class OrganisationAdminApi {
     }
 
     private Response jsonRedirectToEdit(Organisation org, String queryName, String queryValue, String tab) {
-        return Response.ok(Map.of("redirect", editRedirectUri(org, queryName, queryValue, tab).toString()))
-                .build();
+        String json = new JSONObject()
+                .put("redirect", editRedirectUri(org, queryName, queryValue, tab).toString())
+                .toString();
+        return Response.ok(json).build();
     }
 
     private URI editRedirectUri(Organisation org, String queryName, String queryValue, String tab) {
@@ -867,17 +832,6 @@ public class OrganisationAdminApi {
                 .queryParam("tab", tab)
                 .fragment(tab)
                 .build());
-    }
-
-    private static Integer parseId(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Integer.valueOf(value.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private static String formValue(MultivaluedMap<String, String> form, String key) {

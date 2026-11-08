@@ -6,8 +6,6 @@ import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.desk.EventDeskHub;
 import com.github.gcolin.desk.EventDeskService;
-import jakarta.json.bind.Jsonb;
-import jakarta.json.bind.JsonbBuilder;
 import jakarta.websocket.CloseReason;
 import jakarta.websocket.OnClose;
 import jakarta.websocket.OnError;
@@ -31,7 +29,6 @@ import org.slf4j.LoggerFactory;
 public class EventDeskWebSocket {
 
     private static final Logger logger = LoggerFactory.getLogger(EventDeskWebSocket.class);
-    private static final Jsonb JSONB = JsonbBuilder.create();
     static final long IDLE_TIMEOUT_MS = 120_000L;
 
     @OnOpen
@@ -74,7 +71,7 @@ public class EventDeskWebSocket {
     private void handleMessage(String message, Session session, Integer pathEventId) throws IOException {
         EventDeskOp.SyncRequest request;
         try {
-            request = JSONB.fromJson(message, EventDeskOp.SyncRequest.class);
+            request = EventDeskJson.parseSyncRequest(message);
         } catch (Exception e) {
             sendError(session, "invalid message");
             return;
@@ -222,7 +219,7 @@ public class EventDeskWebSocket {
 
     private void sendJson(Session session, Object payload) throws IOException {
         synchronized (session) {
-            session.getBasicRemote().sendText(JSONB.toJson(payload));
+            session.getBasicRemote().sendText(EventDeskJson.toJson(payload));
         }
     }
 

@@ -1,21 +1,21 @@
 package com.github.gcolin.payment;
 
 import com.github.gcolin.club.SeasonScope;
-import com.github.gcolin.payment.Payment;
-import com.github.gcolin.payment.PaymentStatus;
-import com.github.gcolin.payment.PaymentType;
-import com.github.gcolin.platform.Transactional;
-import com.github.gcolin.platform.PagedList;
-import jakarta.persistence.LockModeType;
-import jakarta.persistence.TypedQuery;
-import java.util.List;
 import com.github.gcolin.platform.AbstractDao;
-import com.github.gcolin.registration.PlayerSubscription;
+import com.github.gcolin.platform.Db;
+import com.github.gcolin.platform.PagedList;
+import java.util.List;
+import org.apache.commons.dbutils.handlers.ColumnListHandler;
 
 public class PaymentDao extends AbstractDao<Payment> {
 
+    private static final String SEARCH_CONDITION = "(LOWER(p.useremail) LIKE ?"
+            + " OR EXISTS (SELECT 1 FROM player_subscription s WHERE s.payment_id = p.id AND LOWER(s.nr_ffe) LIKE ?)"
+            + " OR EXISTS (SELECT 1 FROM membership m WHERE m.payment_id = p.id AND (LOWER(m.nr_ffe) LIKE ?"
+            + " OR LOWER(m.lastname) LIKE ? OR LOWER(m.firstname) LIKE ?)))";
+
     public PaymentDao() {
-        super(Payment.class);
+        super(Payment.class, "payment");
     }
 
     @Override
@@ -24,126 +24,104 @@ public class PaymentDao extends AbstractDao<Payment> {
     }
 
     public PagedList<Payment> page(int start, int pageSize, SeasonScope scope) {
-        String jpql = "SELECT e FROM Payment e" + paymentCreatedAtSeasonWhere("e", scope) + " ORDER BY e.id DESC";
-        TypedQuery<Payment> query = em.createQuery(jpql, Payment.class);
-        bindSeasonScope(query, scope);
-        query.setFirstResult(start);
-        query.setMaxResults(pageSize);
-        List<Payment> list = query.getResultList();
+        List<Object> args = Db.args();
+        String where = seasonClause(scope, args, " WHERE ");
+        long total = Db.scalarLongOrZero("SELECT COUNT(*) FROM payment p" + where, args.toArray());
 
-        String countJpql = "SELECT COUNT(e) FROM Payment e" + paymentCreatedAtSeasonWhere("e", scope);
-        TypedQuery<Long> countQuery = em.createQuery(countJpql, Long.class);
-        bindSeasonScope(countQuery, scope);
-        long total = countQuery.getSingleResult();
-
+        args.add(pageSize);
+        args.add(start);
+        List<Payment> list = select("SELECT p.* FROM payment p" + where + " ORDER BY p.id DESC LIMIT ? OFFSET ?", args.toArray());
         return new PagedList<>(list, start, total);
     }
 
     public Payment findPendingByUser(String email) {
-        TypedQuery<Payment> query = em.createQuery(
-                "SELECT e FROM Payment e where e.userEmail = :email AND e.status = :status", Payment.class);
-        query.setParameter("email", email);
-        query.setParameter("status", PaymentStatus.PENDING);
-        return query.getResultStream().findFirst().orElse(null);
+        return selectOne(
+                "SELECT * FROM payment WHERE useremail = ? AND status = ? ORDER BY id LIMIT 1",
+                email,
+                PaymentStatus.PENDING);
     }
 
     public Payment findPendingEventPayment(String email) {
-        TypedQuery<Payment> query = em.createQuery(
-                "SELECT p FROM Payment p WHERE p.userEmail = :email AND p.status = :status"
-                        + " AND EXISTS (SELECT s FROM PlayerSubscription s WHERE s.payment = p)",
-                Payment.class);
-        query.setParameter("email", email);
-        query.setParameter("status", PaymentStatus.PENDING);
-        return query.getResultStream().findFirst().orElse(null);
+        return selectOne(
+                "SELECT p.* FROM payment p WHERE p.useremail = ? AND p.status = ?"
+                        + " AND EXISTS (SELECT 1 FROM player_subscription s WHERE s.payment_id = p.id)"
+                        + " ORDER BY p.id LIMIT 1",
+                email,
+                PaymentStatus.PENDING);
     }
 
     public Payment findPendingMembershipPayment(String email) {
-        TypedQuery<Payment> query = em.createQuery(
-                "SELECT p FROM Payment p WHERE p.userEmail = :email AND p.status = :status"
-                        + " AND EXISTS (SELECT m FROM Membership m WHERE m.payment = p)",
-                Payment.class);
-        query.setParameter("email", email);
-        query.setParameter("status", PaymentStatus.PENDING);
-        return query.getResultStream().findFirst().orElse(null);
+        return selectOne(
+                "SELECT p.* FROM payment p WHERE p.useremail = ? AND p.status = ?"
+                        + " AND EXISTS (SELECT 1 FROM membership m WHERE m.payment_id = p.id)"
+                        + " ORDER BY p.id LIMIT 1",
+                email,
+                PaymentStatus.PENDING);
     }
 
     public List<Payment> findAllPaidNotFreeByUser(String email) {
-        TypedQuery<Payment> query = em.createQuery(
-                "SELECT e FROM Payment e where e.userEmail = :email AND e.status = :status AND e.type <> :type ORDER BY e.id DESC",
-                Payment.class);
-        query.setParameter("email", email);
-        query.setParameter("status", PaymentStatus.PAID);
-        query.setParameter("type", PaymentType.FREE);
-        return query.getResultList();
+        return select(
+                "SELECT * FROM payment WHERE useremail = ? AND status = ? AND type <> ? ORDER BY id DESC",
+                email,
+                PaymentStatus.PAID,
+                PaymentType.FREE);
     }
 
     public List<Payment> findAllPaidWithMembershipsByUser(String email) {
-        TypedQuery<Payment> query = em.createQuery(
-                "SELECT DISTINCT p FROM Payment p WHERE p.userEmail = :email AND p.status = :status"
-                        + " AND p.type <> :freeType"
-                        + " AND EXISTS (SELECT m FROM Membership m WHERE m.payment = p)"
+        return select(
+                "SELECT p.* FROM payment p WHERE p.useremail = ? AND p.status = ? AND p.type <> ?"
+                        + " AND EXISTS (SELECT 1 FROM membership m WHERE m.payment_id = p.id)"
                         + " ORDER BY p.id DESC",
-                Payment.class);
-        query.setParameter("email", email);
-        query.setParameter("status", PaymentStatus.PAID);
-        query.setParameter("freeType", PaymentType.FREE);
-        return query.getResultList();
+                email,
+                PaymentStatus.PAID,
+                PaymentType.FREE);
     }
 
     public List<Payment> findAllPaidDonationsByUser(String email) {
-        TypedQuery<Payment> query = em.createQuery(
-                "SELECT p FROM Payment p WHERE p.userEmail = :email AND p.status = :status"
-                        + " AND p.donation = true"
-                        + " ORDER BY p.id DESC",
-                Payment.class);
-        query.setParameter("email", email);
-        query.setParameter("status", PaymentStatus.PAID);
-        return query.getResultList();
+        return select(
+                "SELECT * FROM payment WHERE useremail = ? AND status = ? AND donation = TRUE ORDER BY id DESC",
+                email,
+                PaymentStatus.PAID);
     }
 
     public Payment findBySessionId(String sessionId) {
-        TypedQuery<Payment> query =
-                em.createQuery("SELECT e FROM Payment e where e.stripeSessionId = :sessionId", Payment.class);
-        query.setParameter("sessionId", sessionId);
-        query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
-        return query.getResultStream().findFirst().orElse(null);
+        return selectOne("SELECT * FROM payment WHERE stripesessionid = ? ORDER BY id LIMIT 1 FOR UPDATE", sessionId);
     }
 
-    public Double sumAllPayments() {
+    public long sumAllPayments() {
         return sumAllPayments(SeasonScope.all());
     }
 
-    public Double sumAllPayments(SeasonScope scope) {
-        String jpql = "SELECT COALESCE(SUM(p.amount), 0.0) FROM Payment p WHERE p.status = :status"
-                + paymentCreatedAtSeasonAnd("p", scope);
-        TypedQuery<Double> query = em.createQuery(jpql, Double.class);
-        query.setParameter("status", PaymentStatus.PAID);
-        bindSeasonScope(query, scope);
-        return query.getSingleResult();
+    public long sumAllPayments(SeasonScope scope) {
+        List<Object> args = Db.args(PaymentStatus.PAID);
+        String and = seasonClause(scope, args, " AND ");
+        return Db.scalarLongOrZero(
+                "SELECT COALESCE(SUM(p.amountcents), 0) FROM payment p WHERE p.status = ?" + and,
+                args.toArray());
     }
 
     public List<Payment> all(SeasonScope scope) {
-        String jpql = "SELECT e FROM Payment e" + paymentCreatedAtSeasonWhere("e", scope) + " ORDER BY e.id DESC";
-        TypedQuery<Payment> query = em.createQuery(jpql, Payment.class);
-        bindSeasonScope(query, scope);
-        return query.getResultList();
+        List<Object> args = Db.args();
+        String where = seasonClause(scope, args, " WHERE ");
+        return select("SELECT p.* FROM payment p" + where + " ORDER BY p.id DESC", args.toArray());
     }
 
     public List<Payment> findPaid(SeasonScope scope) {
-        String jpql = "SELECT p FROM Payment p WHERE p.status = :status"
-                + paymentCreatedAtSeasonAnd("p", scope)
-                + " ORDER BY COALESCE(p.updatedAt, p.createdAt), p.id";
-        TypedQuery<Payment> query = em.createQuery(jpql, Payment.class);
-        query.setParameter("status", PaymentStatus.PAID);
-        bindSeasonScope(query, scope);
-        return query.getResultList();
+        List<Object> args = Db.args(PaymentStatus.PAID);
+        String and = seasonClause(scope, args, " AND ");
+        return select(
+                "SELECT p.* FROM payment p WHERE p.status = ?"
+                        + and
+                        + " ORDER BY COALESCE(p.updated_at, p.created_at), p.id",
+                args.toArray());
     }
 
     public List<String> findDistinctUserEmails() {
-        TypedQuery<String> query = em.createQuery(
-                "SELECT DISTINCT p.userEmail FROM Payment p WHERE p.userEmail IS NOT NULL AND p.userEmail <> '' ORDER BY p.userEmail",
-                String.class);
-        return query.getResultList();
+        List<String> emails = Db.query(
+                "SELECT DISTINCT useremail FROM payment WHERE useremail IS NOT NULL AND useremail <> ''"
+                        + " ORDER BY useremail",
+                new ColumnListHandler<String>());
+        return emails == null ? List.of() : emails;
     }
 
     public PagedList<Payment> pageSearch(String search, int start, int pageSize) {
@@ -152,50 +130,71 @@ public class PaymentDao extends AbstractDao<Payment> {
 
     public PagedList<Payment> pageSearch(String search, int start, int pageSize, SeasonScope scope) {
         String term = "%" + search.toLowerCase() + "%";
-        String jpql = "SELECT DISTINCT p FROM Payment p WHERE (LOWER(p.userEmail) LIKE :term"
-                + " OR EXISTS (SELECT s FROM PlayerSubscription s WHERE s.payment = p AND LOWER(s.nrFfe) LIKE :term)"
-                + " OR EXISTS (SELECT m FROM Membership m WHERE m.payment = p AND (LOWER(m.nrFfe) LIKE :term"
-                + " OR LOWER(m.lastname) LIKE :term OR LOWER(m.firstname) LIKE :term)))"
-                + paymentCreatedAtSeasonAnd("p", scope)
-                + " ORDER BY p.id DESC";
-        TypedQuery<Payment> query = em.createQuery(jpql, Payment.class);
-        query.setParameter("term", term);
-        bindSeasonScope(query, scope);
-        query.setFirstResult(start);
-        query.setMaxResults(pageSize);
-        List<Payment> list = query.getResultList();
+        List<Object> args = Db.args(term, term, term, term, term);
+        String and = seasonClause(scope, args, " AND ");
+        long total = Db.scalarLongOrZero(
+                "SELECT COUNT(*) FROM payment p WHERE " + SEARCH_CONDITION + and, args.toArray());
 
-        String countJpql = "SELECT COUNT(DISTINCT p) FROM Payment p WHERE (LOWER(p.userEmail) LIKE :term"
-                + " OR EXISTS (SELECT s FROM PlayerSubscription s WHERE s.payment = p AND LOWER(s.nrFfe) LIKE :term)"
-                + " OR EXISTS (SELECT m FROM Membership m WHERE m.payment = p AND (LOWER(m.nrFfe) LIKE :term"
-                + " OR LOWER(m.lastname) LIKE :term OR LOWER(m.firstname) LIKE :term)))"
-                + paymentCreatedAtSeasonAnd("p", scope);
-        TypedQuery<Long> countQuery = em.createQuery(countJpql, Long.class);
-        countQuery.setParameter("term", term);
-        bindSeasonScope(countQuery, scope);
-        long total = countQuery.getSingleResult();
-
+        args.add(pageSize);
+        args.add(start);
+        List<Payment> list = select(
+                "SELECT p.* FROM payment p WHERE " + SEARCH_CONDITION + and + " ORDER BY p.id DESC LIMIT ? OFFSET ?",
+                args.toArray());
         return new PagedList<>(list, start, total);
     }
 
-    private String paymentCreatedAtSeasonWhere(String alias, SeasonScope scope) {
-        if (!scope.isFiltered()) {
+    private static String seasonClause(SeasonScope scope, List<Object> args, String keyword) {
+        if (scope == null || !scope.isFiltered()) {
             return "";
         }
-        return " WHERE " + alias + ".createdAt >= :seasonStart AND " + alias + ".createdAt <= :seasonEnd";
+        args.add(scope.getStart());
+        args.add(scope.getEnd());
+        return keyword + "p.created_at >= ? AND p.created_at <= ?";
     }
 
-    private String paymentCreatedAtSeasonAnd(String alias, SeasonScope scope) {
-        if (!scope.isFiltered()) {
-            return "";
+    @Override
+    public void persist(Payment payment) {
+        if (payment.getId() == null) {
+            touchCreated(payment);
+            long id = Db.insertReturningLong(
+                    "INSERT INTO payment (created_at, updated_at, stripesessionid, stripeintent, useremail,"
+                            + " payername, payeraddress, donation, status, type, amountcents)"
+                            + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    payment.getCreatedAt(),
+                    payment.getUpdatedAt(),
+                    payment.getStripeSessionId(),
+                    payment.getStripeIntent(),
+                    payment.getUserEmail(),
+                    payment.getPayerName(),
+                    payment.getPayerAddress(),
+                    payment.isDonation(),
+                    Db.enumName(payment.getStatus()),
+                    Db.enumName(payment.getType()),
+                    payment.getAmountCents());
+            payment.setId(id);
+        } else {
+            touchUpdated(payment);
+            Db.update(
+                    "UPDATE payment SET updated_at = ?, stripesessionid = ?, stripeintent = ?, useremail = ?,"
+                            + " payername = ?, payeraddress = ?, donation = ?, status = ?, type = ?,"
+                            + " amountcents = ? WHERE id = ?",
+                    payment.getUpdatedAt(),
+                    payment.getStripeSessionId(),
+                    payment.getStripeIntent(),
+                    payment.getUserEmail(),
+                    payment.getPayerName(),
+                    payment.getPayerAddress(),
+                    payment.isDonation(),
+                    Db.enumName(payment.getStatus()),
+                    Db.enumName(payment.getType()),
+                    payment.getAmountCents(),
+                    payment.getId());
         }
-        return " AND " + alias + ".createdAt >= :seasonStart AND " + alias + ".createdAt <= :seasonEnd";
     }
 
-    private void bindSeasonScope(TypedQuery<?> query, SeasonScope scope) {
-        if (scope.isFiltered()) {
-            query.setParameter("seasonStart", scope.getStart());
-            query.setParameter("seasonEnd", scope.getEnd());
-        }
+    @Override
+    public Payment merge(Payment payment) {
+        persist(payment);
+        return payment;
     }
 }

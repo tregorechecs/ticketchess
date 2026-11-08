@@ -78,7 +78,7 @@ public class EventPapiApi {
 
     @POST
     @Path("upload")
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     @Produces(MediaType.TEXT_PLAIN)
     public Response uploadToFfe(@PathParam("id") Integer eventId) {
         EventCache cache = eventService.buildCache(eventId);

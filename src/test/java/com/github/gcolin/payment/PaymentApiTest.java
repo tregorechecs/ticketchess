@@ -525,8 +525,8 @@ class PaymentApiTest {
 
         assertEquals(303, response.getStatus());
         verify(paymentDao).persist(any(Payment.class));
-        verify(membershipDao, org.mockito.Mockito.never()).find(any());
-        verify(subDao, org.mockito.Mockito.never()).find(any());
+        verify(membershipDao, org.mockito.Mockito.never()).find(any(Integer.class));
+        verify(subDao, org.mockito.Mockito.never()).find(any(Integer.class));
     }
 
     @Test
@@ -673,32 +673,6 @@ class PaymentApiTest {
         assertTrue(csv.contains("1;CARD;PENDING;10.0;"));
         assertTrue(csv.contains("2;BANK_TRANSFER;PAID;20.0;event;Open"));
         assertTrue(csv.contains("Ada Lovelace;LIC1"));
-    }
-
-    @Test
-    void exportShouldDetachElementsAndReturnPagedList() throws Exception {
-        PaymentApi api = new PaymentApi();
-        PaymentDao paymentDao = mock(PaymentDao.class);
-
-        Payment payment = new Payment();
-        payment.setId(4L);
-
-        PagedList<Payment> paged = new PagedList<>(List.of(payment), 0, 1);
-
-        when(paymentDao.page(eq(0), eq(50), any(SeasonScope.class))).thenReturn(paged);
-        when(paymentDao.detachAll(paged.getElements())).thenReturn(paged.getElements());
-
-        ClubSeasonFilter clubSeasonFilter = mock(ClubSeasonFilter.class);
-        when(clubSeasonFilter.resolve(null)).thenReturn(SeasonScope.all());
-
-        inject(api, "paymentService", paymentDao);
-        inject(api, "clubSeasonFilter", clubSeasonFilter);
-
-        PagedList<Payment> result = api.export(0, 50, null);
-
-        assertSame(paged, result);
-        assertEquals(1, result.getElements().size());
-        verify(paymentDao).detachAll(paged.getElements());
     }
 
     @Test
@@ -868,32 +842,6 @@ class PaymentApiTest {
                         eq("donor@test.com"),
                         eq("Votre attestation fiscale"),
                         any(MailAttachment.class));
-    }
-
-    @Test
-    void exportByIdAndSubByIdShouldReturnDaoValues() throws Exception {
-        PaymentApi api = new PaymentApi();
-        PaymentDao paymentDao = mock(PaymentDao.class);
-        PlayerSubscriptionDao subDao = mock(PlayerSubscriptionDao.class);
-
-        Payment payment = new Payment();
-        payment.setId(7L);
-
-        PlayerSubscription sub = new PlayerSubscription();
-        sub.setId(70);
-
-        when(paymentDao.find(7)).thenReturn(payment);
-        when(subDao.findByPaymentId(7)).thenReturn(List.of(sub));
-
-        inject(api, "paymentService", paymentDao);
-        inject(api, "playerSubscriptionService", subDao);
-
-        Payment byId = api.exportById(7);
-        List<PlayerSubscription> subs = api.subById(7);
-
-        assertSame(payment, byId);
-        assertEquals(1, subs.size());
-        assertEquals(70, subs.get(0).getId());
     }
 
     @Test

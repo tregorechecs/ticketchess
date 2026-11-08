@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
 import com.github.gcolin.platform.MustacheHtml;
 
 @Path("eventcollection/{id:\\d+}/mail")
-@RequireRole(RoleCode.EVENT_ADMIN)
+@RequireRole(RoleCode.ARBITRE)
 public class EventCollectionMailApi {
 
     @Inject

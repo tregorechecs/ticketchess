@@ -33,7 +33,7 @@ import java.util.Map;
 import com.github.gcolin.platform.MustacheHtml;
 
 @Path("playersubscription-admin")
-@RequireRole(RoleCode.EVENT_ADMIN)
+@RequireRole(RoleCode.ARBITRE)
 public class PlayerSubscriptionAdminApi {
 
     @Inject

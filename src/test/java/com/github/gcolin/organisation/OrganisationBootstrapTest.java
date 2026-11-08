@@ -34,12 +34,11 @@ class OrganisationBootstrapTest {
         config.getProperties().setProperty("oauth.clientId", "cid");
 
         Organisation org = new Organisation();
-        org.setSlug("default");
         org.setBaseUrl("http://localhost:8080");
         org.setName("Existing");
         org.setSuperUserEmail("admin@example.org");
 
-        OrganisationBootstrap bootstrap = new OrganisationBootstrap(config, null);
+        OrganisationBootstrap bootstrap = new OrganisationBootstrap(config, (javax.sql.DataSource) null);
         Set<String> migrated = bootstrap.backfillFromPlatform(org);
 
         assertTrue(migrated.contains("title"));
@@ -66,7 +65,6 @@ class OrganisationBootstrapTest {
         Organisation org = OrgConfig.seed(config.getProperties());
         OrgConfig view = new OrgConfig(org);
 
-        assertEquals("default", org.getSlug());
         assertEquals("Seed Club", org.getName());
         assertEquals("Seed Club", view.getProperty("title"));
         assertEquals("seed@example.org", view.getProperty("org.email"));

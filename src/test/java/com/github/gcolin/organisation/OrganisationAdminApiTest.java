@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -21,7 +22,7 @@ import com.github.gcolin.platform.LogoService;
 import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.platform.SignatureService;
 import com.github.gcolin.platform.TestContext;
-import jakarta.persistence.EntityManager;
+import java.sql.Connection;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -70,19 +71,15 @@ class OrganisationAdminApiTest {
         OrganisationAdminApi api = newApi(true);
         OrganisationDao dao = (OrganisationDao) get(api, "organisationDao");
 
-        assertEquals(200, api.create("BAD SLUG", "http://club.test", "Club", "a@b.test", null).getStatus());
-        when(dao.findBySlug("club")).thenReturn(org(2));
-        assertEquals(200, api.create("club", "http://club.test", "Club", "a@b.test", null).getStatus());
-        when(dao.findBySlug("club")).thenReturn(null);
+        assertEquals(200, api.create("not-a-url", "Club", "a@b.test").getStatus());
         when(dao.findByBaseUrl("http://club.test")).thenReturn(org(3));
-        assertEquals(200, api.create("club", "http://club.test", "Club", "a@b.test", null).getStatus());
+        assertEquals(200, api.create("http://club.test", "Club", "a@b.test").getStatus());
     }
 
     @Test
     void updateHandlesMissingAndValidation() throws Exception {
         OrganisationAdminApi api = newApi(true);
-        OrganisationDao dao = (OrganisationDao) get(api, "organisationDao");
-        assertEquals(404, api.update(1, "x", "http://x.test", "X", "x@y.test", "true").getStatus());
+        assertEquals(404, api.update(1, "http://x.test", "X", "x@y.test").getStatus());
     }
 
     @Test
@@ -94,7 +91,7 @@ class OrganisationAdminApiTest {
         Config config = mock(Config.class);
         inject(api, "config", config);
         inject(api, "ribService", mock(RibService.class));
-        TestContext.open((EntityManager) null);
+        TestContext.open((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         MultivaluedMap<String, String> invalid = new MultivaluedHashMap<>();
@@ -102,7 +99,7 @@ class OrganisationAdminApiTest {
         assertEquals(303, api.saveConfig(4, invalid).getStatus());
 
         MultivaluedMap<String, String> form = new MultivaluedHashMap<>();
-        form.putSingle("tab", "club");
+        form.putSingle("tab", "identity");
         form.putSingle("title", " Club ");
         assertEquals(303, api.saveConfig(4, form).getStatus());
         verify(config).updateProperties(any());
@@ -112,18 +109,84 @@ class OrganisationAdminApiTest {
     }
 
     @Test
-    void invoiceTabKeysDropSellerFallbacksCoveredByClub() {
-        Set<String> invoiceKeys = OrganisationAdminApi.SETTINGS_TAB_KEYS.get("invoice");
-        assertFalse(invoiceKeys.contains("invoice.seller.name"));
-        assertFalse(invoiceKeys.contains("invoice.seller.email"));
-        assertFalse(invoiceKeys.contains("invoice.seller.address1"));
-        assertFalse(invoiceKeys.contains("invoice.seller.website"));
-        assertTrue(invoiceKeys.contains("invoice.seller.phone"));
-        assertTrue(invoiceKeys.contains("invoice.seller.zip"));
+    void paymentTabKeysDropSellerFallbacksCoveredByIdentity() {
+        Set<String> paymentKeys = OrganisationAdminApi.SETTINGS_TAB_KEYS.get("payment");
+        assertFalse(paymentKeys.contains("invoice.seller.name"));
+        assertFalse(paymentKeys.contains("invoice.seller.email"));
+        assertFalse(paymentKeys.contains("invoice.seller.address1"));
+        assertFalse(paymentKeys.contains("invoice.seller.website"));
+        assertTrue(paymentKeys.contains("invoice.seller.phone"));
+        assertTrue(paymentKeys.contains("invoice.seller.zip"));
+        assertTrue(paymentKeys.contains("stripe.simuled"));
     }
 
     @Test
-    void saveConfigClubAsPlatformAdminUpdatesIdentityFields() throws Exception {
+    void saveConfigFeaturesPersistsFeatureFlags() throws Exception {
+        OrganisationAdminApi api = newApi(false);
+        Organisation org = org(11);
+        OrganisationDao dao = (OrganisationDao) get(api, "organisationDao");
+        when(dao.find(11)).thenReturn(org);
+        Config config = mock(Config.class);
+        inject(api, "config", config);
+        inject(api, "ribService", mock(RibService.class));
+        TestContext.open((Connection) null);
+        RequestContext.require().setOrganisation(org);
+
+        MultivaluedMap<String, String> form = new MultivaluedHashMap<>();
+        form.putSingle("tab", "features");
+        form.putSingle("feature.events", "true");
+        // memberships + payments unchecked → false; membership payment methods forced off
+        assertEquals(303, api.saveConfig(11, form).getStatus());
+        verify(config).updateProperties(argThat(updates ->
+                "true".equals(updates.get(OrgConfig.FEATURE_EVENTS))
+                        && "false".equals(updates.get(OrgConfig.FEATURE_MEMBERSHIPS))
+                        && "false".equals(updates.get(OrgConfig.FEATURE_PAYMENTS))
+                        && "false".equals(updates.get("stripe.card.memberships"))
+                        && "false".equals(updates.get("payment.transfer.memberships"))
+                        && !updates.containsKey("stripe.card.events")
+                        && !updates.containsKey("payment.transfer.events")));
+    }
+
+    @Test
+    void editPageRedirectsOauthTabToAdminOrg() throws Exception {
+        OrganisationAdminApi api = newApi(true);
+        Organisation org = org(9);
+        OrganisationDao dao = (OrganisationDao) get(api, "organisationDao");
+        when(dao.find(9)).thenReturn(org);
+        inject(api, "uriInfo", mockUriInfo(URI.create("/admin/org?tab=oauth#oauth")));
+
+        Response response = api.editPage(9, "oauth", "", "");
+        assertEquals(303, response.getStatus());
+        assertEquals(URI.create("/admin/org?tab=oauth#oauth"), response.getLocation());
+    }
+
+    @Test
+    void saveConfigRejectsOauthTabMovedToAdminOrg() throws Exception {
+        OrganisationAdminApi api = newApi(true);
+        Organisation org = org(10);
+        OrganisationDao dao = (OrganisationDao) get(api, "organisationDao");
+        when(dao.find(10)).thenReturn(org);
+        inject(api, "config", mock(Config.class));
+        inject(api, "ribService", mock(RibService.class));
+        inject(
+                api,
+                "uriInfo",
+                mockUriInfo(URI.create("/admin/organisations/10?error=configInvalid&tab=features#features")));
+        TestContext.open((Connection) null);
+        RequestContext.require().setOrganisation(org);
+
+        MultivaluedMap<String, String> form = new MultivaluedHashMap<>();
+        form.putSingle("tab", "oauth");
+        form.putSingle("oauth.clientId", "cid");
+        Response response = api.saveConfig(10, form);
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/admin/organisations/10?error=configInvalid&tab=features#features"),
+                response.getLocation());
+    }
+
+    @Test
+    void saveConfigIdentityAsPlatformAdminUpdatesIdentityFields() throws Exception {
         OrganisationAdminApi api = newApi(true);
         Organisation org = org(7);
         org.setActive(false);
@@ -133,35 +196,32 @@ class OrganisationAdminApiTest {
         inject(api, "config", config);
         inject(api, "ribService", mock(RibService.class));
 
-        EntityManager em = mock(EntityManager.class);
         try (TestContext appCtx = TestContext.open(mock(LoggedUser.class), mock(ActiveLoggedUsers.class))) {
             RequestContext.close();
-            TestContext.open(em);
+            TestContext.open((Connection) null);
             RequestContext.require().setOrganisation(org);
             inject(AppContext.get(), "organisationResolver", mock(OrganisationResolver.class));
 
             MultivaluedMap<String, String> form = new MultivaluedHashMap<>();
-            form.putSingle("tab", "club");
+            form.putSingle("tab", "identity");
             form.putSingle("title", "App");
             form.putSingle("org.name", "Club Seven");
             form.putSingle("base_url", "https://club7.example.org");
             form.putSingle("super_user_email", "admin7@example.org");
-            form.putSingle("active", "true");
 
             assertEquals(303, api.saveConfig(7, form).getStatus());
             assertEquals("Club Seven", org.getName());
             assertEquals("https://club7.example.org", org.getBaseUrl());
             assertEquals("admin7@example.org", org.getSuperUserEmail());
-            assertTrue(org.isActive());
-            assertEquals("club7", org.getSlug());
-            verify(em).flush();
+            assertFalse(org.isActive());
+            verify(dao).merge(org);
             verify(config).updateProperties(any());
         }
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void saveConfigStripeSimuledDoesNotWipeKeysAndBlankPublicDisablesCards() throws Exception {
+    void saveConfigPaymentSimuledDoesNotWipeKeysAndBlankPublicDisablesCards() throws Exception {
         OrganisationAdminApi api = newApi(false);
         Organisation org = org(8);
         OrganisationDao dao = (OrganisationDao) get(api, "organisationDao");
@@ -171,13 +231,13 @@ class OrganisationAdminApiTest {
         when(rib.exists()).thenReturn(true);
         inject(api, "config", config);
         inject(api, "ribService", rib);
-        TestContext.open((EntityManager) null);
+        TestContext.open((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
 
         MultivaluedMap<String, String> simuled = new MultivaluedHashMap<>();
-        simuled.putSingle("tab", "stripe");
+        simuled.putSingle("tab", "payment");
         simuled.putSingle("stripe.simuled", "true");
         simuled.putSingle("stripe.card.events", "true");
         assertEquals(303, api.saveConfig(8, simuled).getStatus());
@@ -189,7 +249,7 @@ class OrganisationAdminApiTest {
         assertEquals("true", simuledUpdates.get("stripe.simuled"));
 
         MultivaluedMap<String, String> noPublic = new MultivaluedHashMap<>();
-        noPublic.putSingle("tab", "stripe");
+        noPublic.putSingle("tab", "payment");
         noPublic.putSingle("stripe.public", "  ");
         noPublic.putSingle("stripe.card.events", "true");
         noPublic.putSingle("stripe.card.memberships", "true");
@@ -207,7 +267,7 @@ class OrganisationAdminApiTest {
         OrganisationDao dao = (OrganisationDao) get(api, "organisationDao");
         when(dao.find(5)).thenReturn(org);
         inject(api, "uriInfo", uriInfo());
-        TestContext.open((EntityManager) null);
+        TestContext.open((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         LogoService logo = mock(LogoService.class);
@@ -261,7 +321,6 @@ class OrganisationAdminApiTest {
     private static Organisation org(int id) {
         Organisation org = new Organisation();
         org.setId(id);
-        org.setSlug("club" + id);
         org.setBaseUrl("http://club" + id + ".test");
         org.setName("Club");
         org.setSuperUserEmail("admin@test.com");
@@ -276,13 +335,17 @@ class OrganisationAdminApiTest {
     }
 
     private static UriInfo uriInfo() {
+        return mockUriInfo(URI.create("http://localhost/admin/organisations/1"));
+    }
+
+    private static UriInfo mockUriInfo(URI target) {
         UriInfo info = mock(UriInfo.class);
         UriBuilder builder = mock(UriBuilder.class);
         when(info.getBaseUriBuilder()).thenReturn(builder);
         when(builder.path(anyString())).thenReturn(builder);
         when(builder.queryParam(anyString(), any())).thenReturn(builder);
         when(builder.fragment(anyString())).thenReturn(builder);
-        when(builder.build()).thenReturn(URI.create("http://localhost/admin/organisations/1"));
+        when(builder.build()).thenReturn(target);
         return info;
     }
 

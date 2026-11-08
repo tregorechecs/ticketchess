@@ -1,7 +1,6 @@
 package com.github.gcolin.platform;
 
 import com.github.gcolin.organisation.OrganisationResolver;
-import com.github.gcolin.organisation.OrgPathRequest;
 import com.github.gcolin.organisation.OrgScope;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
@@ -26,7 +25,6 @@ public class RequestContextFilter implements Filter {
         } else {
             RequestContext.open(httpRequest);
         }
-        HttpServletRequest effective = httpRequest;
         try {
             RequestContext ctx = RequestContext.require();
             OrganisationResolver.Resolution resolution =
@@ -37,13 +35,9 @@ public class RequestContextFilter implements Filter {
             }
             if (resolution.organisation() != null) {
                 ctx.setOrganisation(resolution.organisation());
-                OrgScope.enableFilter(ctx.em(), resolution.organisation().getId());
+                OrgScope.enableFilter(resolution.organisation().getId());
             }
-            ctx.setOrgPathPrefix(resolution.pathPrefix());
-            if (resolution.pathPrefix() != null) {
-                effective = new OrgPathRequest(httpRequest, resolution.pathPrefix());
-            }
-            chain.doFilter(effective, response);
+            chain.doFilter(httpRequest, response);
             RequestContext.commit();
         } catch (RuntimeException | IOException | ServletException e) {
             RequestContext.rollback();

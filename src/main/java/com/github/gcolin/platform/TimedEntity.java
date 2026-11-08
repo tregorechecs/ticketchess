@@ -1,27 +1,17 @@
 package com.github.gcolin.platform;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.MappedSuperclass;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import java.time.LocalDateTime;
 
-@MappedSuperclass
 public abstract class TimedEntity {
-    @Column(name = "created_at")
     protected LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
     protected LocalDateTime updatedAt;
 
-    @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
         createdAt = now;
         updatedAt = now;
     }
 
-    @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
     }

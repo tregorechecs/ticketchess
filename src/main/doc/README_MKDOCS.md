@@ -35,4 +35,4 @@ Le site est généré dans `target/mkdocs-site/` à la racine du dépôt (réper
 
 ## Diagrammes Mermaid
 
-Les pages `MANUEL_UTILISATEUR.md` et `SYNCHRO_SHARLYCHESS.md` incluent des diagrammes Mermaid, chargés depuis unpkg lors du rendu MkDocs. Une connexion à Internet est nécessaire pour les visualiser en local.
+La page `MANUEL_UTILISATEUR.md` inclut des diagrammes Mermaid, chargés depuis unpkg lors du rendu MkDocs. Une connexion à Internet est nécessaire pour les visualiser en local.

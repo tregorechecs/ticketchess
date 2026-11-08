@@ -2,41 +2,24 @@ package com.github.gcolin.player;
 
 import com.github.gcolin.player.IPlayer;
 import com.github.gcolin.platform.ModelUtils;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 import java.time.LocalDate;
 
-@Entity
-@Table(name = "custom_player")
 public class CustomPlayer implements IPlayer {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(nullable = false, length = 255)
     private String firstname;
 
-    @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(length = 255)
     private String licence;
 
-    @Column(name = "birthdate", length = 255)
     private String birthDate;
 
-    @Column(name = "creation_user", length = 255)
     private String creationUser;
 
-    @Column
     private Boolean gender;
 
-    @Column(length = 255)
     private String elo;
 
     // =========================

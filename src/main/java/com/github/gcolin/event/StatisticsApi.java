@@ -41,7 +41,7 @@ public class StatisticsApi {
     private ClubSeasonFilter clubSeasonFilter;
 
     @GET
-    @RequireRole(value = RoleCode.TRESORIER, or = RoleCode.EVENT_ADMIN)
+    @RequireRole(value = RoleCode.TRESORIER, or = RoleCode.ARBITRE)
     @Transactional
     public MustacheHtml page(@QueryParam("seasonId") Integer seasonId) {
         Map<String, Object> model = new HashMap<>();
@@ -54,16 +54,13 @@ public class StatisticsApi {
         List<Object[]> topEvents = eventDao.findTopEventsByParticipants(10, scope);
         model.put("topEvents", topEvents);
 
-        Double totalPayments = paymentDao.sumAllPayments(scope);
-        model.put("totalPayments", totalPayments != null ? totalPayments : 0.0);
-
-        Double unpaidPlayerSubscriptions = calculateUnpaidSubscriptionsTotal(scope);
-        model.put("unpaidPlayerSubscriptions", unpaidPlayerSubscriptions);
+        model.put("totalPayments", paymentDao.sumAllPayments(scope));
+        model.put("unpaidPlayerSubscriptions", calculateUnpaidSubscriptionsTotal(scope));
 
         return new MustacheHtml(model, "event/statistics.mustache");
     }
 
-    private Double calculateUnpaidSubscriptionsTotal(SeasonScope scope) {
+    private long calculateUnpaidSubscriptionsTotal(SeasonScope scope) {
         List<PlayerSubscription> unpaidSubscriptions = playerSubscriptionDao.findNotPaidWithEvent(scope);
         long totalCents = 0;
 
@@ -72,8 +69,7 @@ public class StatisticsApi {
                 try {
                     IPlayer player = find.player(subscription.getNrFfe(), subscription.getEvent().getEventType());
                     if (player != null) {
-                        long priceCents = ServiceUtils.calculatePrice(player, subscription.getEvent());
-                        totalCents += priceCents;
+                        totalCents += ServiceUtils.calculatePrice(player, subscription.getEvent());
                     }
                 } catch (Exception e) {
                     // Ignore if player not found
@@ -81,6 +77,6 @@ public class StatisticsApi {
             }
         }
 
-        return ServiceUtils.toEuros(totalCents);
+        return totalCents;
     }
 }

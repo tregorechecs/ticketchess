@@ -155,5 +155,4 @@ Si votre club active cette fonctionnalité, le bouton **S'inscrire au club** app
 ## Pour les organisateurs et arbitres
 
 - [Manuel organisateur](MANUEL_ORGANISATEUR.md)
-- [Synchroniser les inscriptions avec SharlyChess](SYNCHRO_SHARLYCHESS.md)
 - [Liste de contrôle pour les bénévoles — Paiement & pointage](CHECKLIST_BENEVOLES_GUICHET.md)

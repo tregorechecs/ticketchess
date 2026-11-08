@@ -32,7 +32,7 @@ public class DashboardApi {
     private ClubSeasonFilter clubSeasonFilter;
 
     @GET
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     @Transactional
     public MustacheHtml page(@QueryParam("seasonId") Integer seasonId) {
         Map<String, Object> model = new HashMap<>();

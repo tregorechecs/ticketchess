@@ -34,13 +34,7 @@ import com.github.gcolin.platform.MailAttachment;
 import com.github.gcolin.payment.PaymentDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
-import com.stripe.exception.StripeException;
-import com.stripe.model.checkout.Session;
-import com.stripe.net.RequestOptions;
-import com.stripe.param.checkout.SessionCreateParams;
 import jakarta.inject.Inject;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -91,6 +85,9 @@ public class PaymentApi {
     UriInfo uriInfo;
 
     @Inject
+    private StripeCheckoutService stripeCheckoutService;
+
+    @Inject
     private PaymentDao paymentService;
 
     @Inject
@@ -126,10 +123,16 @@ public class PaymentApi {
     @GET
     @RequireRole(RoleCode.TRESORIER)
     public MustacheHtml page(
-            @QueryParam("page") @DefaultValue("0") @Min(0) Integer page,
-            @QueryParam("size") @DefaultValue("25") @Max(100) @Min(1) Integer size,
+            @QueryParam("page") @DefaultValue("0") Integer page,
+            @QueryParam("size") @DefaultValue("25") Integer size,
             @QueryParam("search") @DefaultValue("") String search,
             @QueryParam("seasonId") Integer seasonId) {
+        if (page < 0) {
+            throw new WebApplicationException("page must be >= 0", Response.Status.BAD_REQUEST);
+        }
+        if (size < 1 || size > 100) {
+            throw new WebApplicationException("size must be between 1 and 100", Response.Status.BAD_REQUEST);
+        }
         int start = page * size;
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
 
@@ -605,7 +608,8 @@ public class PaymentApi {
         Payment existing = paymentService.findPendingEventPayment(loggerUser.getEmail());
         if (existing != null) {
             try {
-                Session session = Session.retrieve(existing.getStripeSessionId(), stripeRequestOptions());
+                StripeCheckoutSession session =
+                        stripeCheckoutService.retrieveSession(stripeSecret(), existing.getStripeSessionId());
                 String status = session.getStatus();
                 String paymentStatus = session.getPaymentStatus();
 
@@ -633,48 +637,31 @@ public class PaymentApi {
         logger.info("start payment {} for {} euros", loggerUser.getEmail(), amount);
 
         long amountCents = (long) (amount * 100);
-
-        // 2️⃣ Construire la session Checkout
-        SessionCreateParams params = SessionCreateParams.builder()
-                // 2.1 Paiement (paiement en ligne)
-                .setMode(SessionCreateParams.Mode.PAYMENT)
-                // 2.2 Lier la session au produit, vous pouvez changer le prix/description
-                .addLineItem(SessionCreateParams.LineItem.builder()
-                        .setPriceData(SessionCreateParams.LineItem.PriceData.builder()
-                                .setCurrency("eur")
-                                .setUnitAmount(amountCents)
-                                .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                        .setName("Commande " + loggerUser.getUsername())
-                                        .build())
-                                .build())
-                        .setQuantity(1L)
-                        .build())
-                // 2.3 URL de succès et d’annulation
-                .setSuccessUrl(uriInfo.getBaseUriBuilder()
-                                .path("payment")
-                                .path("success")
-                                .build()
-                                .toString() + "?session_id={CHECKOUT_SESSION_ID}")
-                .setCancelUrl(uriInfo.getBaseUriBuilder()
-                        .path("event")
-                        .path("my")
+        String successUrl = uriInfo.getBaseUriBuilder()
+                        .path("payment")
+                        .path("success")
                         .build()
-                        .toString()) // page de retour
-                .putMetadata("email", loggerUser.getEmail())
-                .putMetadata("scope", "event")
-                .setCustomerEmail(loggerUser.getEmail())
-                .build();
+                        .toString()
+                + "?session_id={CHECKOUT_SESSION_ID}";
+        String cancelUrl = uriInfo.getBaseUriBuilder()
+                .path("event")
+                .path("my")
+                .build()
+                .toString();
 
         Payment payment = debtService.createPayment(loggerUser.getEmail(), amount);
 
         try {
             String paymentPrefix = properties.getProperty("stripe.keyprefix", "p");
-            RequestOptions options = RequestOptions.builder()
-                    .setApiKey(properties.getProperty("stripe.secret"))
-                    .setIdempotencyKey(paymentPrefix + payment.getId())
-                    .build();
-
-            Session session = Session.create(params, options);
+            StripeCheckoutSession session = stripeCheckoutService.createPaymentSession(
+                    stripeSecret(),
+                    paymentPrefix + payment.getId(),
+                    amountCents,
+                    "Commande " + loggerUser.getUsername(),
+                    loggerUser.getEmail(),
+                    successUrl,
+                    cancelUrl,
+                    Map.of("email", loggerUser.getEmail(), "scope", "event"));
 
             payment.setStripeSessionId(session.getId());
             payment.setStripeIntent(session.getPaymentIntent());
@@ -766,7 +753,8 @@ public class PaymentApi {
         Payment existing = paymentService.findPendingMembershipPayment(loggerUser.getEmail());
         if (existing != null) {
             try {
-                Session session = Session.retrieve(existing.getStripeSessionId(), stripeRequestOptions());
+                StripeCheckoutSession session =
+                        stripeCheckoutService.retrieveSession(stripeSecret(), existing.getStripeSessionId());
                 String status = session.getStatus();
                 String paymentStatus = session.getPaymentStatus();
 
@@ -793,43 +781,28 @@ public class PaymentApi {
         logger.info("start membership payment {} for {} euros", loggerUser.getEmail(), amount);
 
         long amountCents = (long) (amount * 100);
-
-        SessionCreateParams params = SessionCreateParams.builder()
-                .setMode(SessionCreateParams.Mode.PAYMENT)
-                .addLineItem(SessionCreateParams.LineItem.builder()
-                        .setPriceData(SessionCreateParams.LineItem.PriceData.builder()
-                                .setCurrency("eur")
-                                .setUnitAmount(amountCents)
-                                .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                        .setName("Adhesion " + loggerUser.getUsername())
-                                        .build())
-                                .build())
-                        .setQuantity(1L)
-                        .build())
-                .setSuccessUrl(uriInfo.getBaseUriBuilder()
-                                .path("payment")
-                                .path("success")
-                                .build()
-                                .toString() + "?session_id={CHECKOUT_SESSION_ID}")
-                .setCancelUrl(uriInfo.getBaseUriBuilder()
-                        .path("club-register")
+        String successUrl = uriInfo.getBaseUriBuilder()
+                        .path("payment")
+                        .path("success")
                         .build()
-                        .toString())
-                .putMetadata("email", loggerUser.getEmail())
-                .putMetadata("scope", "membership")
-                .setCustomerEmail(loggerUser.getEmail())
-                .build();
+                        .toString()
+                + "?session_id={CHECKOUT_SESSION_ID}";
+        String cancelUrl =
+                uriInfo.getBaseUriBuilder().path("club-register").build().toString();
 
         Payment payment = debtService.createMembershipPayment(loggerUser.getEmail(), amount, scope);
 
         try {
             String paymentPrefix = properties.getProperty("stripe.keyprefix", "p");
-            RequestOptions options = RequestOptions.builder()
-                    .setApiKey(properties.getProperty("stripe.secret"))
-                    .setIdempotencyKey(paymentPrefix + payment.getId())
-                    .build();
-
-            Session session = Session.create(params, options);
+            StripeCheckoutSession session = stripeCheckoutService.createPaymentSession(
+                    stripeSecret(),
+                    paymentPrefix + payment.getId(),
+                    amountCents,
+                    "Adhesion " + loggerUser.getUsername(),
+                    loggerUser.getEmail(),
+                    successUrl,
+                    cancelUrl,
+                    Map.of("email", loggerUser.getEmail(), "scope", "membership"));
 
             payment.setStripeSessionId(session.getId());
             payment.setStripeIntent(session.getPaymentIntent());
@@ -906,9 +879,9 @@ public class PaymentApi {
             throw new WebApplicationException("session_id requis", Response.Status.BAD_REQUEST);
         }
 
-        Session session = null;
+        StripeCheckoutSession session;
         try {
-            session = Session.retrieve(sessionId, stripeRequestOptions());
+            session = stripeCheckoutService.retrieveSession(stripeSecret(), sessionId);
         } catch (StripeException e) {
             logger.error("Erreur Stripe : {}", e.getMessage());
             throw new WebApplicationException("Erreur Stripe : " + e.getMessage());
@@ -919,10 +892,11 @@ public class PaymentApi {
             scope = "event";
         }
 
+        long amountTotal = session.getAmountTotal() == null ? 0L : session.getAmountTotal();
         logger.info(
                 "[email={}] Stripe payment {} euros – status: {} scope: {}",
                 email,
-                session.getAmountTotal() / 100,
+                amountTotal / 100,
                 session.getPaymentStatus(),
                 scope);
 
@@ -930,7 +904,7 @@ public class PaymentApi {
                 ? uriInfo.getBaseUriBuilder().path("club-register")
                 : uriInfo.getBaseUriBuilder().path("event").path("my");
         if ("paid".equals(session.getPaymentStatus())) {
-            double amount = session.getAmountTotal() / 100;
+            double amount = amountTotal / 100.0;
             debtService.payment(amount, email, sessionId, session.getPaymentIntent());
             redirectBuilder.queryParam("success", "payment");
         }
@@ -1027,32 +1001,35 @@ public class PaymentApi {
     }
 
     @GET
-    @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
-    @RequireRole(RoleCode.TRESORIER)
     @Path("export")
+    @Produces(MediaType.APPLICATION_JSON)
+    @RequireRole(RoleCode.TRESORIER)
     public PagedList<Payment> export(
-            @QueryParam("page") @DefaultValue("0") @Min(0) Integer page,
-            @QueryParam("size") @DefaultValue("50") @Max(100) @Min(1) Integer size,
+            @QueryParam("page") @DefaultValue("0") Integer page,
+            @QueryParam("size") @DefaultValue("50") Integer size,
             @QueryParam("seasonId") Integer seasonId) {
+        if (page < 0) {
+            throw new WebApplicationException("page must be >= 0", Response.Status.BAD_REQUEST);
+        }
+        if (size < 1 || size > 100) {
+            throw new WebApplicationException("size must be between 1 and 100", Response.Status.BAD_REQUEST);
+        }
         int start = page * size;
         SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        PagedList<Payment> paged = paymentService.page(start, size, scope);
-        paged.setElements(paymentService.detachAll(paged.getElements()));
-        return paged;
+        return paymentService.page(start, size, scope);
     }
 
     @GET
     @Path("{payment_id:\\d+}")
-    @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+    @Produces(MediaType.APPLICATION_JSON)
     @RequireRole(RoleCode.TRESORIER)
     public Payment exportById(@PathParam("payment_id") Integer payment_id) {
-        Payment payment = paymentService.find(payment_id);
-        return payment;
+        return paymentService.find(payment_id);
     }
 
     @GET
     @Path("{payment_id:\\d+}/sub")
-    @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+    @Produces(MediaType.APPLICATION_JSON)
     @RequireRole(RoleCode.TRESORIER)
     public List<PlayerSubscription> subById(@PathParam("payment_id") Integer payment_id) {
         return playerSubscriptionService.findByPaymentId(payment_id);
@@ -1143,10 +1120,8 @@ public class PaymentApi {
         return builder.build();
     }
 
-    private RequestOptions stripeRequestOptions() {
-        return RequestOptions.builder()
-                .setApiKey(properties.getProperty("stripe.secret"))
-                .build();
+    private String stripeSecret() {
+        return properties.getProperty("stripe.secret");
     }
 
     private String safe(String value) {

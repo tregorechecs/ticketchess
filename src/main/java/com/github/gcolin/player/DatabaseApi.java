@@ -29,6 +29,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.github.gcolin.platform.MustacheHtml;
@@ -217,7 +218,7 @@ public class DatabaseApi {
     @Path("manual-players/prefill")
     @RequireRole(RoleCode.ADMIN)
     @Produces(MediaType.APPLICATION_JSON)
-    public Player prefillManualPlayer(@QueryParam("nrffe") String nrffe, @QueryParam("fide") String fide) {
+    public String prefillManualPlayer(@QueryParam("nrffe") String nrffe, @QueryParam("fide") String fide) {
         try {
             Player player = null;
             String nrffeValue = com.github.gcolin.platform.ModelUtils.trimToNull(nrffe);
@@ -232,7 +233,7 @@ public class DatabaseApi {
             if (player == null) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
             }
-            return player;
+            return new JSONObject(player).toString();
         } catch (IOException e) {
             throw new WebApplicationException(e);
         }

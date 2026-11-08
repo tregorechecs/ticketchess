@@ -1,14 +1,10 @@
 package com.github.gcolin.payment;
 
-import com.stripe.StripeClient;
-import com.stripe.exception.StripeException;
-import com.stripe.model.StripeCollection;
-import com.stripe.model.checkout.Session;
-import com.stripe.param.checkout.SessionListParams;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.List;
 
 /**
  * Exports Stripe Checkout sessions to CSV. Usage: {@code StripeSession <apiKey> [out.csv]}
@@ -23,26 +19,23 @@ public class StripeSession {
 
         String apiKey = args[0];
         String output = args.length > 1 ? args[1] : "out.csv";
-        StripeClient client = new StripeClient(apiKey);
+        StripeCheckoutService stripe = new StripeCheckoutService();
 
         int limit = 100;
         String last = null;
         StringBuilder str = new StringBuilder();
         str.append("id,email,amount,intent\n");
         while (true) {
-            SessionListParams.Builder params = SessionListParams.builder().setLimit((long) limit);
-            if (last != null) {
-                params.setStartingAfter(last);
-            }
-            StripeCollection<Session> list = client.v1().checkout().sessions().list(params.build());
-            for (Session session : list.getData()) {
+            StripeCheckoutClient.ListResult list = stripe.listSessions(apiKey, limit, last);
+            List<StripeCheckoutSession> data = list.data();
+            for (StripeCheckoutSession session : data) {
                 str.append(session.getId()).append(",");
-                str.append(session.getMetadata().toString()).append(",");
+                str.append(session.getMetadata()).append(",");
                 str.append(session.getAmountTotal()).append(",");
                 str.append(session.getPaymentIntent()).append("\n");
             }
-            if (list.getData().size() == limit) {
-                last = list.getData().get(limit - 1).getId();
+            if (list.hasMore() && !data.isEmpty()) {
+                last = data.get(data.size() - 1).getId();
             } else {
                 break;
             }

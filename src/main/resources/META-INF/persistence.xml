@@ -5,7 +5,6 @@
     <persistence-unit name="myPU" transaction-type="RESOURCE_LOCAL">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
         <class>com.github.gcolin.event.Event</class>
-        <class>com.github.gcolin.event.EventInfo</class>
         <class>com.github.gcolin.player.CustomPlayer</class>
         <class>com.github.gcolin.payment.Payment</class>
         <class>com.github.gcolin.registration.PlayerPendingSubscription</class>

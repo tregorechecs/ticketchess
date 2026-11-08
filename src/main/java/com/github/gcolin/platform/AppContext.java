@@ -14,6 +14,7 @@ import com.github.gcolin.organisation.OrganisationResolver;
 import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.payment.PaymentReceiptPdfService;
 import com.github.gcolin.payment.RibService;
+import com.github.gcolin.payment.StripeCheckoutService;
 import com.github.gcolin.player.LuceneDb;
 import com.github.gcolin.player.LuceneDbRegistry;
 import jakarta.servlet.ServletContext;
@@ -42,6 +43,7 @@ public final class AppContext {
     private StatisticsReportService statisticsReportService;
     private EventPaymentsReportService eventPaymentsReportService;
     private PaymentReceiptPdfService paymentReceiptPdfService;
+    private StripeCheckoutService stripeCheckoutService;
     private MembershipReportService membershipReportService;
     private MembershipOptionFileService membershipOptionFileService;
     private BackgroundService backgroundService;
@@ -65,9 +67,9 @@ public final class AppContext {
             app.persistence.init();
 
             // Club / invoice / stripe (+ mail) live on organisation; files under CONFIG_DIR/orgs/{id}.
-            new OrganisationBootstrap(app.config, app.persistence.getEmf()).ensure();
+            new OrganisationBootstrap(app.config, app.persistence).ensure();
 
-            DbInit dbInit = new DbInit(app.persistence.getEmf());
+            DbInit dbInit = new DbInit(app.persistence);
             dbInit.initLicenses();
             dbInit.initClubSeason();
             dbInit.initMembershipOptions();
@@ -88,7 +90,7 @@ public final class AppContext {
             app.eventDeskHub = new EventDeskHub();
 
             app.eventDeskService = new EventDeskService();
-            app.eventDeskService.setEmf(app.persistence.getEmf());
+            app.eventDeskService.setDataSource(app.persistence.getDataSource());
             app.eventDeskService.setCaches(app.caches);
             app.eventDeskService.setSendMail(app.sendMail);
 
@@ -109,6 +111,7 @@ public final class AppContext {
             app.paymentReceiptPdfService.setProperties(app.config.getProperties());
             app.paymentReceiptPdfService.setLogoService(app.logoService);
             app.paymentReceiptPdfService.setSignatureService(app.signatureService);
+            app.stripeCheckoutService = new StripeCheckoutService();
             app.membershipReportService = new MembershipReportService();
             app.membershipReportService.setProperties(app.config.getProperties());
 
@@ -241,6 +244,10 @@ public final class AppContext {
 
     public PaymentReceiptPdfService paymentReceiptPdfService() {
         return paymentReceiptPdfService;
+    }
+
+    public StripeCheckoutService stripeCheckoutService() {
+        return stripeCheckoutService;
     }
 
     public MembershipReportService membershipReportService() {

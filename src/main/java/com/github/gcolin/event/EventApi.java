@@ -6,7 +6,6 @@ import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.player.CustomPlayer;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.event.EventCollectionOptionType;
-import com.github.gcolin.event.EventInfo;
 import com.github.gcolin.event.EventOption;
 import com.github.gcolin.event.EventOptionType;
 import com.github.gcolin.auth.RoleCode;
@@ -31,7 +30,6 @@ import com.github.gcolin.event.EventCollectionDao;
 import com.github.gcolin.event.EventCollectionOptionDao;
 import com.github.gcolin.event.EventDao;
 import com.github.gcolin.event.EventGroupDao;
-import com.github.gcolin.event.EventInfoDao;
 import com.github.gcolin.event.EventOptionDao;
 import com.github.gcolin.payment.PaymentDao;
 import com.github.gcolin.registration.PlayerPendingSubscriptionDao;
@@ -39,7 +37,6 @@ import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.event.EventCache;
 import com.github.gcolin.event.EventsCache;
 import jakarta.inject.Inject;
-import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -79,9 +76,6 @@ public class EventApi {
 
     @Inject
     EventDao eventService;
-
-    @Inject
-    private EventInfoDao eventInfoService;
 
     @Inject
     private EventOptionDao eventOptionService;
@@ -181,13 +175,13 @@ public class EventApi {
             }
             DisplayPlayer player = new DisplayPlayer(p);
             if (s.getStatus() == PlayerSubscriptionStatus.NOT_PAID) {
-                player.setPrice(ServiceUtils.toEuros(ServiceUtils.calculatePrice(p, event)));
+                player.setPriceCents(ServiceUtils.calculatePrice(p, event));
             } else if (s.getStatus() == PlayerSubscriptionStatus.PAID && s.getAmountCents() != null) {
-                player.setPrice(ServiceUtils.toEuros(s.getAmountCents()));
+                player.setPriceCents(s.getAmountCents());
             }
             player.setRating(p, event.getEventType());
             if (p.isEditable()
-                    && (loggerUser.hasRole(RoleCode.EVENT_ADMIN)
+                    && (loggerUser.hasRole(RoleCode.ARBITRE)
                             || (p instanceof CustomPlayer
                                     && loggerUser.getEmail().equals(((CustomPlayer) p).getCreationUser())))) {
                 player.setEditable(true);
@@ -255,7 +249,7 @@ public class EventApi {
             }
             player.setPendingQueueAhead(ahead);
             if (p.isEditable()
-                    && (loggerUser.hasRole(RoleCode.EVENT_ADMIN)
+                    && (loggerUser.hasRole(RoleCode.ARBITRE)
                             || (p instanceof CustomPlayer
                                     && loggerUser.getEmail().equals(((CustomPlayer) p).getCreationUser())))) {
                 player.setEditable(true);
@@ -468,7 +462,10 @@ public class EventApi {
     public Response updateEventCollectionVariant(
             @PathParam("playersubscriptionId") Integer playersubscriptionId,
             @PathParam("eventCollectionId") Integer eventCollectionId,
-            @FormParam("eventId") @NotNull Integer eventId) {
+            @FormParam("eventId") Integer eventId) {
+        if (eventId == null) {
+            throw new WebApplicationException("eventId is required", Response.Status.BAD_REQUEST);
+        }
 
         PlayerSubscription sub = playerSubscriptionService.find(playersubscriptionId);
         if (sub == null) {
@@ -527,7 +524,7 @@ public class EventApi {
 
     @GET
     @Path("new")
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     public MustacheHtml newE(@PathParam("id") Integer id) {
         return edit(null, null);
     }
@@ -586,14 +583,10 @@ public class EventApi {
     @RequireRole(RoleCode.ARBITRE)
     public MustacheHtml edit(@PathParam("id") Integer id, @QueryParam("success") String success) {
         Map<String, Object> model = new HashMap<String, Object>();
-        boolean canEdit = loggerUser.hasRole(RoleCode.EVENT_ADMIN);
+        boolean canEdit = loggerUser.hasRole(RoleCode.ARBITRE);
         model.put("readOnly", !canEdit);
         if (id != null && id != 0) {
             Event event = eventService.find(id);
-            EventInfo eventInfo = eventInfoService.findByEventId(id);
-            if (eventInfo != null) {
-                model.put("eventInfo", eventInfo);
-            }
             Map<String, String> eventOptions = loadEventOptions(id);
             if (!canEdit) {
                 eventOptions.remove(EventOptionType.FFE_PASSWORD.name());
@@ -611,7 +604,7 @@ public class EventApi {
 
     @POST
     @Path("{id:\\d+}/description/preview")
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.TEXT_HTML)
     public Response previewDescription(
@@ -623,7 +616,7 @@ public class EventApi {
     }
 
     @POST
-    @RequireRole(RoleCode.EVENT_ADMIN)
+    @RequireRole(RoleCode.ARBITRE)
     @Consumes({MediaType.APPLICATION_FORM_URLENCODED, MediaType.MULTIPART_FORM_DATA})
     public Response postEventEdit(
             @FormParam("descriptionOnly") @DefaultValue("false") boolean descriptionOnly,
@@ -650,7 +643,7 @@ public class EventApi {
             @FormParam("pointage") String pointage) {
         if (descriptionOnly) {
             if (eventId != null) {
-                eventInfoService.setEventInfo(eventId, description);
+                eventService.updateDescription(eventId, description);
             }
         } else if (optionsOnly) {
             if (eventId != null) {
@@ -702,7 +695,10 @@ public class EventApi {
     @Path("{id:\\d+}/pointe")
     @LoggedOnly
     public Response pointe(
-            @PathParam("id") Integer eventId, @QueryParam("subId") @NotNull Integer subId) {
+            @PathParam("id") Integer eventId, @QueryParam("subId") Integer subId) {
+        if (subId == null) {
+            throw new WebApplicationException("subId is required", Response.Status.BAD_REQUEST);
+        }
         PlayerSubscription sub = playerSubscriptionService.findWithEvent(subId);
         if (sub == null || sub.getEvent() == null || !eventId.equals(sub.getEvent().getId())) {
             throw new WebApplicationException("PlayerSubscription not found", Response.Status.NOT_FOUND);
@@ -731,8 +727,11 @@ public class EventApi {
     @GET
     @Path("{id:\\d+}/unregister")
     @LoggedOnly
-    public Response unregister(@PathParam("id") Integer eventId, @QueryParam("nrffe") @NotNull String nrffe)
+    public Response unregister(@PathParam("id") Integer eventId, @QueryParam("nrffe") String nrffe)
             throws IOException {
+        if (nrffe == null || nrffe.isBlank()) {
+            throw new WebApplicationException("nrffe is required", Response.Status.BAD_REQUEST);
+        }
 
         Event event = eventService.find(eventId);
         if (event == null) {
@@ -766,7 +765,10 @@ public class EventApi {
     @LoggedOnly
     public Response unregisterPending(
             @PathParam("id") Integer eventId,
-            @QueryParam("nrffe") @NotNull String nrffe) {
+            @QueryParam("nrffe") String nrffe) {
+        if (nrffe == null || nrffe.isBlank()) {
+            throw new WebApplicationException("nrffe is required", Response.Status.BAD_REQUEST);
+        }
 
         Event event = eventService.find(eventId);
         if (event == null) {

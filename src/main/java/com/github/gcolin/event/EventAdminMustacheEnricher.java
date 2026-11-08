@@ -14,7 +14,7 @@ public final class EventAdminMustacheEnricher {
 
     public static void enrich(
             Map<String, Object> model, List<EventAdminGroupNode> groups, Messages messages, LoggedUser user) {
-        boolean showCreateEvent = user != null && user.hasRole("EVENT_ADMIN");
+        boolean showCreateEvent = user != null && user.hasRole("ARBITRE");
         boolean showAdminStatisticsLink = user != null && user.hasRole("ADMIN");
         boolean showCollectionMailLink = user != null && user.canManageEvents();
         model.put("showCreateEvent", showCreateEvent);

@@ -1,43 +1,65 @@
 package com.github.gcolin.player;
 
-import com.github.gcolin.player.CustomPlayer;
-import com.github.gcolin.platform.Transactional;
-import com.github.gcolin.platform.PagedList;
-import jakarta.persistence.TypedQuery;
-import java.util.List;
 import com.github.gcolin.platform.AbstractDao;
-import com.github.gcolin.registration.PlayerSubscription;
+import com.github.gcolin.platform.Db;
+import com.github.gcolin.platform.PagedList;
+import java.util.List;
 
 public class CustomPlayerDao extends AbstractDao<CustomPlayer> {
 
     public CustomPlayerDao() {
-        super(CustomPlayer.class);
+        super(CustomPlayer.class, "custom_player");
     }
 
     public List<CustomPlayer> findByCreationUser(String email) {
-        TypedQuery<CustomPlayer> query =
-                em.createQuery("SELECT e FROM CustomPlayer e where e.creationUser = :creationUser", CustomPlayer.class);
-        query.setParameter("creationUser", email);
-        return query.getResultList();
+        return select("SELECT * FROM custom_player WHERE creation_user = ?", email);
     }
 
     public List<CustomPlayer> findWithoutSubscription() {
-        TypedQuery<CustomPlayer> query = em.createQuery(
-                "SELECT e FROM CustomPlayer e WHERE NOT EXISTS (SELECT 1 FROM PlayerSubscription s WHERE s.nrFfe = concat('@', e.id))",
-                CustomPlayer.class);
-        return query.getResultList();
+        return select(
+                "SELECT e.* FROM custom_player e WHERE NOT EXISTS"
+                        + " (SELECT 1 FROM player_subscription s WHERE s.nr_ffe = CONCAT('@', e.id))");
     }
 
     public PagedList<CustomPlayer> pageSorted(int start, int pageSize) {
-        TypedQuery<CustomPlayer> query =
-                em.createQuery("SELECT e FROM CustomPlayer e ORDER BY e.name, e.firstname", CustomPlayer.class);
-        query.setFirstResult(start);
-        query.setMaxResults(pageSize);
-        List<CustomPlayer> list = query.getResultList();
-
-        TypedQuery<Long> countQuery = em.createQuery("SELECT COUNT(e) FROM CustomPlayer e", Long.class);
-        long total = countQuery.getSingleResult();
-
+        List<CustomPlayer> list =
+                select("SELECT * FROM custom_player ORDER BY name, firstname LIMIT ? OFFSET ?", pageSize, start);
+        long total = Db.scalarLongOrZero("SELECT COUNT(*) FROM custom_player");
         return new PagedList<>(list, start, total);
+    }
+
+    @Override
+    public void persist(CustomPlayer player) {
+        if (player.getId() == null) {
+            int id = Db.insertReturningInt(
+                    "INSERT INTO custom_player (firstname, name, licence, birthdate, creation_user, gender, elo)"
+                            + " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    player.getFirstname(),
+                    player.getName(),
+                    player.getLicence(),
+                    player.getBirthDate(),
+                    player.getCreationUser(),
+                    player.getGender(),
+                    player.getElo());
+            player.setId(id);
+        } else {
+            Db.update(
+                    "UPDATE custom_player SET firstname = ?, name = ?, licence = ?, birthdate = ?,"
+                            + " creation_user = ?, gender = ?, elo = ? WHERE id = ?",
+                    player.getFirstname(),
+                    player.getName(),
+                    player.getLicence(),
+                    player.getBirthDate(),
+                    player.getCreationUser(),
+                    player.getGender(),
+                    player.getElo(),
+                    player.getId());
+        }
+    }
+
+    @Override
+    public CustomPlayer merge(CustomPlayer player) {
+        persist(player);
+        return player;
     }
 }

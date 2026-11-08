@@ -12,13 +12,15 @@ Bienvenue dans la documentation utilisateur et opérationnelle de **Ticket Chess
 ### Organisateurs et arbitres
 
 - [Manuel organisateur](MANUEL_ORGANISATEUR.md) — événements, paiements, FFE, administration
-- [Synchronisation SharlyChess](SYNCHRO_SHARLYCHESS.md) — envoi automatique des inscriptions vers SharlyChess
+- [Droits admin (tuiles)](DROITS_ADMIN.md) — quel rôle voit quelle tuile du hub Admin
 
 ### Bénévoles (jour J)
 
 - [Liste de contrôle pour les bénévoles — Paiement & pointage](CHECKLIST_BENEVOLES_GUICHET.md) — accueil sur place, encaissement et pointage
 
 ## Développeurs
+
+- [Modèle de données](MODELE_DONNEES.md) — tables, colonnes et relations (POJO / JDBC)
 
 Pour installer, tester et publier le projet, voir le fichier `README.md` à la racine du dépôt.
 

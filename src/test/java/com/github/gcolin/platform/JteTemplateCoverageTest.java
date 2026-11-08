@@ -124,7 +124,6 @@ public class JteTemplateCoverageTest extends PlaywrightBaseTest {
         map.put("payment/paymentAudit.mustache", "/payment/audit");
 
         map.put("platform/admin.mustache", "/admin");
-        map.put("platform/adminOrg.mustache", "/admin/org");
         map.put("club/seasonAdmin.mustache", "/admin/seasons");
         map.put("club/seasonEdit.mustache", "/admin/seasons/new");
         map.put("club/seasonEdit.mustache (edit)", "/admin/seasons/1/edit");
@@ -139,6 +138,7 @@ public class JteTemplateCoverageTest extends PlaywrightBaseTest {
 
         map.put("organisation/organisationAdmin.mustache", "/admin/organisations");
         map.put("organisation/organisationEdit.mustache", "/admin/organisations/new");
+        map.put("platform/adminOrg.mustache (oauth)", "/admin/org?tab=oauth");
 
         map.put("player/database.mustache", "/database");
         map.put("player/databasePlayers.mustache", "/database/manual-players");

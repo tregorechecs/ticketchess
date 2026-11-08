@@ -1,12 +1,14 @@
-# Entités JPA — Ticket Chess
+# Modèle de données — Ticket Chess
 
-Inventaire des classes annotées `@Entity` / `@MappedSuperclass` et de leurs champs persistés.
+Inventaire des entités persistées (POJO + `AbstractDao` / JDBC) et de leurs colonnes SQL.
+
+Source de vérité schéma : `src/main/resources/schema.sql`.
 
 ## Sommaire
 
 | Entité | Table | Hérite de |
 |--------|-------|-----------|
-| [TimedEntity](#timedentity) | — (`@MappedSuperclass`) | — |
+| [TimedEntity](#timedentity) | — (classe de base) | — |
 | [Organisation](#organisation) | `organisation` | — |
 | [UserAuthorization](#userauthorization) | `user_authorization` | — |
 | [ClubSeason](#clubseason) | `club_season` | TimedEntity |
@@ -15,7 +17,6 @@ Inventaire des classes annotées `@Entity` / `@MappedSuperclass` et de leurs cha
 | [EventCollection](#eventcollection) | `big_event` | — |
 | [EventCollectionOption](#eventcollectionoption) | `eventcollectionoption` | — |
 | [Event](#event) | `event` | — |
-| [EventInfo](#eventinfo) | `eventinfo` | — |
 | [EventOption](#eventoption) | `eventoption` | — |
 | [PlayerSubscription](#playersubscription) | `player_subscription` | TimedEntity |
 | [PlayerSubscriptionOption](#playersubscriptionoption) | `player_subscription_option` | TimedEntity |
@@ -32,14 +33,14 @@ Inventaire des classes annotées `@Entity` / `@MappedSuperclass` et de leurs cha
 
 ## TimedEntity
 
-`@MappedSuperclass` — `com.github.gcolin.platform.TimedEntity`
+`com.github.gcolin.platform.TimedEntity`
 
-Champs communs injectés automatiquement à la création / mise à jour.
+Champs communs renseignés à la création / mise à jour (`prePersist` / `preUpdate`).
 
 | Champ | Colonne | Type | Notes |
 |-------|---------|------|-------|
-| `createdAt` | `created_at` | `LocalDateTime` | `@PrePersist` |
-| `updatedAt` | `updated_at` | `LocalDateTime` | `@PrePersist` / `@PreUpdate` |
+| `createdAt` | `created_at` | `LocalDateTime` | |
+| `updatedAt` | `updated_at` | `LocalDateTime` | |
 
 ---
 
@@ -47,35 +48,23 @@ Champs communs injectés automatiquement à la création / mise à jour.
 
 `com.github.gcolin.organisation.Organisation` → table `organisation`
 
-Contraintes uniques : `slug`, `base_url`. Définit le filtre Hibernate `OrgScope` (`org_id = :orgId`).
+Colonnes SQL réduites : identité d’hôte + blob de réglages. Les champs typés (nom, Stripe, OAuth, mail…) sont packés / dépackés via `OrganisationSettings` dans `settings_json`.
 
-| Champ | Colonne | Type | Nullable | Notes |
-|-------|---------|------|----------|-------|
-| `id` | `id` | `Integer` | PK, IDENTITY | |
-| `slug` | `slug` | `String(100)` | non | UK |
-| `baseUrl` | `base_url` | `String(500)` | non | UK |
-| `name` | `name` | `String(255)` | non | |
-| `superUserEmail` | `super_user_email` | `String(320)` | non | |
-| `active` | `active` | `boolean` | non | défaut `true` |
-| `stripePublic` | `stripe_public` | `String(512)` | oui | |
-| `stripeSecret` | `stripe_secret` | `String(512)` | oui | |
-| `stripeKeyprefix` | `stripe_keyprefix` | `String(100)` | oui | |
-| `stripeSimuled` | `stripe_simuled` | `boolean` | non | |
-| `stripeCardEvents` | `stripe_card_events` | `boolean` | non | défaut `true` |
-| `stripeCardMemberships` | `stripe_card_memberships` | `boolean` | non | défaut `true` |
-| `paymentTransferEvents` | `payment_transfer_events` | `boolean` | non | défaut `true` |
-| `paymentTransferMemberships` | `payment_transfer_memberships` | `boolean` | non | défaut `true` |
-| `oauthClientId` | `oauth_client_id` | `String(512)` | oui | |
-| `oauthClientSecret` | `oauth_client_secret` | `String(512)` | oui | |
-| `oauthAuthorizationUrl` | `oauth_authorization_url` | `String(1000)` | oui | |
-| `oauthTokenUrl` | `oauth_token_url` | `String(1000)` | oui | |
-| `oauthScope` | `oauth_scope` | `String(500)` | oui | |
-| `oauthLogoutUrl` | `oauth_logout_url` | `String(1000)` | oui | |
-| `oauthAccountUrl` | `oauth_account_url` | `String(1000)` | oui | |
-| `oauthUserinfoUrl` | `oauth_userinfo_url` | `String(1000)` | oui | |
-| `mailUserName` | `mail_user_name` | `String(320)` | oui | |
-| `mailPassword` | `mail_password` | `String(512)` | oui | |
-| `settingsJson` | `settings_json` | `text` | oui | |
+UK : `base_url`. Résolution multi-tenant par URL de base / hôte (`OrganisationDao`, `OrgScope`).
+
+| Champ / clé | Stockage | Type | Notes |
+|-------------|----------|------|-------|
+| `id` | colonne `id` | `Integer` | PK, IDENTITY |
+| `baseUrl` | colonne `base_url` | `String(500)` | UK, non null |
+| `active` | colonne `active` | `boolean` | défaut `true` |
+| `settingsJson` | colonne `settings_json` | `text` | JSON |
+| `name` | `settings_json` → `org.name` | `String` | |
+| `superUserEmail` | `settings_json` → `org.superUserEmail` | `String` | traité comme `ADMIN` sur l’org courante |
+| Stripe / paiements | `stripe.*`, `payment.transfer.*` | | clés / simulation / moyens |
+| OAuth | `oauth.*` | | SSO de l’organisation |
+| Mail | `mail.USER_NAME`, `mail.PASSWORD` | | |
+
+D’autres clés (facture, identité visuelle, features…) peuvent coexister dans `settings_json` sans champ Java dédié.
 
 ---
 
@@ -85,16 +74,20 @@ Contraintes uniques : `slug`, `base_url`. Définit le filtre Hibernate `OrgScope
 
 UK : `(email, role, scope_type, scope_id)`. Index sur `email` et `(email, role, scope_type, scope_id, active)`.
 
+Pas de `org_id` : les grants sont globaux à l’instance (ou scopés événement / groupe).
+
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
 | `email` | `email` | `String(320)` | non | normalisé lower-case |
-| `role` | `role` | `RoleCode` (STRING) | non | `ADMIN`, `TRESORIER`, `ENTRAINEUR`, `ARBITRE`, `EVENT_ADMIN` |
-| `scopeType` | `scope_type` | `AuthorizationScopeType` (STRING) | non | défaut `GLOBAL` ; `GLOBAL`, `EVENT`, `EVENT_GROUP` |
-| `scopeId` | `scope_id` | `Integer` | oui | |
+| `role` | `role` | `RoleCode` | non | `ADMIN`, `TRESORIER`, `ENTRAINEUR`, `ARBITRE` |
+| `scopeType` | `scope_type` | `AuthorizationScopeType` | non | `GLOBAL`, `EVENT`, `EVENT_GROUP` |
+| `scopeId` | `scope_id` | `Integer` | oui | requis si scope ≠ `GLOBAL` |
 | `active` | `active` | `boolean` | non | défaut `true` |
 | `validUntil` | `valid_until` | `LocalDateTime` | oui | |
 | `grantedBy` | `granted_by` | `String(320)` | oui | normalisé lower-case |
+
+Voir aussi [Droits admin (tuiles)](DROITS_ADMIN.md).
 
 ---
 
@@ -102,12 +95,12 @@ UK : `(email, role, scope_type, scope_id)`. Index sur `email` et `(email, role, 
 
 `com.github.gcolin.club.ClubSeason` → table `club_season`
 
-Étend `TimedEntity`, `OrgOwned`. Filtre org + `OrgEntityListener`.
+Étend `TimedEntity`. Multi-tenant via `org_id`.
 
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
-| `orgId` | `org_id` | `Integer` | non | multi-tenant |
+| `orgId` | `org_id` | `Integer` | non | |
 | `name` | `name` | `String(255)` | non | |
 | `startDate` | `start_date` | `LocalDate` | non | |
 | `endDate` | `end_date` | `LocalDate` | non | |
@@ -139,12 +132,15 @@ Implémente `IPlayer` (joueurs hors annuaire FFE).
 
 `com.github.gcolin.event.EventGroup` → table `event_group`
 
+`OrgOwned`. Filtré par organisation courante.
+
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
+| `orgId` | `org_id` | `Integer` | non | multi-tenant |
 | `name` | `name` | `String(255)` | non | |
 | `shortname` | `shortname` | `String(255)` | non | |
-| `events` | — | `List<Event>` | | `@OneToMany(mappedBy = "eventGroup")` |
+| `events` | — | `List<Event>` | | relation logique (`event.event_group_id`) |
 
 ---
 
@@ -152,14 +148,17 @@ Implémente `IPlayer` (joueurs hors annuaire FFE).
 
 `com.github.gcolin.event.EventCollection` → table `big_event`
 
+`OrgOwned`. Filtré par organisation courante.
+
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
+| `orgId` | `org_id` | `Integer` | non | multi-tenant |
 | `name` | `name` | `String(255)` | non | |
-| `events` | — | `List<Event>` | | `@OneToMany(mappedBy = "eventCollection")`, cascade ALL |
-| `maxSubscribe` | — | `Integer` | | `@Transient` |
-| `nbSubscriptions` | — | `Integer` | | `@Transient` |
-| `eventCount` | — | `Integer` | | `@Transient` |
+| `events` | — | `List<Event>` | | relation logique (`event.big_event_id`) |
+| `maxSubscribe` | — | `Integer` | | transient |
+| `nbSubscriptions` | — | `Integer` | | transient |
+| `eventCount` | — | `Integer` | | transient |
 
 ---
 
@@ -170,8 +169,8 @@ Implémente `IPlayer` (joueurs hors annuaire FFE).
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
-| `eventCollection` | `big_event_id` | `EventCollection` | oui | `@ManyToOne` LAZY |
-| `optionType` | `option_type` | `EventCollectionOptionType` (STRING) | non | `MAX_SUBSCRIPTIONS`, `CHESS_EVENT_ID` |
+| `eventCollection` | `big_event_id` | `EventCollection` | oui | FK |
+| `optionType` | `option_type` | `EventCollectionOptionType` | non | `MAX_SUBSCRIPTIONS` |
 | `value` | `option_value` | `String(255)` | non | |
 
 ---
@@ -180,40 +179,25 @@ Implémente `IPlayer` (joueurs hors annuaire FFE).
 
 `com.github.gcolin.event.Event` → table `event`
 
-Index : `status_id`, `start_date`.
+`OrgOwned`. Filtré par organisation courante. Index : `status_id`, `start_date`.
 
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
+| `orgId` | `org_id` | `Integer` | non | multi-tenant |
 | `name` | `name` | `String` | non | |
 | `startDate` | `start_date` | `LocalDateTime` | non | |
 | `endDate` | `end_date` | `LocalDateTime` | non | |
-| `price` | `price` | `BigDecimal(10,2)` | oui | sync avec `priceCents` |
-| `priceCents` | `pricecents` | `Long` | oui | |
-| `youngPrice` | `youngPrice` | `BigDecimal(10,2)` | oui | sync avec `youngPriceCents` |
-| `youngPriceCents` | `youngpricecents` | `Long` | oui | |
-| `status` | `status_id` | `EventStatus` (ORDINAL) | non | défaut `DRAFT` ; `DRAFT`, `ACTIVE`, `ONGOING`, `COMPLETED` |
-| `eventType` | `event_type` | `EventType` (ORDINAL) | non | défaut `STANDARD` ; `STANDARD`, `RAPID`, `BLITZ` |
-| `subscriptions` | — | `List<PlayerSubscription>` | | `@OneToMany(mappedBy = "event")` |
-| `eventGroup` | `event_group_id` | `EventGroup` | oui | `@ManyToOne` LAZY |
-| `eventCollection` | `big_event_id` | `EventCollection` | oui | `@ManyToOne` LAZY |
-| `eventInfo` | — | `EventInfo` | | `@OneToOne(mappedBy = "event")` LAZY |
-| `eventOptions` | — | `Map<EventOptionType, EventOption>` | | `@Transient` |
-| `players` | — | `List<DisplayPlayer>` | | `@Transient` |
-| `nbSubscriptions` | — | `Integer` | | `@Transient` |
-
----
-
-## EventInfo
-
-`com.github.gcolin.event.EventInfo` → table `eventinfo`
-
-PK partagée avec `Event` via `@MapsId`.
-
-| Champ | Colonne | Type | Nullable | Notes |
-|-------|---------|------|----------|-------|
-| `event` | `eventid` | `Event` | PK | `@OneToOne` + `@MapsId` |
-| `description` | `description` | `TEXT` | oui | |
+| `priceCents` | `pricecents` | `Long` | oui | `price` (BigDecimal) dérivé en Java |
+| `youngPriceCents` | `youngpricecents` | `Long` | oui | `youngPrice` dérivé en Java |
+| `status` | `status_id` | `EventStatus` (ORDINAL) | non | `DRAFT`, `ACTIVE`, `ONGOING`, `COMPLETED` |
+| `eventType` | `event_type` | `EventType` (ORDINAL) | non | `STANDARD`, `RAPID`, `BLITZ` |
+| `eventGroup` | `event_group_id` | `EventGroup` | oui | FK |
+| `eventCollection` | `big_event_id` | `EventCollection` | oui | FK |
+| `subscriptions` | — | `List<PlayerSubscription>` | | chargé à la demande (`EventDao`) |
+| `description` | `description` | `TEXT` | oui | markdown ; chargé uniquement en détail/édition (pas dans les listes) |
+| `eventOptions` | — | `Map<EventOptionType, EventOption>` | | transient / chargé à part |
+| `players` / `nbSubscriptions` | — | | | transient |
 
 ---
 
@@ -224,8 +208,8 @@ PK partagée avec `Event` via `@MapsId`.
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
-| `optionType` | `option_type` | `EventOptionType` (STRING) | non | `FFE_ID`, `FFE_PASSWORD`, `MAX_ELO`, `MIN_ELO`, `MAX_SUBSCRIPTIONS`, `ROUNDS`, `CADENCE`, `CLUB_REF`, `PAIRING`, `POINTAGE`, `CHESS_EVENT_USER`, `CHESS_EVENT_PASSWORD` |
-| `event` | `event_id` | `Event` | oui | `@ManyToOne` LAZY |
+| `optionType` | `option_type` | `EventOptionType` | non | `FFE_ID`, `FFE_PASSWORD`, `MAX_ELO`, `MIN_ELO`, `MAX_SUBSCRIPTIONS`, `ROUNDS`, `CADENCE`, `CLUB_REF`, `PAIRING`, `POINTAGE` |
+| `event` | `event_id` | `Event` | oui | FK |
 | `value` | `option_value` | `String(255)` | non | |
 
 ---
@@ -241,12 +225,12 @@ PK partagée avec `Event` via `@MapsId`.
 | `id` | `id` | `Integer` | PK, IDENTITY | |
 | `nrFfe` | `nr_ffe` | `String(255)` | oui | |
 | `creationUser` | `creation_user` | `String(255)` | oui | |
-| `event` | `event_id` | `Event` | non | `@ManyToOne` LAZY |
+| `event` | `event_id` | `Event` | non | FK |
 | `status` | `status` | `PlayerSubscriptionStatus` (ORDINAL) | non | `NOT_PAID`, `PAID`, `CANCELLED` |
-| `payment` | `payment_id` | `Payment` | oui | `@ManyToOne` LAZY |
+| `payment` | `payment_id` | `Payment` | oui | FK |
 | `amountCents` | `amountcents` | `Long` | oui | |
 | `attendanceAt` | `attendance_at` | `LocalDateTime` | oui | pointage |
-| `player` | — | `DisplayPlayer` | | `@Transient` |
+| `player` | — | `DisplayPlayer` | | transient |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -260,10 +244,10 @@ PK partagée avec `Event` via `@MapsId`.
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
-| `playerSubscription` | `player_subscription_id` | `PlayerSubscription` | non | `@ManyToOne` LAZY |
+| `playerSubscription` | `player_subscription_id` | `PlayerSubscription` | non | FK |
 | `amountCents` | `amountcents` | `Long` | oui | |
 | `description` | `description` | `String(512)` | oui | |
-| `payment` | `payment_id` | `Payment` | oui | `@ManyToOne` LAZY |
+| `payment` | `payment_id` | `Payment` | oui | FK |
 | `status` | `status` | `PlayerSubscriptionOptionStatus` (ORDINAL) | non | `NOT_PAID`, `PAID` |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
@@ -280,7 +264,7 @@ PK partagée avec `Event` via `@MapsId`.
 | `id` | `id` | `Integer` | PK, IDENTITY | |
 | `nrFfe` | `nr_ffe` | `String(255)` | oui | |
 | `creationUser` | `creation_user` | `String(255)` | oui | |
-| `event` | `event_id` | `Event` | non | `@ManyToOne` LAZY |
+| `event` | `event_id` | `Event` | non | FK |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -289,23 +273,21 @@ PK partagée avec `Event` via `@MapsId`.
 
 `com.github.gcolin.payment.Payment` → table `payment`
 
-Étend `TimedEntity`.
+Étend `TimedEntity`. Colonnes SQL en camelCase minuscule (héritage EclipseLink).
 
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Long` | PK, IDENTITY | |
-| `stripeSessionId` | `stripeSessionId` | `String` | oui | unique |
-| `stripeIntent` | `stripeIntent` | `String` | oui | |
-| `userEmail` | `userEmail` | `String` | non | |
-| `payerName` | `payerName` | `String(255)` | oui | |
-| `payerAddress` | `payerAddress` | `String(1000)` | oui | |
-| `donation` | `donation` | `boolean` | non | |
-| `status` | `status` | `PaymentStatus` (STRING) | oui | `PENDING`, `PAID`, `EXPIRED` |
-| `type` | `type` | `PaymentType` (STRING) | oui | `CARD`, `BANK_TRANSFER`, `FREE`, `CASH`, `CHEQUE` |
-| `amount` | `amount` | `Double` | oui | sync `amountCents` |
-| `amountCents` | `amountCents` | `Long` | oui | |
-| `subscriptions` | `payment_id` | `List<PlayerSubscription>` | | `@OneToMany` + `@JoinColumn` |
-| `memberships` | `payment_id` | `List<Membership>` | | `@OneToMany` + `@JoinColumn` |
+| `stripeSessionId` | `stripesessionid` | `String` | oui | UK |
+| `stripeIntent` | `stripeintent` | `String` | oui | |
+| `userEmail` | `useremail` | `String` | non | |
+| `payerName` | `payername` | `String` | oui | |
+| `payerAddress` | `payeraddress` | `String(1000)` | oui | |
+| `donation` | `donation` | `boolean` | non | défaut `false` |
+| `status` | `status` | `PaymentStatus` | oui | `PENDING`, `PAID`, `EXPIRED` |
+| `type` | `type` | `PaymentType` | oui | `CARD`, `BANK_TRANSFER`, `FREE`, `CASH`, `CHEQUE` |
+| `amountCents` | `amountcents` | `Long` | oui | `amount` (Double) dérivé en Java |
+| `subscriptions` / `memberships` | — | listes | | relations logiques via `payment_id` |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -314,14 +296,14 @@ PK partagée avec `Event` via `@MapsId`.
 
 `com.github.gcolin.membership.License` → table `license`
 
-Étend `TimedEntity`, `OrgOwned`. UK : `(org_id, name)`. Filtre org + `OrgEntityListener`.
+Étend `TimedEntity`. UK : `(org_id, name)`. Multi-tenant via `org_id`.
 
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
-| `orgId` | `org_id` | `Integer` | non | multi-tenant |
+| `orgId` | `org_id` | `Integer` | non | |
 | `name` | `name` | `String(50)` | non | |
-| `accessRule` | `access_rule` | `MembershipOptionAccessRule` (STRING) | non | défaut `ALL` ; `ALL`, `YOUNG_ONLY`, `NON_YOUNG_ONLY`, `ADMIN` |
+| `accessRule` | `access_rule` | `MembershipOptionAccessRule` | non | `ALL`, `YOUNG_ONLY`, `NON_YOUNG_ONLY`, `ADMIN` |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -337,7 +319,7 @@ PK partagée avec `Event` via `@MapsId`.
 | `id` | `id` | `Integer` | PK, IDENTITY | |
 | `category` | `category` | `String(10)` | non | |
 | `priceCents` | `price_cents` | `Integer` | non | |
-| `license` | `license_id` | `License` | non | `@ManyToOne`, FK `fk_license_price_license` |
+| `license` | `license_id` | `License` | non | FK |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -346,7 +328,7 @@ PK partagée avec `Event` via `@MapsId`.
 
 `com.github.gcolin.membership.Membership` → table `membership`
 
-Étend `TimedEntity`. Licence type par défaut : `"A"`.
+Étend `TimedEntity`.
 
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
@@ -357,11 +339,11 @@ PK partagée avec `Event` via `@MapsId`.
 | `firstname` | `firstname` | `String(255)` | oui | |
 | `birthDate` | `birthdate` | `String(255)` | oui | |
 | `clubRef` | `club_ref` | `int` | non | |
-| `status` | `status` | `MembershipStatus` (STRING) | non | `APPROVED`, `PENDING_APPROVAL`, `PENDING_CONFIRMATION`, `PAID`, `FREE` |
+| `status` | `status` | `MembershipStatus` | non | `APPROVED`, `PENDING_APPROVAL`, `PENDING_CONFIRMATION`, `PAID`, `FREE` |
 | `amountCents` | `amountcents` | `int` | non | |
 | `licenseType` | `license_type` | `String(10)` | oui | |
-| `season` | `season_id` | `ClubSeason` | oui | `@ManyToOne`, FK `fk_membership_season` |
-| `payment` | `payment_id` | `Payment` | oui | `@ManyToOne`, FK `fk_membership_payment` |
+| `season` | `season_id` | `ClubSeason` | oui | FK |
+| `payment` | `payment_id` | `Payment` | oui | FK |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -375,12 +357,12 @@ PK partagée avec `Event` via `@MapsId`.
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
-| `optionType` | `option_type` | `MembershipOptionType` (STRING) | non | `COURSES`, `COURSES_VOLUNTEER`, `CLUB_CHAMPIONSHIP` |
+| `optionType` | `option_type` | `MembershipOptionType` | non | `COURSES`, `COURSES_VOLUNTEER`, `CLUB_CHAMPIONSHIP` |
 | `optionValue` | `option_value` | `String(255)` | non | |
 | `amountCents` | `amount_cents` | `Integer` | oui | |
-| `accessRule` | `access_rule` | `MembershipOptionAccessRule` (STRING) | oui | défaut `ALL` |
-| `license` | `license_id` | `License` | oui | `@ManyToOne`, FK `fk_membership_option_license` |
-| `season` | `season_id` | `ClubSeason` | oui | `@ManyToOne`, FK `fk_membership_option_season` |
+| `accessRule` | `access_rule` | `MembershipOptionAccessRule` | oui | défaut `ALL` |
+| `license` | `license_id` | `License` | oui | FK |
+| `season` | `season_id` | `ClubSeason` | oui | FK |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -395,8 +377,8 @@ PK partagée avec `Event` via `@MapsId`.
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
 | `nrFfe` | `nr_ffe` | `String(255)` | oui | |
-| `membership` | `membership_id` | `Membership` | non | `@ManyToOne` LAZY |
-| `membershipOption` | `membership_option_id` | `MembershipOption` | non | `@ManyToOne` LAZY |
+| `membership` | `membership_id` | `Membership` | non | FK |
+| `membershipOption` | `membership_option_id` | `MembershipOption` | non | FK |
 | + TimedEntity | | | | `created_at`, `updated_at` |
 
 ---
@@ -410,7 +392,7 @@ PK partagée avec `Event` via `@MapsId`.
 | Champ | Colonne | Type | Nullable | Notes |
 |-------|---------|------|----------|-------|
 | `id` | `id` | `Integer` | PK, IDENTITY | |
-| `membershipOption` | `membership_option_id` | `MembershipOption` | non | `@ManyToOne` LAZY, FK `fk_membership_option_file_option` |
+| `membershipOption` | `membership_option_id` | `MembershipOption` | non | FK |
 | `originalName` | `original_name` | `String(255)` | non | |
 | `storedName` | `stored_name` | `String(255)` | non | |
 | `contentType` | `content_type` | `String(120)` | oui | |
@@ -424,11 +406,11 @@ PK partagée avec `Event` via `@MapsId`.
 
 ```
 Organisation
-  └── (filtre org) ClubSeason, License
+  ├── settings_json (identité, Stripe, OAuth, mail, facture…)
+  └── (org_id) ClubSeason, License, Event, EventGroup, EventCollection
 
 EventGroup ──< Event >── EventCollection
                │  │
-               │  └── EventInfo (1:1)
                │  └── EventOption (*)
                └── PlayerSubscription >── Payment
                └── PlayerPendingSubscription

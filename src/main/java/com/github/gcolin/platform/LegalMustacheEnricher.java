@@ -13,6 +13,9 @@ public final class LegalMustacheEnricher {
         String orgHostingAddress = pageConfig != null && pageConfig.getOrgHostingAddress() != null
                 ? pageConfig.getOrgHostingAddress()
                 : "";
+        if (orgHostingAddress.isEmpty()) {
+            orgHostingAddress = orgAddress;
+        }
 
         model.put("publisherText", messages.get("legal.publisher.text", orgName, orgAddress));
         model.put("hostingText", messages.get("legal.hosting.text", orgName, orgHostingAddress));

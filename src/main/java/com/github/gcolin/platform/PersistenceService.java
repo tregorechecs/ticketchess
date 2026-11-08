@@ -4,11 +4,10 @@ import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.event.EventCollectionOptionType;
 import com.github.gcolin.event.EventOptionType;
 import com.github.gcolin.membership.MembershipOptionType;
+import com.github.gcolin.organisation.OrganisationSettings;
 import com.github.gcolin.payment.PaymentType;
 import com.zaxxer.hikari.HikariDataSource;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Persistence;
-import java.io.BufferedReader;
+import javax.sql.DataSource;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,7 +45,6 @@ public class PersistenceService {
             Pattern.compile("'([A-Z][A-Z0-9_]*)'");
 
     private final Config config;
-    private EntityManagerFactory emf;
     private HikariDataSource dataSource;
     private final Map<String, Set<String>> tableColumnsCache = new HashMap<>();
 
@@ -55,26 +54,77 @@ public class PersistenceService {
 
     public void init() {
         initDatasource();
+        initSchemaIfNeeded();
         //applySchemaPatches();
+        dropLegacyChessEventOptions();
         renameOrganisationTransferColumns();
-        Map<String, Object> props = new HashMap<>();
-        props.put("jakarta.persistence.nonJtaDataSource", dataSource);
-        // Closest EclipseLink equivalent of Hibernate hbm2ddl.auto=update.
-        props.put("eclipselink.ddl-generation", "create-or-extend-tables");
-        props.put("eclipselink.ddl-generation.output-mode", "database");
-        // Classes are statically woven by eclipselink-maven-plugin (process-classes).
-        props.put("eclipselink.weaving", "static");
-
-        emf = Persistence.createEntityManagerFactory("myPU", props);
-        //backfillMembershipTimestamps();
-        initH2FromPostgresDumpIfNeeded();
         dropOrganisationThemeColumn();
+        migrateLegacyMoneyColumnsToCents();
+        ensureOrgIdOnClubSeasonAndLicense();
+        ensureOrgIdOnEventTables();
+        foldEventInfoIntoEventDescription();
+        foldOrganisationColumnsIntoSettingsJson();
+        dropOrganisationSlugColumn();
+        normalizeOrganisationSettingsAliases();
         //backfillMembershipSeasonIdsAfterBootstrap();
+    }
+
+    /** Creates the schema from {@code schema.sql} when the key tables are missing. */
+    private void initSchemaIfNeeded() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (tableExists(connection, "event") && tableExists(connection, "organisation")) {
+                return;
+            }
+            for (String statement : loadSchemaStatements()) {
+                try (Statement st = connection.createStatement()) {
+                    st.execute(statement);
+                }
+            }
+            if (!connection.getAutoCommit()) {
+                connection.commit();
+            }
+            tableColumnsCache.clear();
+            logger.info("Database schema created from schema.sql");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to create database schema", e);
+        }
+    }
+
+    static List<String> loadSchemaStatements() {
+        try (var in = PersistenceService.class.getResourceAsStream("/schema.sql")) {
+            if (in == null) {
+                throw new IllegalStateException("schema.sql not found on classpath");
+            }
+            String script = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            return splitSqlStatements(script);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot read schema.sql", e);
+        }
+    }
+
+    /** Splits a SQL script on {@code ;} after dropping {@code --} comment lines. */
+    static List<String> splitSqlStatements(String script) {
+        StringBuilder cleaned = new StringBuilder();
+        for (String line : script.split("\\r?\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("--")) {
+                continue;
+            }
+            cleaned.append(line).append('\n');
+        }
+        List<String> statements = new ArrayList<>();
+        for (String part : cleaned.toString().split(";")) {
+            String statement = part.trim();
+            if (!statement.isEmpty()) {
+                statements.add(statement);
+            }
+        }
+        return statements;
     }
 
     private void renameOrganisationTransferColumns() {
         try (Connection connection = dataSource.getConnection()) {
-            if (!tableExists(connection, "ORGANISATION")) {
+            if (!tableExists(connection, "organisation")) {
                 return;
             }
             renameOrganisationColumn(
@@ -87,8 +137,8 @@ public class PersistenceService {
     }
 
     private void renameOrganisationColumn(Connection connection, String oldName, String newName) throws SQLException {
-        boolean hasOld = columnExists(connection, "ORGANISATION", oldName);
-        boolean hasNew = columnExists(connection, "ORGANISATION", newName);
+        boolean hasOld = columnExists(connection, "organisation", oldName);
+        boolean hasNew = columnExists(connection, "organisation", newName);
         if (!hasOld || hasNew) {
             return;
         }
@@ -99,13 +149,13 @@ public class PersistenceService {
                 st.execute("ALTER TABLE organisation RENAME COLUMN " + oldName + " TO " + newName);
             }
         }
-        tableColumnsCache.remove("ORGANISATION");
+        tableColumnsCache.remove("organisation");
         logger.info("Renamed organisation.{} to {}", oldName, newName);
     }
 
     private void dropOrganisationThemeColumn() {
         try (Connection connection = dataSource.getConnection()) {
-            if (!tableExists(connection, "ORGANISATION") || !columnExists(connection, "ORGANISATION", "THEME")) {
+            if (!tableExists(connection, "organisation") || !columnExists(connection, "organisation", "theme")) {
                 return;
             }
             try (Statement st = connection.createStatement()) {
@@ -115,10 +165,453 @@ public class PersistenceService {
                     st.execute("ALTER TABLE organisation DROP COLUMN IF EXISTS theme");
                 }
             }
-            tableColumnsCache.remove("ORGANISATION");
+            tableColumnsCache.remove("organisation");
             logger.info("Dropped obsolete organisation.theme column");
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to drop organisation.theme column", e);
+        }
+    }
+
+    /** Drops obsolete {@code organisation.slug}; tenants are resolved by {@code base_url} host only. */
+    private void dropOrganisationSlugColumn() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "organisation") || !columnExists(connection, "organisation", "slug")) {
+                return;
+            }
+            try (Statement st = connection.createStatement()) {
+                if (isH2()) {
+                    st.execute("ALTER TABLE organisation DROP COLUMN slug");
+                } else {
+                    st.execute("ALTER TABLE organisation DROP CONSTRAINT IF EXISTS uk_organisation_slug");
+                    st.execute("ALTER TABLE organisation DROP COLUMN IF EXISTS slug");
+                }
+            }
+            tableColumnsCache.remove("organisation");
+            logger.info("Dropped obsolete organisation.slug column");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to drop organisation.slug column", e);
+        }
+    }
+
+    /**
+     * Moves legacy organisation typed columns into {@code settings_json}, then drops them.
+     * Target shape: id / base_url / active / settings_json only.
+     */
+    private void foldOrganisationColumnsIntoSettingsJson() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "organisation")) {
+                return;
+            }
+            List<String> legacy = organisationLegacyColumns(connection);
+            if (legacy.isEmpty()) {
+                return;
+            }
+            if (!columnExists(connection, "organisation", "settings_json")) {
+                try (Statement st = connection.createStatement()) {
+                    if (isH2()) {
+                        st.execute("ALTER TABLE organisation ADD COLUMN settings_json CLOB");
+                    } else {
+                        st.execute("ALTER TABLE organisation ADD COLUMN IF NOT EXISTS settings_json TEXT");
+                    }
+                }
+                tableColumnsCache.remove("organisation");
+            }
+            foldOrganisationRows(connection, legacy);
+            dropOrganisationLegacyColumns(connection, legacy);
+            tableColumnsCache.remove("organisation");
+            logger.info("Folded organisation columns into settings_json and dropped {}", legacy);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to fold organisation columns into settings_json", e);
+        }
+    }
+
+    private static final List<String> ORGANISATION_LEGACY_COLUMNS = List.of(
+            "name",
+            "super_user_email",
+            "stripe_public",
+            "stripe_secret",
+            "stripe_keyprefix",
+            "stripe_simuled",
+            "stripe_card_events",
+            "stripe_card_memberships",
+            "payment_transfer_events",
+            "payment_transfer_memberships",
+            "oauth_client_id",
+            "oauth_client_secret",
+            "oauth_authorization_url",
+            "oauth_token_url",
+            "oauth_scope",
+            "oauth_logout_url",
+            "oauth_account_url",
+            "oauth_userinfo_url",
+            "mail_user_name",
+            "mail_password");
+
+    private List<String> organisationLegacyColumns(Connection connection) throws SQLException {
+        List<String> present = new ArrayList<>();
+        for (String column : ORGANISATION_LEGACY_COLUMNS) {
+            if (columnExists(connection, "organisation", column)) {
+                present.add(column);
+            }
+        }
+        return present;
+    }
+
+    private void foldOrganisationRows(Connection connection, List<String> legacy) throws SQLException {
+        String sql = "SELECT id, settings_json, " + String.join(", ", legacy) + " FROM organisation";
+        try (Statement st = connection.createStatement();
+                ResultSet rs = st.executeQuery(sql);
+                PreparedStatement update = connection.prepareStatement(
+                        "UPDATE organisation SET settings_json = ? WHERE id = ?")) {
+            while (rs.next()) {
+                int id = rs.getInt("id");
+                String settingsJson = rs.getString("settings_json");
+                OrganisationSettings.LegacyColumns cols = new OrganisationSettings.LegacyColumns(
+                        stringCol(rs, "name"),
+                        stringCol(rs, "super_user_email"),
+                        stringCol(rs, "stripe_public"),
+                        stringCol(rs, "stripe_secret"),
+                        stringCol(rs, "stripe_keyprefix"),
+                        boolCol(rs, "stripe_simuled"),
+                        boolCol(rs, "stripe_card_events"),
+                        boolCol(rs, "stripe_card_memberships"),
+                        boolCol(rs, "payment_transfer_events"),
+                        boolCol(rs, "payment_transfer_memberships"),
+                        stringCol(rs, "oauth_client_id"),
+                        stringCol(rs, "oauth_client_secret"),
+                        stringCol(rs, "oauth_authorization_url"),
+                        stringCol(rs, "oauth_token_url"),
+                        stringCol(rs, "oauth_scope"),
+                        stringCol(rs, "oauth_logout_url"),
+                        stringCol(rs, "oauth_account_url"),
+                        stringCol(rs, "oauth_userinfo_url"),
+                        stringCol(rs, "mail_user_name"),
+                        stringCol(rs, "mail_password"));
+                String merged = OrganisationSettings.mergeLegacyColumns(settingsJson, cols);
+                update.setString(1, merged);
+                update.setInt(2, id);
+                update.executeUpdate();
+            }
+        }
+    }
+
+    private void dropOrganisationLegacyColumns(Connection connection, List<String> legacy) throws SQLException {
+        try (Statement st = connection.createStatement()) {
+            for (String column : legacy) {
+                if (isH2()) {
+                    st.execute("ALTER TABLE organisation DROP COLUMN " + column);
+                } else {
+                    st.execute("ALTER TABLE organisation DROP COLUMN IF EXISTS " + column);
+                }
+            }
+        }
+    }
+
+    private static String stringCol(ResultSet rs, String column) throws SQLException {
+        try {
+            String value = rs.getString(column);
+            return rs.wasNull() ? null : value;
+        } catch (SQLException e) {
+            return null;
+        }
+    }
+
+    private static Boolean boolCol(ResultSet rs, String column) throws SQLException {
+        try {
+            boolean value = rs.getBoolean(column);
+            return rs.wasNull() ? null : value;
+        } catch (SQLException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Folds {@code keycloak.*} → {@code oauth.*}, {@code org.hosting.address} → {@code org.address},
+     * and drops invoice seller keys that duplicate org fields.
+     */
+    private void normalizeOrganisationSettingsAliases() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "organisation")
+                    || !columnExists(connection, "organisation", "settings_json")) {
+                return;
+            }
+            int updated = 0;
+            try (Statement st = connection.createStatement();
+                    ResultSet rs = st.executeQuery("SELECT id, settings_json FROM organisation");
+                    PreparedStatement update = connection.prepareStatement(
+                            "UPDATE organisation SET settings_json = ? WHERE id = ?")) {
+                while (rs.next()) {
+                    int id = rs.getInt("id");
+                    String before = rs.getString("settings_json");
+                    String after = OrganisationSettings.normalizeJson(before);
+                    if (OrganisationSettings.jsonEquivalent(before, after)) {
+                        continue;
+                    }
+                    update.setString(1, after);
+                    update.setInt(2, id);
+                    update.executeUpdate();
+                    updated++;
+                }
+            }
+            if (updated > 0) {
+                logger.info("Normalized organisation settings aliases on {} row(s)", updated);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to normalize organisation settings aliases", e);
+        }
+    }
+
+    /**
+     * Legacy DBs created before multi-org owned {@code club_season}/{@code license} rows without
+     * {@code org_id}. Backfill from the first organisation and realign the license unique key.
+     */
+    private void ensureOrgIdOnClubSeasonAndLicense() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "organisation")) {
+                return;
+            }
+            boolean changed = false;
+            changed |= ensureOrgIdColumn(connection, "club_season");
+            changed |= ensureOrgIdColumn(connection, "license");
+            if (tableExists(connection, "license") && columnExists(connection, "license", "org_id")) {
+                changed |= ensureLicenseOrgNameUnique(connection);
+            }
+            if (changed) {
+                logger.info("Ensured org_id on club_season and license");
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to ensure org_id on club_season and license", e);
+        }
+    }
+
+    /** Ensures {@code org_id} on {@code event}, {@code event_group} and {@code big_event}. */
+    private void ensureOrgIdOnEventTables() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "organisation")) {
+                return;
+            }
+            boolean changed = false;
+            changed |= ensureOrgIdColumn(connection, "event");
+            changed |= ensureOrgIdColumn(connection, "event_group");
+            changed |= ensureOrgIdColumn(connection, "big_event");
+            if (changed) {
+                logger.info("Ensured org_id on event, event_group and big_event");
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to ensure org_id on event tables", e);
+        }
+    }
+
+    /** Moves legacy {@code eventinfo.description} onto {@code event.description}, then drops {@code eventinfo}. */
+    private void foldEventInfoIntoEventDescription() {
+        try (Connection connection = dataSource.getConnection()) {
+            if (!tableExists(connection, "event")) {
+                return;
+            }
+            if (!columnExists(connection, "event", "description")) {
+                try (Statement st = connection.createStatement()) {
+                    st.execute("ALTER TABLE event ADD COLUMN description TEXT");
+                }
+                tableColumnsCache.remove("event");
+                logger.info("Added event.description column");
+            }
+            if (!tableExists(connection, "eventinfo")) {
+                return;
+            }
+            try (Statement st = connection.createStatement()) {
+                int updated;
+                if (isH2()) {
+                    updated = st.executeUpdate(
+                            "UPDATE event SET description = ("
+                                    + "SELECT description FROM eventinfo WHERE eventinfo.eventid = event.id)"
+                                    + " WHERE (description IS NULL OR description = '')"
+                                    + " AND EXISTS (SELECT 1 FROM eventinfo WHERE eventinfo.eventid = event.id"
+                                    + " AND eventinfo.description IS NOT NULL)");
+                } else {
+                    updated = st.executeUpdate(
+                            "UPDATE event e SET description = ei.description FROM eventinfo ei"
+                                    + " WHERE e.id = ei.eventid"
+                                    + " AND (e.description IS NULL OR e.description = '')"
+                                    + " AND ei.description IS NOT NULL");
+                }
+                if (updated > 0) {
+                    logger.info("Copied {} eventinfo description(s) into event.description", updated);
+                }
+                st.execute("DROP TABLE eventinfo");
+            }
+            tableColumnsCache.remove("eventinfo");
+            logger.info("Dropped legacy eventinfo table");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to fold eventinfo into event.description", e);
+        }
+    }
+
+    private boolean ensureOrgIdColumn(Connection connection, String table) throws SQLException {
+        if (!tableExists(connection, table) || columnExists(connection, table, "org_id")) {
+            return false;
+        }
+        try (Statement st = connection.createStatement()) {
+            if (isH2()) {
+                st.execute("ALTER TABLE " + table + " ADD COLUMN org_id INTEGER");
+            } else {
+                st.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS org_id INTEGER");
+            }
+            st.execute(
+                    "UPDATE " + table + " SET org_id = (SELECT MIN(id) FROM organisation) WHERE org_id IS NULL");
+            st.execute("ALTER TABLE " + table + " ALTER COLUMN org_id SET NOT NULL");
+        }
+        tableColumnsCache.remove(table.toLowerCase(Locale.ROOT));
+        return true;
+    }
+
+    private boolean ensureLicenseOrgNameUnique(Connection connection) throws SQLException {
+        dropLegacyLicenseNameUnique(connection);
+        if (constraintExists(connection, "license", "uk_license_org_name")) {
+            return false;
+        }
+        try (Statement st = connection.createStatement()) {
+            st.execute("ALTER TABLE license ADD CONSTRAINT uk_license_org_name UNIQUE (org_id, name)");
+        }
+        return true;
+    }
+
+    private void dropLegacyLicenseNameUnique(Connection connection) throws SQLException {
+        List<String> singleColumnNameUniques = findUniqueConstraintsOnSingleColumn(connection, "license", "name");
+        // Known Hibernate-generated name seen on Postgres integration DBs.
+        if (!isH2() && singleColumnNameUniques.stream().noneMatch(n -> n.equalsIgnoreCase("uk888jmhmieccsusvllotgvnrtm"))) {
+            try (Statement st = connection.createStatement()) {
+                st.execute("ALTER TABLE license DROP CONSTRAINT IF EXISTS uk888jmhmieccsusvllotgvnrtm");
+            }
+        }
+        for (String constraintName : singleColumnNameUniques) {
+            if ("uk_license_org_name".equalsIgnoreCase(constraintName)) {
+                continue;
+            }
+            try (Statement st = connection.createStatement()) {
+                if (isH2()) {
+                    st.execute("ALTER TABLE license DROP CONSTRAINT " + constraintName);
+                } else {
+                    st.execute("ALTER TABLE license DROP CONSTRAINT IF EXISTS " + constraintName);
+                }
+            }
+        }
+    }
+
+    private boolean constraintExists(Connection connection, String table, String constraintName) throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS "
+                        + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?")) {
+            ps.setString(1, informationSchemaName());
+            ps.setString(2, informationSchemaTableName(table));
+            ps.setString(3, constraintName.toLowerCase(Locale.ROOT));
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    private List<String> findUniqueConstraintsOnSingleColumn(Connection connection, String table, String column)
+            throws SQLException {
+        String sql =
+                "SELECT tc.CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc "
+                        + "JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu "
+                        + "ON tc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA "
+                        + "AND tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME "
+                        + "AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA "
+                        + "AND tc.TABLE_NAME = kcu.TABLE_NAME "
+                        + "WHERE tc.TABLE_SCHEMA = ? AND tc.TABLE_NAME = ? "
+                        + "AND tc.CONSTRAINT_TYPE = 'UNIQUE' "
+                        + "GROUP BY tc.CONSTRAINT_NAME "
+                        + "HAVING COUNT(*) = 1 AND MIN(kcu.COLUMN_NAME) = ?";
+        List<String> names = new ArrayList<>();
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, informationSchemaName());
+            ps.setString(2, informationSchemaTableName(table));
+            ps.setString(3, column.toLowerCase(Locale.ROOT));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    names.add(rs.getString(1));
+                }
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Migrates legacy euro float/numeric money columns to integer cents, then drops them.
+     * Idempotent: no-op when {@code event.price}, {@code event.youngprice} and {@code payment.amount}
+     * are already gone.
+     */
+    private void migrateLegacyMoneyColumnsToCents() {
+        try (Connection connection = dataSource.getConnection()) {
+            boolean hasEventPrice =
+                    tableExists(connection, "event") && columnExists(connection, "event", "price");
+            boolean hasEventYoungPrice =
+                    tableExists(connection, "event") && columnExists(connection, "event", "youngprice");
+            boolean hasPaymentAmount =
+                    tableExists(connection, "payment") && columnExists(connection, "payment", "amount");
+            if (!hasEventPrice && !hasEventYoungPrice && !hasPaymentAmount) {
+                return;
+            }
+
+            try (Statement st = connection.createStatement()) {
+                if (tableExists(connection, "event")) {
+                    ensureBigintColumn(connection, st, "event", "pricecents");
+                    ensureBigintColumn(connection, st, "event", "youngpricecents");
+                    if (hasEventPrice) {
+                        st.execute(
+                                "UPDATE event SET pricecents = ROUND(price * 100)"
+                                        + " WHERE pricecents IS NULL AND price IS NOT NULL");
+                    }
+                    if (hasEventYoungPrice) {
+                        st.execute(
+                                "UPDATE event SET youngpricecents = ROUND(youngprice * 100)"
+                                        + " WHERE youngpricecents IS NULL AND youngprice IS NOT NULL");
+                    }
+                    if (hasEventPrice) {
+                        dropColumn(st, "event", "price");
+                    }
+                    if (hasEventYoungPrice) {
+                        dropColumn(st, "event", "youngprice");
+                    }
+                    tableColumnsCache.remove("event");
+                }
+                if (tableExists(connection, "payment")) {
+                    ensureBigintColumn(connection, st, "payment", "amountcents");
+                    if (hasPaymentAmount) {
+                        st.execute(
+                                "UPDATE payment SET amountcents = ROUND(amount * 100)"
+                                        + " WHERE amountcents IS NULL AND amount IS NOT NULL");
+                        dropColumn(st, "payment", "amount");
+                    }
+                    tableColumnsCache.remove("payment");
+                }
+            }
+            logger.info("Migrated legacy money columns to cents and dropped float/numeric columns");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to migrate legacy money columns to cents", e);
+        }
+    }
+
+    private void ensureBigintColumn(Connection connection, Statement st, String table, String column)
+            throws SQLException {
+        if (columnExists(connection, table, column)) {
+            return;
+        }
+        if (isH2()) {
+            st.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " BIGINT");
+        } else {
+            st.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS " + column + " BIGINT");
+        }
+        tableColumnsCache.remove(table);
+    }
+
+    private void dropColumn(Statement st, String table, String column) throws SQLException {
+        if (isH2()) {
+            st.execute("ALTER TABLE " + table + " DROP COLUMN " + column);
+        } else {
+            st.execute("ALTER TABLE " + table + " DROP COLUMN IF EXISTS " + column);
         }
     }
 
@@ -130,12 +623,11 @@ public class PersistenceService {
         }
     }
 
-    public EntityManagerFactory getEmf() {
-        return emf;
+    public DataSource getDataSource() {
+        return dataSource;
     }
 
     public void shutdown() {
-        if (emf != null) emf.close();
         if (dataSource != null) dataSource.close();
     }
 
@@ -193,12 +685,10 @@ public class PersistenceService {
 
                 Path dbFile = dbDir.resolve(dbName);
                 String dbFilePath = dbFile.toAbsolutePath().toString().replace('\\', '/');
-                // MODE=LEGACY: EclipseLink DDL still emits "INTEGER IDENTITY" / CALL IDENTITY().
-                databaseUrl = "jdbc:h2:file:" + dbFilePath + ";MODE=LEGACY";
+                databaseUrl = "jdbc:h2:file:" + dbFilePath + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE";
                 logger.info("h2 using persistent database on disk at {}", dbFilePath);
             } else {
-                // MODE=LEGACY: EclipseLink DDL still emits "INTEGER IDENTITY" / CALL IDENTITY().
-                databaseUrl = "jdbc:h2:mem:" + dbName + ";MODE=LEGACY";
+                databaseUrl = "jdbc:h2:mem:" + dbName + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE";
                 logger.info(
                         "h2 using in-memory database (set db.h2.persistent=true or DB_H2_PERSISTENT=true for disk persistence)");
             }
@@ -230,6 +720,47 @@ public class PersistenceService {
             }
         }
         return null;
+    }
+
+    /**
+     * Removes obsolete SharlyChess option rows ({@code CHESS_EVENT_*}) then realigns option_type
+     * constraints with the current enums.
+     */
+    private void dropLegacyChessEventOptions() {
+        try (Connection connection = dataSource.getConnection()) {
+            int eventOptionsDeleted = 0;
+            int collectionOptionsDeleted = 0;
+            if (tableExists(connection, "eventoption") && columnExists(connection, "eventoption", "option_type")) {
+                try (Statement st = connection.createStatement()) {
+                    eventOptionsDeleted = st.executeUpdate(
+                            "DELETE FROM eventoption WHERE option_type IN ('CHESS_EVENT_USER', 'CHESS_EVENT_PASSWORD')");
+                }
+            }
+            if (tableExists(connection, "eventcollectionoption")
+                    && columnExists(connection, "eventcollectionoption", "option_type")) {
+                try (Statement st = connection.createStatement()) {
+                    collectionOptionsDeleted =
+                            st.executeUpdate("DELETE FROM eventcollectionoption WHERE option_type = 'CHESS_EVENT_ID'");
+                }
+            }
+            if (eventOptionsDeleted > 0 || collectionOptionsDeleted > 0) {
+                logger.info(
+                        "Dropped legacy ChessEvent options (eventoption={}, eventcollectionoption={})",
+                        eventOptionsDeleted,
+                        collectionOptionsDeleted);
+            }
+            if (isH2()) {
+                applyH2EnumColumnPatch(connection, "eventoption", "option_type", EventOptionType.class, true);
+                applyH2EnumColumnPatch(
+                        connection, "eventcollectionoption", "option_type", EventCollectionOptionType.class, true);
+            } else {
+                applyPostgresEnumCheckConstraintPatch(connection, "eventoption", "option_type", EventOptionType.class);
+                applyPostgresEnumCheckConstraintPatch(
+                        connection, "eventcollectionoption", "option_type", EventCollectionOptionType.class);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to drop legacy ChessEvent options", e);
+        }
     }
 
     private void applySchemaPatches() {
@@ -271,8 +802,8 @@ public class PersistenceService {
             Class<? extends Enum<?>> enumClass,
             boolean notNull)
             throws SQLException {
-        String tableKey = table.toUpperCase();
-        String columnKey = column.toUpperCase();
+        String tableKey = table.toLowerCase(Locale.ROOT);
+        String columnKey = column.toLowerCase(Locale.ROOT);
         if (!tableExists(connection, tableKey) || !columnExists(connection, tableKey, columnKey)) {
             return;
         }
@@ -367,9 +898,9 @@ public class PersistenceService {
     private boolean isH2EnumColumn(Connection connection, String table, String column) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS "
-                        + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_NAME = ? AND COLUMN_NAME = ?")) {
-            ps.setString(1, table);
-            ps.setString(2, column);
+                        + "WHERE TABLE_SCHEMA = 'public' AND TABLE_NAME = ? AND COLUMN_NAME = ?")) {
+            ps.setString(1, table.toLowerCase(Locale.ROOT));
+            ps.setString(2, column.toLowerCase(Locale.ROOT));
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
                     return false;
@@ -381,8 +912,8 @@ public class PersistenceService {
 
     private void backfillMembershipTimestamps() {
         try (Connection connection = dataSource.getConnection()) {
-            backfillTimedEntityColumns(connection, "MEMBERSHIP");
-            backfillTimedEntityColumns(connection, "MEMBERSHIP_OPTION");
+            backfillTimedEntityColumns(connection, "membership");
+            backfillTimedEntityColumns(connection, "membership_option");
         } catch (SQLException e) {
             logger.warn("Failed to backfill membership timestamps", e);
         }
@@ -390,8 +921,8 @@ public class PersistenceService {
 
     private void backfillTimedEntityColumns(Connection connection, String table) throws SQLException {
         if (!tableExists(connection, table)
-                || !columnExists(connection, table, "CREATED_AT")
-                || !columnExists(connection, table, "UPDATED_AT")) {
+                || !columnExists(connection, table, "created_at")
+                || !columnExists(connection, table, "updated_at")) {
             return;
         }
         String sql = "UPDATE " + table.toLowerCase()
@@ -407,26 +938,26 @@ public class PersistenceService {
     }
 
     private void applyClubSeasonCurrentColumn(Connection connection) throws SQLException {
-        if (!tableExists(connection, "CLUB_SEASON") || columnExists(connection, "CLUB_SEASON", "IS_CURRENT")) {
+        if (!tableExists(connection, "club_season") || columnExists(connection, "club_season", "is_current")) {
             return;
         }
         try (Statement st = connection.createStatement()) {
             st.execute(
                     "ALTER TABLE club_season ADD COLUMN IF NOT EXISTS is_current boolean NOT NULL DEFAULT false");
         }
-        tableColumnsCache.remove("CLUB_SEASON");
+        tableColumnsCache.remove("club_season");
         logger.info("Added club_season.is_current column with default false for existing rows");
     }
 
     private void applyMembershipLicenseTypeColumn(Connection connection) throws SQLException {
         if (isH2()) {
-            if (!tableExists(connection, "MEMBERSHIP") || columnExists(connection, "MEMBERSHIP", "LICENSE_TYPE")) {
+            if (!tableExists(connection, "membership") || columnExists(connection, "membership", "license_type")) {
                 return;
             }
             try (Statement st = connection.createStatement()) {
                 st.execute("ALTER TABLE membership ADD COLUMN license_type VARCHAR(10)");
             }
-            tableColumnsCache.remove("MEMBERSHIP");
+            tableColumnsCache.remove("membership");
         } else {
             try (Statement st = connection.createStatement()) {
                 st.execute("ALTER TABLE membership ADD COLUMN IF NOT EXISTS license_type VARCHAR(10)");
@@ -437,17 +968,17 @@ public class PersistenceService {
 
     private void applyMembershipSeasonColumns(Connection connection) throws SQLException {
         if (isH2()) {
-            if (tableExists(connection, "MEMBERSHIP") && !columnExists(connection, "MEMBERSHIP", "SEASON_ID")) {
+            if (tableExists(connection, "membership") && !columnExists(connection, "membership", "season_id")) {
                 try (Statement st = connection.createStatement()) {
                     st.execute("ALTER TABLE membership ADD COLUMN season_id INTEGER");
                 }
-                tableColumnsCache.remove("MEMBERSHIP");
+                tableColumnsCache.remove("membership");
             }
-            if (tableExists(connection, "MEMBERSHIP_OPTION") && !columnExists(connection, "MEMBERSHIP_OPTION", "SEASON_ID")) {
+            if (tableExists(connection, "membership_option") && !columnExists(connection, "membership_option", "season_id")) {
                 try (Statement st = connection.createStatement()) {
                     st.execute("ALTER TABLE membership_option ADD COLUMN season_id INTEGER");
                 }
-                tableColumnsCache.remove("MEMBERSHIP_OPTION");
+                tableColumnsCache.remove("membership_option");
             }
         } else {
             try (Statement st = connection.createStatement()) {
@@ -461,13 +992,13 @@ public class PersistenceService {
 
     private void applyMembershipPaymentColumn(Connection connection) throws SQLException {
         if (isH2()) {
-            if (!tableExists(connection, "MEMBERSHIP") || columnExists(connection, "MEMBERSHIP", "PAYMENT_ID")) {
+            if (!tableExists(connection, "membership") || columnExists(connection, "membership", "payment_id")) {
                 return;
             }
             try (Statement st = connection.createStatement()) {
                 st.execute("ALTER TABLE membership ADD COLUMN payment_id BIGINT");
             }
-            tableColumnsCache.remove("MEMBERSHIP");
+            tableColumnsCache.remove("membership");
         } else {
             try (Statement st = connection.createStatement()) {
                 st.execute("ALTER TABLE membership ADD COLUMN IF NOT EXISTS payment_id BIGINT");
@@ -477,11 +1008,11 @@ public class PersistenceService {
     }
 
     private void applyPaymentDonationColumns(Connection connection) throws SQLException {
-        if (!tableExists(connection, "PAYMENT")) {
+        if (!tableExists(connection, "payment")) {
             return;
         }
         boolean added = false;
-        if (!columnExists(connection, "PAYMENT", "DONATION")) {
+        if (!columnExists(connection, "payment", "donation")) {
             try (Statement st = connection.createStatement()) {
                 if (isH2()) {
                     st.execute("ALTER TABLE payment ADD COLUMN donation BOOLEAN DEFAULT FALSE NOT NULL");
@@ -492,7 +1023,7 @@ public class PersistenceService {
             }
             added = true;
         }
-        if (!columnExists(connection, "PAYMENT", "PAYERADDRESS")) {
+        if (!columnExists(connection, "payment", "payeraddress")) {
             try (Statement st = connection.createStatement()) {
                 if (isH2()) {
                     st.execute("ALTER TABLE payment ADD COLUMN payerAddress VARCHAR(1000)");
@@ -503,7 +1034,7 @@ public class PersistenceService {
             }
             added = true;
         }
-        if (!columnExists(connection, "PAYMENT", "PAYERNAME")) {
+        if (!columnExists(connection, "payment", "payername")) {
             try (Statement st = connection.createStatement()) {
                 if (isH2()) {
                     st.execute("ALTER TABLE payment ADD COLUMN payerName VARCHAR(255)");
@@ -514,7 +1045,7 @@ public class PersistenceService {
             added = true;
         }
         if (added) {
-            tableColumnsCache.remove("PAYMENT");
+            tableColumnsCache.remove("payment");
             logger.info("Ensured payment.donation, payment.payerAddress and payment.payerName columns exist");
         }
     }
@@ -522,7 +1053,7 @@ public class PersistenceService {
     private static final int MEMBERSHIP_PRE_SEASON_MONTHS = 5;
 
     private void backfillMembershipSeasonIds(Connection connection) throws SQLException {
-        if (!tableExists(connection, "CLUB_SEASON")) {
+        if (!tableExists(connection, "club_season")) {
             return;
         }
         List<SeasonDates> seasons = loadClubSeasons(connection);
@@ -530,13 +1061,13 @@ public class PersistenceService {
             return;
         }
         Integer fallbackSeasonId = resolveCurrentSeasonId(connection, seasons);
-        if (tableExists(connection, "MEMBERSHIP") && columnExists(connection, "MEMBERSHIP", "SEASON_ID")) {
+        if (tableExists(connection, "membership") && columnExists(connection, "membership", "season_id")) {
             int updated = backfillTableSeasonId(connection, "membership", seasons, MEMBERSHIP_PRE_SEASON_MONTHS, fallbackSeasonId);
             if (updated > 0) {
                 logger.info("Backfilled season_id on {} membership row(s)", updated);
             }
         }
-        if (tableExists(connection, "MEMBERSHIP_OPTION") && columnExists(connection, "MEMBERSHIP_OPTION", "SEASON_ID")) {
+        if (tableExists(connection, "membership_option") && columnExists(connection, "membership_option", "season_id")) {
             int updated = backfillTableSeasonId(connection, "membership_option", seasons, 0, fallbackSeasonId);
             if (updated > 0) {
                 logger.info("Backfilled season_id on {} membership_option row(s)", updated);
@@ -630,14 +1161,14 @@ public class PersistenceService {
     private record SeasonDates(int id, LocalDate startDate, LocalDate endDate) {}
 
     private void migratePermissionsToRoles(Connection connection) throws SQLException {
-        if (!tableExists(connection, "USER_AUTHORIZATION")) {
+        if (!tableExists(connection, "user_authorization")) {
             return;
         }
 
         prepareUserAuthorizationRoleColumnForMigration(connection);
 
-        boolean hasPermissionColumn = columnExists(connection, "USER_AUTHORIZATION", "PERMISSION");
-        boolean hasRoleColumn = columnExists(connection, "USER_AUTHORIZATION", "ROLE");
+        boolean hasPermissionColumn = columnExists(connection, "user_authorization", "permission");
+        boolean hasRoleColumn = columnExists(connection, "user_authorization", "role");
         String valueColumn = hasPermissionColumn ? "permission" : (hasRoleColumn ? "role" : null);
         if (valueColumn == null) {
             return;
@@ -649,11 +1180,12 @@ public class PersistenceService {
                 Map.entry("ADMIN_USER", "ADMIN"),
                 Map.entry("PAYMENT_READ", "TRESORIER"),
                 Map.entry("PAYMENT_WRITE", "TRESORIER"),
-                Map.entry("EVENT_CREATE", "EVENT_ADMIN"),
-                Map.entry("EVENT_EDIT", "EVENT_ADMIN"),
-                Map.entry("EVENT_DELETE", "EVENT_ADMIN"),
-                Map.entry("MAIL_SEND", "EVENT_ADMIN"),
-                Map.entry("EVENT_READ", "ARBITRE"));
+                Map.entry("EVENT_CREATE", "ARBITRE"),
+                Map.entry("EVENT_EDIT", "ARBITRE"),
+                Map.entry("EVENT_DELETE", "ARBITRE"),
+                Map.entry("MAIL_SEND", "ARBITRE"),
+                Map.entry("EVENT_READ", "ARBITRE"),
+                Map.entry("EVENT_ADMIN", "ARBITRE"));
 
         for (Map.Entry<String, String> entry : mapping.entrySet()) {
             String sql = "UPDATE user_authorization SET " + valueColumn + " = ? WHERE " + valueColumn + " = ?";
@@ -671,9 +1203,10 @@ public class PersistenceService {
             }
         }
 
-        Set<String> validRoles = Set.of("ADMIN", "TRESORIER", "ARBITRE", "EVENT_ADMIN");
+        Set<String> validRoles = enumValues(RoleCode.class);
+        String placeholders = String.join(", ", Collections.nCopies(validRoles.size(), "?"));
         try (PreparedStatement ps = connection.prepareStatement(
-                "DELETE FROM user_authorization WHERE " + valueColumn + " NOT IN (?, ?, ?, ?)")) {
+                "DELETE FROM user_authorization WHERE " + valueColumn + " NOT IN (" + placeholders + ")")) {
             int index = 1;
             for (String role : validRoles) {
                 ps.setString(index++, role);
@@ -704,11 +1237,11 @@ public class PersistenceService {
 
     private void prepareUserAuthorizationRoleColumnForMigration(Connection connection) throws SQLException {
         if (isH2()) {
-            for (String column : List.of("PERMISSION", "ROLE")) {
-                if (!columnExists(connection, "USER_AUTHORIZATION", column)) {
+            for (String column : List.of("permission", "role")) {
+                if (!columnExists(connection, "user_authorization", column)) {
                     continue;
                 }
-                if (!isH2EnumColumn(connection, "USER_AUTHORIZATION", column)) {
+                if (!isH2EnumColumn(connection, "user_authorization", column)) {
                     continue;
                 }
                 String sqlColumn = column.toLowerCase(Locale.ROOT);
@@ -716,7 +1249,7 @@ public class PersistenceService {
                     st.execute(
                             "ALTER TABLE user_authorization ALTER COLUMN " + sqlColumn + " VARCHAR(64) NOT NULL");
                 }
-                tableColumnsCache.remove("USER_AUTHORIZATION");
+                tableColumnsCache.remove("user_authorization");
                 logger.info("Converted user_authorization.{} from legacy ENUM to VARCHAR(64)", sqlColumn);
                 return;
             }
@@ -745,7 +1278,7 @@ public class PersistenceService {
     }
 
     private void finalizeUserAuthorizationRoleColumn(Connection connection) throws SQLException {
-        if (!columnExists(connection, "USER_AUTHORIZATION", "ROLE") || isH2()) {
+        if (!columnExists(connection, "user_authorization", "role") || isH2()) {
             return;
         }
         if (!postgresTableHasColumn(connection, "user_authorization", "role")) {
@@ -798,148 +1331,20 @@ public class PersistenceService {
     }
 
     private boolean columnExists(Connection connection, String table, String column) throws SQLException {
-        return getTableColumns(connection, table).contains(column.toUpperCase());
+        return getTableColumns(connection, table).contains(column.toLowerCase(Locale.ROOT));
     }
 
+    /** H2 (DATABASE_TO_LOWER=TRUE) and PostgreSQL both expose lowercase names in the {@code public} schema. */
     private String informationSchemaName() {
-        return isH2() ? "PUBLIC" : "public";
+        return "public";
     }
 
     private String informationSchemaTableName(String table) {
-        return isH2() ? table.toUpperCase() : table.toLowerCase();
-    }
-
-    private void initH2FromPostgresDumpIfNeeded() {
-        Properties properties = config.getProperties();
-        String dbType = properties.getProperty("db.type", "h2");
-        boolean loadtest = "true".equals(System.getProperty("loadtest"));
-        if (!"h2".equalsIgnoreCase(dbType) || loadtest) {
-            return;
-        }
-        boolean enabled = Boolean.parseBoolean(properties.getProperty("db.h2.loadPostgresDump", "false"));
-        if (!enabled) {
-            return;
-        }
-
-        String configDir = System.getenv("CONFIG_DIR");
-        String defaultPath = (configDir == null || configDir.isBlank()) ? "./src/docker/db.sql" : configDir + "/db.sql";
-        Path dumpPath = Paths.get(properties.getProperty("db.h2.postgresDumpFile", defaultPath));
-        if (!Files.exists(dumpPath)) {
-            logger.warn("H2 bootstrap skipped: PostgreSQL dump file not found at {}", dumpPath);
-            return;
-        }
-
-        try (Connection connection = dataSource.getConnection()) {
-            if (!Boolean.parseBoolean(properties.getProperty("db.h2.reloadPostgresDump", "false"))
-                    && !isLikelyEmpty(connection)) {
-                logger.info("H2 bootstrap skipped: database already contains data");
-                return;
-            }
-            int inserted = importPostgresCopySections(connection, dumpPath);
-            logger.info("H2 bootstrap done from {} with {} inserted rows", dumpPath, inserted);
-        } catch (Exception e) {
-            logger.error("cannot initialize H2 from PostgreSQL dump", e);
-        }
-    }
-
-    private boolean isLikelyEmpty(Connection connection) throws SQLException {
-        try (PreparedStatement st = connection.prepareStatement("SELECT COUNT(*) FROM event");
-                var rs = st.executeQuery()) {
-            rs.next();
-            return rs.getInt(1) == 0;
-        }
-    }
-
-    private int importPostgresCopySections(Connection connection, Path dumpPath) throws IOException, SQLException {
-        int insertedRows = 0;
-        boolean previousAutoCommit = connection.getAutoCommit();
-        connection.setAutoCommit(false);
-        try (Statement st = connection.createStatement()) {
-            st.execute("SET REFERENTIAL_INTEGRITY FALSE");
-            try (BufferedReader br = Files.newBufferedReader(dumpPath, StandardCharsets.UTF_8)) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    if (!line.startsWith("COPY public.")) {
-                        continue;
-                    }
-
-                    CopyHeader header = parseCopyHeader(line);
-                    if (header == null) {
-                        continue;
-                    }
-                    header = filterColumnsForTable(connection, header);
-                    if (header == null) {
-                        while ((line = br.readLine()) != null) {
-                            if ("\\.".equals(line)) {
-                                break;
-                            }
-                        }
-                        continue;
-                    }
-
-                    String sql = buildInsertSql(header.tableName, header.columns);
-                    try (PreparedStatement ps = connection.prepareStatement(sql)) {
-                        while ((line = br.readLine()) != null) {
-                            if ("\\.".equals(line)) {
-                                break;
-                            }
-
-                            String[] values = line.split("\\t", -1);
-                            for (int i = 0; i < header.columns.length; i++) {
-                                int sourceIndex = header.sourceColumnIndices[i];
-                                if (sourceIndex >= values.length || "\\N".equals(values[sourceIndex])) {
-                                    ps.setObject(i + 1, null);
-                                } else {
-                                    ps.setString(i + 1, values[sourceIndex]);
-                                }
-                            }
-                            ps.addBatch();
-                        }
-                        int[] counts = ps.executeBatch();
-                        for (int count : counts) {
-                            if (count > 0) {
-                                insertedRows += count;
-                            }
-                        }
-                    }
-                }
-            }
-            synchronizeIdentityColumns(connection);
-            connection.commit();
-            st.execute("SET REFERENTIAL_INTEGRITY TRUE");
-        } catch (Exception e) {
-            connection.rollback();
-            throw e;
-        } finally {
-            connection.setAutoCommit(previousAutoCommit);
-        }
-        return insertedRows;
-    }
-
-    private void synchronizeIdentityColumns(Connection connection) throws SQLException {
-        String identitiesSql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-                + "WHERE TABLE_SCHEMA = 'PUBLIC' AND COLUMN_NAME = 'ID' AND IS_IDENTITY = 'YES'";
-
-        try (PreparedStatement identityTables = connection.prepareStatement(identitiesSql);
-                ResultSet tables = identityTables.executeQuery()) {
-            while (tables.next()) {
-                String table = tables.getString(1);
-                long nextId;
-                try (Statement st = connection.createStatement();
-                        ResultSet rs = st.executeQuery("SELECT COALESCE(MAX(id), 0) + 1 FROM " + table)) {
-                    rs.next();
-                    nextId = rs.getLong(1);
-                }
-
-                try (Statement st = connection.createStatement()) {
-                    st.execute("ALTER TABLE " + table + " ALTER COLUMN id RESTART WITH " + nextId);
-                }
-            }
-        }
+        return table.toLowerCase(Locale.ROOT);
     }
 
     private Set<String> getTableColumns(Connection connection, String table) throws SQLException {
-        String cacheKey = table.toUpperCase();
+        String cacheKey = table.toLowerCase(Locale.ROOT);
         Set<String> cached = tableColumnsCache.get(cacheKey);
         if (cached != null) {
             return cached;
@@ -953,106 +1358,11 @@ public class PersistenceService {
             ps.setString(2, informationSchemaTableName(table));
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    columns.add(rs.getString(1).toUpperCase());
+                    columns.add(rs.getString(1).toLowerCase(Locale.ROOT));
                 }
             }
         }
         tableColumnsCache.put(cacheKey, columns);
         return columns;
-    }
-
-    private CopyHeader filterColumnsForTable(Connection connection, CopyHeader header) throws SQLException {
-        Set<String> tableColumns = getTableColumns(connection, header.tableName);
-        if (tableColumns.isEmpty()) {
-            logger.warn("Skipping COPY public.{}: table not found in H2 schema", header.tableName);
-            return null;
-        }
-
-        List<String> columns = new ArrayList<>();
-        List<Integer> sourceIndices = new ArrayList<>();
-        for (int i = 0; i < header.columns.length; i++) {
-            if (tableColumns.contains(header.columns[i].toUpperCase())) {
-                columns.add(header.columns[i]);
-                sourceIndices.add(i);
-            }
-        }
-        if (columns.isEmpty()) {
-            logger.warn("Skipping COPY public.{}: no matching columns", header.tableName);
-            return null;
-        }
-        if (columns.size() < header.columns.length) {
-            List<String> skipped = new ArrayList<>();
-            for (String column : header.columns) {
-                if (!tableColumns.contains(column.toUpperCase())) {
-                    skipped.add(column);
-                }
-            }
-            logger.debug("Skipping legacy columns for {}: {}", header.tableName, skipped);
-        }
-        return new CopyHeader(
-                header.tableName,
-                columns.toArray(new String[0]),
-                sourceIndices.stream().mapToInt(Integer::intValue).toArray());
-    }
-
-    private CopyHeader parseCopyHeader(String line) {
-        int startTable = "COPY public.".length();
-        int endTable = line.indexOf(" (", startTable);
-        if (endTable < 0) {
-            return null;
-        }
-        int startColumns = endTable + 2;
-        int endColumns = line.indexOf(") FROM stdin;", startColumns);
-        if (endColumns < 0) {
-            return null;
-        }
-
-        String table = line.substring(startTable, endTable).trim();
-        String columnsRaw = line.substring(startColumns, endColumns);
-        String[] columns = columnsRaw.split(",");
-        for (int i = 0; i < columns.length; i++) {
-            columns[i] = columns[i].trim();
-        }
-        return new CopyHeader(table, columns, indexRange(columns.length));
-    }
-
-    private static int[] indexRange(int length) {
-        int[] indices = new int[length];
-        for (int i = 0; i < length; i++) {
-            indices[i] = i;
-        }
-        return indices;
-    }
-
-    private String buildInsertSql(String table, String[] columns) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("INSERT INTO ").append(table).append(" (");
-        for (int i = 0; i < columns.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(columns[i]);
-        }
-        sb.append(") VALUES (");
-        for (int i = 0; i < columns.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append('?');
-        }
-        sb.append(')');
-        return sb.toString();
-    }
-
-    private static class CopyHeader {
-        private final String tableName;
-        private final String[] columns;
-        private final int[] sourceColumnIndices;
-
-        private CopyHeader(String tableName, String[] columns, int[] sourceColumnIndices) {
-            this.tableName = tableName;
-            this.columns = columns;
-            this.sourceColumnIndices = sourceColumnIndices;
-        }
     }
 }

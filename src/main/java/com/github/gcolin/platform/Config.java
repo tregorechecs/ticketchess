@@ -3,13 +3,13 @@ package com.github.gcolin.platform;
 import com.github.gcolin.organisation.OrgConfig;
 import com.github.gcolin.organisation.OrgUiStyle;
 import com.github.gcolin.organisation.Organisation;
+import com.github.gcolin.organisation.OrganisationDao;
 import com.github.gcolin.organisation.OrganisationFiles;
 import com.github.gcolin.organisation.OrgProperties;
 import com.github.gcolin.organisation.OrgScope;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.MacAlgorithm;
-import jakarta.persistence.EntityManager;
 import jakarta.servlet.ServletContext;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -167,8 +167,8 @@ public class Config {
         if (ctx == null || current == null || current.getId() == null) {
             throw new IOException("No organisation in scope to save settings");
         }
-        EntityManager em = ctx.em();
-        Organisation managed = em.find(Organisation.class, current.getId());
+        OrganisationDao organisationDao = ctx.organisationDao();
+        Organisation managed = organisationDao.find(current.getId());
         if (managed == null) {
             throw new IOException("Organisation not found: " + current.getId());
         }
@@ -176,7 +176,7 @@ public class Config {
         for (Map.Entry<String, String> entry : orgUpdates.entrySet()) {
             orgConfig.setProperty(entry.getKey(), entry.getValue());
         }
-        em.flush();
+        organisationDao.merge(managed);
         ctx.setOrganisation(managed);
         if (AppContext.get() != null && AppContext.get().organisationResolver() != null) {
             AppContext.get().organisationResolver().invalidate();
@@ -212,13 +212,17 @@ public class Config {
         // Page holds platform defaults; per-request org branding is applied in MustacheMessageBodyWriter.
         page.setContactUrl(platformProperty("contact.url"));
         page.setTitle(platformProperty("title", "TicketChess"));
-        page.setClubRegisterEnabled(hasMembershipNotifEmails());
+        page.setMembershipsEnabled(true);
+        page.setEventsEnabled(true);
+        page.setPaymentsEnabled(true);
+        page.setClubRegisterEnabled(true);
         page.setOrgName(firstNonBlank(platformProperty("org.name"), platformProperty("title"), "TicketChess"));
         page.setOrgEmail(blankToNull(platformProperty("org.email")));
         page.setOrgAddress(blankToNull(platformProperty("org.address")));
-        page.setOrgHostingAddress(blankToNull(platformProperty("org.hosting.address")));
+        page.setOrgHostingAddress(
+                blankToNull(firstNonBlank(platformProperty("org.hosting.address"), platformProperty("org.address"))));
         page.setAccountUrl(blankToNull(getOauthAccountUrl()));
-        page.setSourceUrl(blankToNull(platformProperty("source.url")));
+        page.setSourceUrl(OrgConfig.SOURCE_URL);
         page.setLogoUrl(logoFileExists() ? "/logo" : null);
         page.setBackgroundUrl(backgroundFileExists() ? "/background" : null);
 
@@ -355,10 +359,12 @@ public class Config {
         if (explicit != null) {
             return explicit;
         }
-        if (blankToNull(getProperty("oauth.authorizationUrl")) != null) {
-            return null;
+        // Only Keycloak/OIDC ".../protocol/openid-connect/auth" (not Google ".../v2/auth").
+        String auth = getOauthAuthorizationUrl();
+        if (auth != null && auth.contains("/protocol/openid-connect/auth")) {
+            return replaceAuthSuffix(auth, "/logout");
         }
-        return replaceAuthSuffix(getProperty("keycloak.url"), "/logout");
+        return null;
     }
 
     public String getOauthAccountUrl() {
@@ -466,19 +472,23 @@ public class Config {
     }
 
     public static boolean isStripeCardEnabledForEvents(Properties properties) {
-        return Boolean.parseBoolean(properties.getProperty("stripe.card.events", "true"));
+        return OrgConfig.isFeatureEnabled(properties.getProperty(OrgConfig.FEATURE_EVENTS))
+                && Boolean.parseBoolean(properties.getProperty("stripe.card.events", "true"));
     }
 
     public static boolean isStripeCardEnabledForMemberships(Properties properties) {
-        return Boolean.parseBoolean(properties.getProperty("stripe.card.memberships", "true"));
+        return OrgConfig.isFeatureEnabled(properties.getProperty(OrgConfig.FEATURE_MEMBERSHIPS))
+                && Boolean.parseBoolean(properties.getProperty("stripe.card.memberships", "true"));
     }
 
     public static boolean isBankTransferEnabledForEvents(Properties properties) {
-        return Boolean.parseBoolean(properties.getProperty("payment.transfer.events", "true"));
+        return OrgConfig.isFeatureEnabled(properties.getProperty(OrgConfig.FEATURE_EVENTS))
+                && Boolean.parseBoolean(properties.getProperty("payment.transfer.events", "true"));
     }
 
     public static boolean isBankTransferEnabledForMemberships(Properties properties) {
-        return Boolean.parseBoolean(properties.getProperty("payment.transfer.memberships", "true"));
+        return OrgConfig.isFeatureEnabled(properties.getProperty(OrgConfig.FEATURE_MEMBERSHIPS))
+                && Boolean.parseBoolean(properties.getProperty("payment.transfer.memberships", "true"));
     }
 
     public boolean isTestMode() {
@@ -546,7 +556,7 @@ public class Config {
         return keys;
     }
 
-    /** Servlet + optional {@code /o/{slug}} path used for login and OAuth return URLs. */
+    /** Servlet context path used for login and OAuth return URLs. */
     public String getRequestContextPath() {
         RequestContext ctx = RequestContext.current();
         if (ctx != null) {
@@ -592,13 +602,24 @@ public class Config {
         return false;
     }
 
+    /** Feature toggles default to enabled when unset; only explicit {@code false} disables. */
+    public boolean isFeatureEnabled(String key) {
+        return OrgConfig.isFeatureEnabled(getProperty(key));
+    }
+
     /** Request-scoped page view: current org identity + per-org logo/background when available. */
     public Page pageForRequest() {
         Page base = page;
         Page view = new Page();
         view.setTitle(firstNonBlank(getProperty("title"), base.getTitle(), "TicketChess"));
         view.setContactUrl(firstNonBlank(getProperty("contact.url"), base.getContactUrl()));
-        view.setClubRegisterEnabled(hasMembershipNotifEmails());
+        boolean memberships = isFeatureEnabled(OrgConfig.FEATURE_MEMBERSHIPS);
+        boolean events = isFeatureEnabled(OrgConfig.FEATURE_EVENTS);
+        boolean payments = isFeatureEnabled(OrgConfig.FEATURE_PAYMENTS);
+        view.setMembershipsEnabled(memberships);
+        view.setEventsEnabled(events);
+        view.setPaymentsEnabled(payments);
+        view.setClubRegisterEnabled(memberships);
         Organisation org = OrgScope.currentOrg();
         if (org != null && blankToNull(org.getName()) != null) {
             view.setOrgName(org.getName().trim());
@@ -607,10 +628,13 @@ public class Config {
         }
         view.setOrgEmail(blankToNull(firstNonBlank(getProperty("org.email"), base.getOrgEmail())));
         view.setOrgAddress(blankToNull(firstNonBlank(getProperty("org.address"), base.getOrgAddress())));
-        view.setOrgHostingAddress(
-                blankToNull(firstNonBlank(getProperty("org.hosting.address"), base.getOrgHostingAddress())));
+        view.setOrgHostingAddress(blankToNull(firstNonBlank(
+                getProperty("org.hosting.address"),
+                getProperty("org.address"),
+                base.getOrgHostingAddress(),
+                base.getOrgAddress())));
         view.setAccountUrl(blankToNull(getOauthAccountUrl()));
-        view.setSourceUrl(blankToNull(firstNonBlank(getProperty("source.url"), base.getSourceUrl())));
+        view.setSourceUrl(OrgConfig.SOURCE_URL);
         view.setLogoUrl(logoFileExists() ? "/logo" : null);
         view.setBackgroundUrl(backgroundFileExists() ? "/background" : null);
         OrgUiStyle.Resolved ui = OrgUiStyle.resolve(this::getProperty);

@@ -1,30 +1,9 @@
 package com.github.gcolin.event;
 
+import com.github.gcolin.organisation.OrgOwned;
 import com.github.gcolin.player.DisplayPlayer;
 import com.github.gcolin.event.EventStatus;
 import com.github.gcolin.event.EventType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Index;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.PostLoad;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import jakarta.persistence.Transient;
-import jakarta.xml.bind.annotation.XmlAccessType;
-import jakarta.xml.bind.annotation.XmlAccessorType;
-import jakarta.xml.bind.annotation.XmlRootElement;
-import jakarta.xml.bind.annotation.XmlTransient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -34,79 +13,49 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import com.github.gcolin.registration.PlayerSubscription;
 
-@Entity
-@Table(
-        name = "event",
-        indexes = {
-            @Index(name = "idx_event_status_id", columnList = "status_id"),
-            @Index(name = "idx_event_start_date", columnList = "start_date")
-        })
-@XmlRootElement
-@XmlAccessorType(XmlAccessType.FIELD)
-public class Event {
+public class Event implements OrgOwned {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(nullable = false)
+    private Integer orgId;
+
     private String name;
 
-    @Column(name = "start_date", nullable = false)
     private LocalDateTime startDate;
 
-    @Column(name = "end_date", nullable = false)
     private LocalDateTime endDate;
 
-    @Column(precision = 10, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "pricecents")
     private Long priceCents;
 
-    @Column(name = "youngPrice", precision = 10, scale = 2)
     private BigDecimal youngPrice;
 
-    @Column(name = "youngpricecents")
     private Long youngPriceCents;
 
-    @Enumerated(EnumType.ORDINAL)
-    @Column(name = "status_id", nullable = false)
     private EventStatus status = EventStatus.DRAFT;
 
-    @Enumerated(EnumType.ORDINAL)
-    @Column(name = "event_type", nullable = false)
     private EventType eventType = EventType.STANDARD;
 
-    @OneToMany(mappedBy = "event")
-    @XmlTransient
     private List<PlayerSubscription> subscriptions = new ArrayList<>();
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "event_group_id")
-    @XmlTransient
+    /** Lazy loader installed by {@code EventDao}; replaces JPA lazy loading of {@link #subscriptions}. */
+    private transient Supplier<List<PlayerSubscription>> subscriptionsLoader;
+
     private EventGroup eventGroup;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "big_event_id")
-    @XmlTransient
     private EventCollection eventCollection;
 
-    @OneToOne(fetch = FetchType.LAZY, mappedBy = "event")
-    @XmlTransient
-    private EventInfo eventInfo;
+    /** Markdown description; loaded only on detail/edit queries, not on list queries. */
+    private String description;
 
-    @Transient
     private Map<EventOptionType, EventOption> eventOptions;
 
-    @XmlTransient
-    @Transient
     private List<DisplayPlayer> players;
 
-    @XmlTransient
-    @Transient
     private Integer nbSubscriptions;
     public Event() {}
 
@@ -116,6 +65,16 @@ public class Event {
 
     public void setId(Integer id) {
         this.id = id;
+    }
+
+    @Override
+    public Integer getOrgId() {
+        return orgId;
+    }
+
+    @Override
+    public void setOrgId(Integer orgId) {
+        this.orgId = orgId;
     }
 
     public String getName() {
@@ -201,11 +160,21 @@ public class Event {
     }
 
     public List<PlayerSubscription> getSubscriptions() {
+        if (subscriptionsLoader != null) {
+            Supplier<List<PlayerSubscription>> loader = subscriptionsLoader;
+            subscriptionsLoader = null;
+            subscriptions = loader.get();
+        }
         return subscriptions;
     }
 
     public void setSubscriptions(List<PlayerSubscription> subscriptions) {
+        this.subscriptionsLoader = null;
         this.subscriptions = subscriptions;
+    }
+
+    public void setSubscriptionsLoader(Supplier<List<PlayerSubscription>> subscriptionsLoader) {
+        this.subscriptionsLoader = subscriptionsLoader;
     }
 
     public List<DisplayPlayer> getPlayers() {
@@ -248,34 +217,6 @@ public class Event {
 
     public boolean isFree() {
         return getPriceCents() == 0L && getYoungPriceCents() == 0L;
-    }
-
-    @PostLoad
-    public void fillCentsFromLegacyValues() {
-        if (priceCents == null && price != null) {
-            priceCents = toCents(price);
-        }
-        if (youngPriceCents == null && youngPrice != null) {
-            youngPriceCents = toCents(youngPrice);
-        }
-    }
-
-    @PrePersist
-    @PreUpdate
-    public void syncLegacyAndCentsValues() {
-        if (priceCents == null && price != null) {
-            priceCents = toCents(price);
-        }
-        if (price == null && priceCents != null) {
-            price = fromCents(priceCents);
-        }
-
-        if (youngPriceCents == null && youngPrice != null) {
-            youngPriceCents = toCents(youngPrice);
-        }
-        if (youngPrice == null && youngPriceCents != null) {
-            youngPrice = fromCents(youngPriceCents);
-        }
     }
 
     private static Long toCents(BigDecimal value) {
@@ -334,12 +275,12 @@ public class Event {
         this.eventOptions = eventOptions;
     }
 
-    public EventInfo getEventInfo() {
-        return eventInfo;
+    public String getDescription() {
+        return description;
     }
 
-    public void setEventInfo(EventInfo eventInfo) {
-        this.eventInfo = eventInfo;
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public EventCollection getEventCollection() {

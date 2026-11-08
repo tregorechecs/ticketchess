@@ -40,7 +40,7 @@ class StatisticsApiTest {
 
         when(eventDao.findClosestEvents(eq(10), any(SeasonScope.class))).thenReturn(closestEvents);
         when(eventDao.findTopEventsByParticipants(eq(10), any(SeasonScope.class))).thenReturn(topEvents);
-        when(paymentDao.sumAllPayments(any(SeasonScope.class))).thenReturn(123.45);
+        when(paymentDao.sumAllPayments(any(SeasonScope.class))).thenReturn(12345L);
         when(playerSubscriptionDao.findNotPaidWithEvent(any(SeasonScope.class))).thenReturn(List.of());
 
         ClubSeasonFilter clubSeasonFilter = mockClubSeasonFilter();
@@ -57,12 +57,12 @@ class StatisticsApiTest {
         assertEquals("event/statistics.mustache", html.getTemplate());
         assertSame(closestEvents, model.get("closestEvents"));
         assertSame(topEvents, model.get("topEvents"));
-        assertEquals(123.45, (Double) model.get("totalPayments"));
-        assertEquals(0.0, (Double) model.get("unpaidPlayerSubscriptions"));
+        assertEquals(12345L, (Long) model.get("totalPayments"));
+        assertEquals(0L, (Long) model.get("unpaidPlayerSubscriptions"));
     }
 
     @Test
-    void pageShouldDefaultTotalPaymentsToZeroWhenNull() throws Exception {
+    void pageShouldDefaultTotalPaymentsToZeroWhenEmpty() throws Exception {
         StatisticsApi api = new StatisticsApi();
 
         EventDao eventDao = mock(EventDao.class);
@@ -72,7 +72,7 @@ class StatisticsApiTest {
 
         when(eventDao.findClosestEvents(eq(10), any(SeasonScope.class))).thenReturn(List.of());
         when(eventDao.findTopEventsByParticipants(eq(10), any(SeasonScope.class))).thenReturn(List.of());
-        when(paymentDao.sumAllPayments(any(SeasonScope.class))).thenReturn(null);
+        when(paymentDao.sumAllPayments(any(SeasonScope.class))).thenReturn(0L);
         when(playerSubscriptionDao.findNotPaidWithEvent(any(SeasonScope.class))).thenReturn(List.of());
 
         ClubSeasonFilter clubSeasonFilter = mockClubSeasonFilter();
@@ -86,8 +86,8 @@ class StatisticsApiTest {
         MustacheHtml html = api.page(null);
         Map<String, Object> model = html.getModel();
 
-        assertEquals(0.0, (Double) model.get("totalPayments"));
-        assertEquals(0.0, (Double) model.get("unpaidPlayerSubscriptions"));
+        assertEquals(0L, (Long) model.get("totalPayments"));
+        assertEquals(0L, (Long) model.get("unpaidPlayerSubscriptions"));
         assertTrue(((List<?>) model.get("closestEvents")).isEmpty());
         assertTrue(((List<?>) model.get("topEvents")).isEmpty());
     }

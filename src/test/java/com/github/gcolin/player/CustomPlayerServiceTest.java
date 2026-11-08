@@ -1,12 +1,8 @@
 package com.github.gcolin.player;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.github.gcolin.platform.TestContext;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
+import com.github.gcolin.platform.TestDb;
+import java.sql.Connection;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -15,38 +11,41 @@ import org.junit.jupiter.api.Test;
 
 class CustomPlayerServiceTest {
 
-    private EntityManager em;
+    private Connection connection;
     private CustomPlayerDao customPlayerService;
     private TestContext testContext;
 
     @BeforeEach
     void setUp() {
-        em = mock(EntityManager.class);
-        testContext = TestContext.open(em);
-        customPlayerService = TestContext.createDao(CustomPlayerDao.class, em);
+        connection = TestDb.newConnection();
+        testContext = TestContext.open(connection);
+        customPlayerService = TestContext.createDao(CustomPlayerDao.class, connection);
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         testContext.close();
+        connection.close();
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     void testFindByCreationUser() {
-        TypedQuery<CustomPlayer> query = mock(TypedQuery.class);
+        CustomPlayer mine = new CustomPlayer();
+        mine.setCreationUser("bob@example.com");
+        mine.setName("Doe");
+        mine.setFirstname("John");
+        customPlayerService.persist(mine);
 
-        when(em.createQuery("SELECT e FROM CustomPlayer e where e.creationUser = :creationUser", CustomPlayer.class))
-                .thenReturn(query);
-        when(query.setParameter("creationUser", "bob@example.com")).thenReturn(query);
-
-        CustomPlayer customPlayer = new CustomPlayer();
-        when(query.getResultList()).thenReturn(List.of(customPlayer));
+        CustomPlayer other = new CustomPlayer();
+        other.setCreationUser("alice@example.com");
+        other.setName("Smith");
+        other.setFirstname("Jane");
+        customPlayerService.persist(other);
 
         List<CustomPlayer> result = customPlayerService.findByCreationUser("bob@example.com");
 
         Assertions.assertEquals(1, result.size());
-        Assertions.assertSame(customPlayer, result.get(0));
-        verify(query).setParameter("creationUser", "bob@example.com");
+        Assertions.assertEquals(mine.getId(), result.get(0).getId());
+        Assertions.assertEquals("Doe", result.get(0).getName());
     }
 }

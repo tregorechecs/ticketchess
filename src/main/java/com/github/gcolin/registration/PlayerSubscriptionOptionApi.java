@@ -28,7 +28,7 @@ import java.util.Map;
 import com.github.gcolin.platform.MustacheHtml;
 
 @Path("event/{id:\\d+}/register/{subId:\\d+}/option")
-@RequireRole(RoleCode.EVENT_ADMIN)
+@RequireRole(RoleCode.ARBITRE)
 public class PlayerSubscriptionOptionApi {
 
     @Inject

@@ -26,6 +26,15 @@
         <url-pattern>/*</url-pattern>
     </filter-mapping>
 
+    <filter>
+        <filter-name>OrgFeatureFilter</filter-name>
+        <filter-class>com.github.gcolin.organisation.OrgFeatureFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>OrgFeatureFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
     <!-- ===================== -->
     <!-- 🔹 Jersey en FILTER -->
     <!-- ===================== -->
@@ -46,15 +55,12 @@
                 com.github.gcolin.event.EventCollectionStatisticsApi,
                 com.github.gcolin.player.ClubApi,
                 com.github.gcolin.registration.ClubRegisterApi,
-                com.github.gcolin.platform.ConstraintViolationExceptionMapper,
                 com.github.gcolin.player.CustomPlayerApi,
                 com.github.gcolin.platform.DashboardApi,
                 com.github.gcolin.player.DatabaseApi,
                 com.github.gcolin.event.EventAdminApi,
                 com.github.gcolin.event.EventApi,
                 com.github.gcolin.event.EventCsvApi,
-                com.github.gcolin.event.ChessEventApi,
-                com.github.gcolin.event.SharlySelectApi,
                 com.github.gcolin.desk.EventDeskApi,
                 com.github.gcolin.event.EventLicenceCheckApi,
                 com.github.gcolin.event.EventGroupApi,
@@ -96,6 +102,11 @@
 
         <init-param>
             <param-name>jersey.config.servlet.filter.forwardOn404</param-name>
+            <param-value>true</param-value>
+        </init-param>
+
+        <init-param>
+            <param-name>jersey.config.server.wadl.disableWadl</param-name>
             <param-value>true</param-value>
         </init-param>
     </filter>

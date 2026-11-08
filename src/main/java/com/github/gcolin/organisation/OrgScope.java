@@ -1,21 +1,15 @@
 package com.github.gcolin.organisation;
 
 import com.github.gcolin.platform.RequestContext;
-import jakarta.persistence.EntityManager;
 
 public final class OrgScope {
 
-    /**
-     * EclipseLink {@code @AdditionalCriteria} parameter. Must always be set: EclipseLink rejects a
-     * missing property even when the criteria allows {@code null}. Use {@link #FILTER_DISABLED} to
-     * see all organisations.
-     */
-    public static final String ORG_ID_PROPERTY = "orgId";
-
     public static final int DEFAULT_ORG_ID = 1;
 
-    /** Sentinel for {@link #disableFilter(EntityManager)} — must match AdditionalCriteria. */
+    /** Sentinel to see all organisations (replaces EclipseLink AdditionalCriteria disable). */
     public static final int FILTER_DISABLED = -1;
+
+    private static final ThreadLocal<Integer> FILTER_ORG_ID = ThreadLocal.withInitial(() -> FILTER_DISABLED);
 
     private OrgScope() {}
 
@@ -34,11 +28,20 @@ public final class OrgScope {
         return orgId == null ? DEFAULT_ORG_ID : orgId;
     }
 
-    public static void enableFilter(EntityManager em, int orgId) {
-        em.setProperty(ORG_ID_PROPERTY, orgId);
+    public static int currentFilterOrgId() {
+        Integer value = FILTER_ORG_ID.get();
+        return value == null ? FILTER_DISABLED : value;
     }
 
-    public static void disableFilter(EntityManager em) {
-        em.setProperty(ORG_ID_PROPERTY, FILTER_DISABLED);
+    public static void enableFilter(int orgId) {
+        FILTER_ORG_ID.set(orgId);
+    }
+
+    public static void disableFilter() {
+        FILTER_ORG_ID.set(FILTER_DISABLED);
+    }
+
+    public static void clearFilter() {
+        FILTER_ORG_ID.remove();
     }
 }

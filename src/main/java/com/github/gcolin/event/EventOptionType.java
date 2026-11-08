@@ -10,7 +10,5 @@ public enum EventOptionType {
     CADENCE,
     CLUB_REF,
     PAIRING,
-    POINTAGE,
-    CHESS_EVENT_USER,
-    CHESS_EVENT_PASSWORD
+    POINTAGE
 }

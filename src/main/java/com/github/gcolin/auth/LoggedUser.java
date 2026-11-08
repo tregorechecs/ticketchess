@@ -178,7 +178,7 @@ public class LoggedUser implements Serializable {
     }
 
     public boolean canManageEvents() {
-        return hasRole(RoleCode.EVENT_ADMIN);
+        return hasRole(RoleCode.ARBITRE);
     }
 
     public boolean canManagePayments() {

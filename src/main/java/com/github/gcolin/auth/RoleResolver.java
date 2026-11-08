@@ -1,6 +1,8 @@
 package com.github.gcolin.auth;
 
 import com.github.benmanes.caffeine.cache.Cache;
+import com.github.gcolin.organisation.Organisation;
+import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.platform.Config;
 import java.util.EnumSet;
 import java.util.Set;
@@ -25,6 +27,10 @@ public class RoleResolver {
         if (config.getAdmins().contains(normalizedEmail)) {
             return true;
         }
+        // Org super-user is treated as ADMIN for the current organisation only (not cached).
+        if (isCurrentOrgSuperUser(normalizedEmail)) {
+            return RoleCode.satisfies(EnumSet.of(RoleCode.ADMIN), required);
+        }
         String cacheKey = normalizedEmail + "|" + required.name();
         Boolean cached = roleCache.getIfPresent(cacheKey);
         if (cached != null) {
@@ -44,6 +50,9 @@ public class RoleResolver {
         if (config.getAdmins().contains(normalizedEmail)) {
             return true;
         }
+        if (isCurrentOrgSuperUser(normalizedEmail)) {
+            return true;
+        }
         return !userAuthorizationDao.findActiveGlobalRoles(normalizedEmail).isEmpty();
     }
 
@@ -55,6 +64,19 @@ public class RoleResolver {
         if (config.getAdmins().contains(normalizedEmail)) {
             return EnumSet.allOf(RoleCode.class);
         }
+        if (isCurrentOrgSuperUser(normalizedEmail)) {
+            return EnumSet.of(RoleCode.ADMIN);
+        }
         return userAuthorizationDao.findActiveGlobalRoles(normalizedEmail);
+    }
+
+    /** True when {@code email} is the current organisation's {@code org.superUserEmail}. */
+    static boolean isCurrentOrgSuperUser(String normalizedEmail) {
+        Organisation org = OrgScope.currentOrg();
+        if (org == null || normalizedEmail == null || normalizedEmail.isBlank()) {
+            return false;
+        }
+        String superUserEmail = org.getSuperUserEmail();
+        return superUserEmail != null && normalizedEmail.equals(superUserEmail.trim().toLowerCase());
     }
 }

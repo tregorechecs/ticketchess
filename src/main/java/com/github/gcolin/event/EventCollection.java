@@ -1,46 +1,27 @@
 package com.github.gcolin.event;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
-import jakarta.persistence.Transient;
-import jakarta.xml.bind.annotation.XmlAccessType;
-import jakarta.xml.bind.annotation.XmlAccessorType;
-import jakarta.xml.bind.annotation.XmlRootElement;
-import jakarta.xml.bind.annotation.XmlTransient;
+import com.github.gcolin.organisation.OrgOwned;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
-@Entity
-@Table(name = "big_event")
-@XmlRootElement
-@XmlAccessorType(XmlAccessType.FIELD)
-public class EventCollection {
+public class EventCollection implements OrgOwned {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(nullable = false, length = 255)
+    private Integer orgId;
+
     private String name;
 
-    @OneToMany(mappedBy = "eventCollection", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @XmlTransient
     private List<Event> events = new ArrayList<>();
 
-    @Transient
+    /** Lazy loader installed by {@code EventCollectionDao}; replaces JPA lazy loading of {@link #events}. */
+    private transient Supplier<List<Event>> eventsLoader;
+
     private Integer maxSubscribe;
 
-    @Transient
     private Integer nbSubscriptions;
 
-    @Transient
     private Integer eventCount;
 
     // =========================
@@ -59,6 +40,16 @@ public class EventCollection {
         this.id = id;
     }
 
+    @Override
+    public Integer getOrgId() {
+        return orgId;
+    }
+
+    @Override
+    public void setOrgId(Integer orgId) {
+        this.orgId = orgId;
+    }
+
     public String getName() {
         return name;
     }
@@ -68,11 +59,21 @@ public class EventCollection {
     }
 
     public List<Event> getEvents() {
+        if (eventsLoader != null) {
+            Supplier<List<Event>> loader = eventsLoader;
+            eventsLoader = null;
+            events = loader.get();
+        }
         return events;
     }
 
     public void setEvents(List<Event> events) {
+        this.eventsLoader = null;
         this.events = events;
+    }
+
+    public void setEventsLoader(Supplier<List<Event>> eventsLoader) {
+        this.eventsLoader = eventsLoader;
     }
 
     public Integer getMaxSubscribe() {

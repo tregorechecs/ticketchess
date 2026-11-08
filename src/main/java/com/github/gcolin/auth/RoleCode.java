@@ -6,17 +6,13 @@ public enum RoleCode {
     ADMIN,
     TRESORIER,
     ENTRAINEUR,
-    ARBITRE,
-    EVENT_ADMIN;
+    ARBITRE;
 
     public static boolean satisfies(Set<RoleCode> granted, RoleCode required) {
         if (required == null || granted == null || granted.isEmpty()) {
             return false;
         }
         if (granted.contains(ADMIN)) {
-            return true;
-        }
-        if (required == ARBITRE && granted.contains(EVENT_ADMIN)) {
             return true;
         }
         return granted.contains(required);

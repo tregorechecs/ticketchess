@@ -1,7 +1,6 @@
 package com.github.gcolin.platform;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
+import java.sql.Connection;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -15,33 +14,36 @@ class RequestContextReadOnlyTest {
     }
 
     @Test
-    void commitReadAndClearCommitsAndClearsPersistenceContext() {
-        EntityManager em = Mockito.mock(EntityManager.class);
-        EntityTransaction tx = Mockito.mock(EntityTransaction.class);
-        Mockito.when(em.getTransaction()).thenReturn(tx);
-        Mockito.when(tx.isActive()).thenReturn(true);
-        Mockito.when(em.isOpen()).thenReturn(true);
+    void commitReadAndClearCommitsReadOnlyConnection() throws Exception {
+        Connection connection = Mockito.mock(Connection.class);
 
-        RequestContext.openForTestReadOnly(em);
+        RequestContext.openForTestReadOnly(connection);
         Assertions.assertTrue(RequestContext.isReadOnly());
 
         RequestContext.commitReadAndClear();
 
-        Mockito.verify(tx).commit();
-        Mockito.verify(em).clear();
+        Mockito.verify(connection).commit();
     }
 
     @Test
-    void touchEmStartsTransactionOnFirstDaoAccessInReadOnlyContext() {
-        EntityManager em = Mockito.mock(EntityManager.class);
-        EntityTransaction tx = Mockito.mock(EntityTransaction.class);
-        Mockito.when(em.getTransaction()).thenReturn(tx);
-        Mockito.when(tx.isActive()).thenReturn(false);
-        Mockito.when(em.isOpen()).thenReturn(true);
+    void commitReadAndClearIgnoresWritableContext() throws Exception {
+        Connection connection = Mockito.mock(Connection.class);
 
-        RequestContext.openForTestReadOnly(em);
+        RequestContext.openForTest(connection);
+        Assertions.assertFalse(RequestContext.isReadOnly());
+
+        RequestContext.commitReadAndClear();
+
+        Mockito.verify(connection, Mockito.never()).commit();
+    }
+
+    @Test
+    void daoFactoryDoesNotTouchConnectionEagerly() throws Exception {
+        Connection connection = Mockito.mock(Connection.class);
+
+        RequestContext.openForTestReadOnly(connection);
         RequestContext.require().licenseDao();
 
-        Mockito.verify(tx).begin();
+        Mockito.verifyNoInteractions(connection);
     }
 }

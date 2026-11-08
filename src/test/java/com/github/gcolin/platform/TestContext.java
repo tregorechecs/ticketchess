@@ -1,9 +1,9 @@
 package com.github.gcolin.platform;
 
 import com.github.gcolin.player.Find;
-import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.InvocationTargetException;
+import java.sql.Connection;
 
 public final class TestContext implements AutoCloseable {
 
@@ -11,8 +11,8 @@ public final class TestContext implements AutoCloseable {
 
     private TestContext() {}
 
-    public static TestContext open(EntityManager em) {
-        RequestContext.openForTest(em);
+    public static TestContext open(Connection connection) {
+        RequestContext.openForTest(connection);
         return new TestContext();
     }
 
@@ -35,13 +35,13 @@ public final class TestContext implements AutoCloseable {
         return ctx;
     }
 
-    public static TestContext open(EntityManager em, Find find) {
-        RequestContext.openForTest(em, find);
+    public static TestContext open(Connection connection, Find find) {
+        RequestContext.openForTest(connection, find);
         return new TestContext();
     }
 
-    public static TestContext open(HttpServletRequest request, EntityManager em) {
-        RequestContext.openForTest(request, em);
+    public static TestContext open(HttpServletRequest request, Connection connection) {
+        RequestContext.openForTest(request, connection);
         return new TestContext();
     }
 
@@ -49,11 +49,9 @@ public final class TestContext implements AutoCloseable {
         return RequestContext.require();
     }
 
-    public static <T extends AbstractDao<?>> T createDao(Class<T> type, EntityManager em) {
+    public static <T extends AbstractDao<?>> T createDao(Class<T> type, Connection connection) {
         try {
-            T dao = type.getDeclaredConstructor().newInstance();
-            dao.setEm(em);
-            return dao;
+            return type.getDeclaredConstructor().newInstance();
         } catch (InstantiationException
                 | IllegalAccessException
                 | InvocationTargetException

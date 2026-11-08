@@ -3,16 +3,20 @@ package com.github.gcolin.platform;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.organisation.Organisation;
 import com.github.gcolin.payment.RibService;
-import jakarta.persistence.EntityManager;
+import java.sql.Connection;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
@@ -25,6 +29,7 @@ import java.lang.reflect.Field;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,34 +45,51 @@ class AdminApiRibTest {
         AdminApi api = new AdminApi();
         inject(api, "config", configWithProps());
         inject(api, "user", mockUser(false));
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/organisations/1?tab=club")));
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/organisations/1?tab=features")));
 
         Organisation org = new Organisation();
         org.setId(1);
         org.setName("Club");
-        org.setSlug("club");
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         Response response = api.orgPage("", "", "club");
 
         assertEquals(303, response.getStatus());
-        assertEquals(URI.create("/admin/organisations/1?tab=club"), response.getLocation());
+        assertEquals(URI.create("/admin/organisations/1?tab=features"), response.getLocation());
     }
 
     @Test
-    void orgPageShouldExposeOauthTab() throws Exception {
+    void orgPageShouldRenderOauthTabOnAdminOrg() throws Exception {
+        AdminApi api = new AdminApi();
+        inject(api, "config", configWithProps());
+        inject(api, "user", mockUser(true));
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?tab=oauth")));
+
+        Organisation org = new Organisation();
+        org.setId(1);
+        org.setName("Club");
+        RequestContext.openForTest((Connection) null);
+        try {
+            RequestContext.require().setOrganisation(org);
+            Response response = api.orgPage("", "", "oauth");
+            assertEquals(200, response.getStatus());
+            assertTrue(response.getEntity() instanceof MustacheHtml);
+        } finally {
+            RequestContext.close();
+        }
+    }
+
+    @Test
+    void orgPageShouldForbidNonPlatformAdmin() throws Exception {
         AdminApi api = new AdminApi();
         inject(api, "config", configWithProps());
         inject(api, "user", mockUser(false));
+        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?tab=oauth")));
 
         Response response = api.orgPage("", "", "oauth");
 
-        assertEquals(200, response.getStatus());
-        MustacheHtml html = assertInstanceOf(MustacheHtml.class, response.getEntity());
-        assertEquals("platform/adminOrg.mustache", html.getTemplate());
-        assertEquals("oauth", html.getModel().get("tab"));
-        assertEquals("Event Test", ((Map<?, ?>) html.getModel().get("cfg")).get("title"));
+        assertEquals(403, response.getStatus());
     }
 
     @Test
@@ -82,7 +104,7 @@ class AdminApiRibTest {
 
         Organisation org = new Organisation();
         org.setId(1);
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         InputStream file = new ByteArrayInputStream("%PDF-1.4".getBytes(StandardCharsets.US_ASCII));
@@ -108,7 +130,7 @@ class AdminApiRibTest {
 
         Organisation org = new Organisation();
         org.setId(1);
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         Response response = api.uploadRib(new ByteArrayInputStream("hello".getBytes(StandardCharsets.US_ASCII)));
@@ -131,7 +153,7 @@ class AdminApiRibTest {
 
         Organisation org = new Organisation();
         org.setId(1);
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         Response response = api.uploadRib(new ByteArrayInputStream("%PDF-1.4".getBytes(StandardCharsets.US_ASCII)));
@@ -141,12 +163,15 @@ class AdminApiRibTest {
     }
 
     @Test
-    void saveConfigShouldPersistOauthTab() throws Exception {
+    void saveConfigShouldPersistOauthOnAdminOrg() throws Exception {
         AdminApi api = new AdminApi();
         Config config = mock(Config.class);
         inject(api, "config", config);
-        inject(api, "user", mockUser(false));
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/org?success=configSaved&tab=oauth")));
+        inject(api, "user", mockUser(true));
+        inject(
+                api,
+                "uriInfo",
+                mockUriInfo(URI.create("/admin/org?success=configSaved&tab=oauth#oauth")));
 
         MultivaluedMap<String, String> form = new MultivaluedHashMap<>();
         form.putSingle("tab", "oauth");
@@ -156,7 +181,9 @@ class AdminApiRibTest {
         Response response = api.saveConfig(form);
 
         assertEquals(303, response.getStatus());
-        verify(config).updateProperties(org.mockito.ArgumentMatchers.argThat(updates ->
+        assertEquals(
+                URI.create("/admin/org?success=configSaved&tab=oauth#oauth"), response.getLocation());
+        verify(config).updateProperties(argThat(updates ->
                 "cid".equals(updates.get("oauth.clientId"))
                         && "https://example.org/auth".equals(updates.get("oauth.authorizationUrl"))));
     }
@@ -175,7 +202,7 @@ class AdminApiRibTest {
 
         Organisation org = new Organisation();
         org.setId(1);
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         Response response = api.deleteLogo();
@@ -199,7 +226,7 @@ class AdminApiRibTest {
 
         Organisation org = new Organisation();
         org.setId(1);
-        RequestContext.openForTest((EntityManager) null);
+        RequestContext.openForTest((Connection) null);
         RequestContext.require().setOrganisation(org);
 
         Response response = api.deleteSignature();
@@ -230,11 +257,11 @@ class AdminApiRibTest {
 
     private static String readRedirect(Response response) {
         Object entity = response.getEntity();
-        if (!(entity instanceof Map<?, ?> map)) {
+        if (!(entity instanceof String json) || json.isBlank()) {
             return null;
         }
-        Object redirect = map.get("redirect");
-        return redirect == null ? null : redirect.toString();
+        String redirect = new JSONObject(json).optString("redirect", null);
+        return redirect == null || redirect.isBlank() ? null : redirect;
     }
 
     private static UriInfo mockUriInfo(URI target) {

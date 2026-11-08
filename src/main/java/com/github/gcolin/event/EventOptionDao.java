@@ -1,10 +1,7 @@
 package com.github.gcolin.event;
 
-import com.github.gcolin.event.Event;
-import com.github.gcolin.event.EventOption;
-import com.github.gcolin.event.EventOptionType;
 import com.github.gcolin.platform.AbstractDao;
-import jakarta.persistence.TypedQuery;
+import com.github.gcolin.platform.Db;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -13,27 +10,38 @@ public class EventOptionDao extends AbstractDao<EventOption> {
     private Supplier<EventDao> eventDao;
 
     public EventOptionDao() {
-        super(EventOption.class);
+        super(EventOption.class, "eventoption");
     }
 
     public void setEventDao(Supplier<EventDao> eventDao) {
         this.eventDao = eventDao;
     }
 
+    /** Options only carry the owning event id (a reference), not a fully loaded event. */
+    @Override
+    protected List<EventOption> select(String sql, Object... params) {
+        return selectWith(
+                (option, rs) -> {
+                    Integer eventId = intOrNull(rs, "event_id");
+                    if (eventId != null) {
+                        Event event = new Event();
+                        event.setId(eventId);
+                        option.setEvent(event);
+                    }
+                },
+                sql,
+                params);
+    }
+
     public List<EventOption> findByEventId(int eventId) {
-        TypedQuery<EventOption> query =
-                em.createQuery("SELECT o FROM EventOption o WHERE o.event.id = :eventId", EventOption.class);
-        query.setParameter("eventId", eventId);
-        return query.getResultList();
+        return select("SELECT * FROM eventoption WHERE event_id = ? ORDER BY id", eventId);
     }
 
     public EventOption findByEventIdAndOptionType(int eventId, EventOptionType optionType) {
-        TypedQuery<EventOption> query = em.createQuery(
-                "SELECT o FROM EventOption o WHERE o.event.id = :eventId AND o.optionType = :optionType",
-                EventOption.class);
-        query.setParameter("eventId", eventId);
-        query.setParameter("optionType", optionType);
-        return query.getResultStream().findFirst().orElse(null);
+        return selectOne(
+                "SELECT * FROM eventoption WHERE event_id = ? AND option_type = ? ORDER BY id LIMIT 1",
+                eventId,
+                optionType);
     }
 
     public void setOption(int eventId, EventOptionType optionType, String value) {
@@ -47,6 +55,7 @@ public class EventOptionDao extends AbstractDao<EventOption> {
             persist(option);
         } else {
             option.setValue(value);
+            merge(option);
         }
     }
 
@@ -65,5 +74,30 @@ public class EventOptionDao extends AbstractDao<EventOption> {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    @Override
+    public void persist(EventOption option) {
+        if (option.getId() == null) {
+            int id = Db.insertReturningInt(
+                    "INSERT INTO eventoption (option_type, option_value, event_id) VALUES (?, ?, ?)",
+                    option.getOptionType(),
+                    option.getValue(),
+                    Db.fkId(option.getEvent()));
+            option.setId(id);
+        } else {
+            Db.update(
+                    "UPDATE eventoption SET option_type = ?, option_value = ?, event_id = ? WHERE id = ?",
+                    option.getOptionType(),
+                    option.getValue(),
+                    Db.fkId(option.getEvent()),
+                    option.getId());
+        }
+    }
+
+    @Override
+    public EventOption merge(EventOption option) {
+        persist(option);
+        return option;
     }
 }
