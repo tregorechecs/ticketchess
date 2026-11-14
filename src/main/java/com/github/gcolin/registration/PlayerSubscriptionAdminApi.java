@@ -1,6 +1,8 @@
 package com.github.gcolin.registration;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.player.CustomPlayer;
@@ -13,14 +15,12 @@ import com.github.gcolin.player.Find;
 import com.github.gcolin.player.CustomPlayerDao;
 import com.github.gcolin.registration.PlayerPendingSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
@@ -35,27 +35,6 @@ import com.github.gcolin.platform.MustacheHtml;
 @Path("playersubscription-admin")
 @RequireRole(RoleCode.ARBITRE)
 public class PlayerSubscriptionAdminApi {
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionService;
-
-    @Inject
-    private CustomPlayerDao customPlayerService;
-
-    @Inject
-    private PlayerPendingSubscriptionDao playerPendingSubscriptionService;
-
-    @Inject
-    private Find find;
-
-    @Inject
-    private Caches caches;
-
-    @Inject
-    private ClubSeasonFilter clubSeasonFilter;
-
-    @Context
-    private UriInfo uriInfo;
 
     @GET
     public MustacheHtml page(@jakarta.ws.rs.QueryParam("seasonId") Integer seasonId) {
@@ -86,43 +65,43 @@ public class PlayerSubscriptionAdminApi {
         int deleted = 0;
         int deleteFailed = 0;
         boolean pendingRemoved = false;
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
 
         if (deletePendingId != null) {
-            PlayerPendingSubscription pending = playerPendingSubscriptionService.find(deletePendingId);
+            PlayerPendingSubscription pending = RequestContext.require().playerPendingSubscriptionDao().find(deletePendingId);
             if (pending != null) {
-                playerPendingSubscriptionService.remove(pending);
+                RequestContext.require().playerPendingSubscriptionDao().remove(pending);
                 pendingRemoved = true;
                 deleted = 1;
             } else {
                 deleteFailed = 1;
             }
         } else if (deleteOrphans) {
-            for (CustomPlayer customPlayer : customPlayerService.findWithoutSubscription()) {
+            for (CustomPlayer customPlayer : RequestContext.require().customPlayerDao().findWithoutSubscription()) {
                 try {
-                    customPlayerService.remove(customPlayer);
+                    RequestContext.require().customPlayerDao().remove(customPlayer);
                     deleted++;
                 } catch (Exception ex) {
                     deleteFailed++;
                 }
             }
         } else if (all) {
-            for (PlayerSubscription subscription : playerSubscriptionService.findLinkedToCustomPlayers(scope)) {
+            for (PlayerSubscription subscription : RequestContext.require().playerSubscriptionDao().findLinkedToCustomPlayers(scope)) {
                 ReplacementCandidate candidate = buildCandidate(subscription);
                 if (candidate != null && candidate.canReplace) {
                     subscription.setNrFfe(candidate.replacementNrFfe);
-                    playerSubscriptionService.merge(subscription);
+                    RequestContext.require().playerSubscriptionDao().merge(subscription);
                     replaced++;
                 } else {
                     failed++;
                 }
             }
         } else if (subscriptionId != null) {
-            PlayerSubscription subscription = playerSubscriptionService.find(subscriptionId);
+            PlayerSubscription subscription = RequestContext.require().playerSubscriptionDao().find(subscriptionId);
             ReplacementCandidate candidate = buildCandidate(subscription);
             if (candidate != null && candidate.canReplace) {
                 subscription.setNrFfe(candidate.replacementNrFfe);
-                playerSubscriptionService.merge(subscription);
+                RequestContext.require().playerSubscriptionDao().merge(subscription);
                 replaced++;
             } else {
                 failed = 1;
@@ -130,12 +109,12 @@ public class PlayerSubscriptionAdminApi {
         }
 
         if (replaced > 0 || pendingRemoved) {
-            caches.getEvent().invalidateAll();
-            caches.getAllEvents().invalidateAll();
-            caches.getDebtCache().invalidateAll();
+            AppContext.get().caches().getEvent().invalidateAll();
+            AppContext.get().caches().getAllEvents().invalidateAll();
+            AppContext.get().caches().getDebtCache().invalidateAll();
         }
 
-        UriBuilder uriBuilder = uriInfo.getBaseUriBuilder()
+        UriBuilder uriBuilder = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("playersubscription-admin")
                 .path("result")
                 .queryParam("replaced", replaced)
@@ -149,12 +128,12 @@ public class PlayerSubscriptionAdminApi {
     }
 
     private MustacheHtml page(Integer replaced, Integer failed, Integer deleted, Integer deleteFailed, Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
         List<Map<String, Object>> rows = new ArrayList<>();
         List<Map<String, Object>> pendingRows = new ArrayList<>();
         int replaceableCount = 0;
 
-        for (PlayerSubscription subscription : playerSubscriptionService.findLinkedToCustomPlayers(scope)) {
+        for (PlayerSubscription subscription : RequestContext.require().playerSubscriptionDao().findLinkedToCustomPlayers(scope)) {
             ReplacementCandidate candidate = buildCandidate(subscription);
             if (candidate == null) {
                 continue;
@@ -179,7 +158,7 @@ public class PlayerSubscriptionAdminApi {
             rows.add(row);
         }
 
-        for (PlayerPendingSubscription pendingSubscription : playerPendingSubscriptionService.findAllWithEvent(scope)) {
+        for (PlayerPendingSubscription pendingSubscription : RequestContext.require().playerPendingSubscriptionDao().findAllWithEvent(scope)) {
             IPlayer player = resolvePlayer(pendingSubscription.getNrFfe());
             Map<String, Object> row = new HashMap<>();
             row.put("id", pendingSubscription.getId());
@@ -193,7 +172,7 @@ public class PlayerSubscriptionAdminApi {
         }
 
         Map<String, Object> model = new HashMap<>();
-        List<CustomPlayer> orphanCustomPlayers = customPlayerService.findWithoutSubscription();
+        List<CustomPlayer> orphanCustomPlayers = RequestContext.require().customPlayerDao().findWithoutSubscription();
         model.put("rows", rows);
         model.put("rowCount", rows.size());
         model.put("pendingRows", pendingRows);
@@ -205,7 +184,7 @@ public class PlayerSubscriptionAdminApi {
         model.put("failed", failed);
         model.put("deleted", deleted);
         model.put("deleteFailed", deleteFailed);
-        clubSeasonFilter.addToModel(model, seasonId);
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         return new MustacheHtml(model, "registration/playersubscriptionAdmin.mustache");
     }
 
@@ -214,7 +193,7 @@ public class PlayerSubscriptionAdminApi {
         if (trimmedNrFfe == null) {
             return null;
         }
-        return find.player(trimmedNrFfe, null);
+        return RequestContext.require().find().player(trimmedNrFfe, null);
     }
 
     private ReplacementCandidate buildCandidate(PlayerSubscription subscription) {
@@ -231,7 +210,7 @@ public class PlayerSubscriptionAdminApi {
             return new ReplacementCandidate(false, "customId.invalid", null, null, null, null);
         }
 
-        CustomPlayer customPlayer = customPlayerService.find(customPlayerId);
+        CustomPlayer customPlayer = RequestContext.require().customPlayerDao().find(customPlayerId);
         if (customPlayer == null) {
             return new ReplacementCandidate(false, "customPlayer.missing", customPlayerId, null, null, null);
         }
@@ -247,7 +226,7 @@ public class PlayerSubscriptionAdminApi {
                     null);
         }
 
-        IPlayer lucenePlayer = find.player(licence, null);
+        IPlayer lucenePlayer = RequestContext.require().find().player(licence, null);
         if (lucenePlayer == null || lucenePlayer.isEditable()) {
             return new ReplacementCandidate(
                     false,

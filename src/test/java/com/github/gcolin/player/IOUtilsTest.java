@@ -28,6 +28,18 @@ class IOUtilsTest {
     }
 
     @Test
+    void downloadAndUnzipStreamsFromFileUrl() throws IOException {
+        Path zip = tempDir.resolve("archive.zip");
+        zip(zip, new Entry("Data.mdb", "mdb-bytes"));
+        Path destination = tempDir.resolve("out");
+
+        IOUtils.downloadAndUnzip(zip.toUri().toString(), destination.toString());
+
+        Assertions.assertEquals(
+                "mdb-bytes", Files.readString(destination.resolve("Data.mdb"), StandardCharsets.UTF_8));
+    }
+
+    @Test
     void unzipRejectsZipSlipEntries() throws IOException {
         Path zip = tempDir.resolve("archive.zip");
         zip(zip, new Entry("../escape.txt", "bad"));

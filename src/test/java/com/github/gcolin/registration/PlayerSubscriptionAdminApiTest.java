@@ -1,5 +1,8 @@
 package com.github.gcolin.registration;
 
+import com.github.gcolin.platform.ApiTestBase;
+
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.player.CustomPlayer;
@@ -30,7 +34,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.github.gcolin.platform.MustacheHtml;
 
-class PlayerSubscriptionAdminApiTest {
+class PlayerSubscriptionAdminApiTest extends ApiTestBase {
 
     @Test
     void pageShouldReturnEmptyRowsWhenNoLinkedSubscriptions() throws Exception {
@@ -45,21 +49,25 @@ class PlayerSubscriptionAdminApiTest {
         CustomPlayerDao customDao = mock(CustomPlayerDao.class);
         when(customDao.findWithoutSubscription()).thenReturn(List.of());
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerPendingSubscriptionService", pendingDao);
-        inject(api, "find", find);
-        inject(api, "customPlayerService", customDao);
-        inject(api, "caches", new Caches());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setFind(find);
+            ctx.setCustomPlayerDao(customDao);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
 
-        MustacheHtml html = api.page(null);
+            MustacheHtml html = api.page(null);
 
-        assertEquals("registration/playersubscriptionAdmin.mustache", html.getTemplate());
-        Map<String, Object> model = html.getModel();
-        assertTrue(((List<?>) model.get("rows")).isEmpty());
-        assertTrue(((List<?>) model.get("pendingRows")).isEmpty());
-        assertEquals(0, model.get("rowCount"));
-        assertEquals(0, model.get("pendingRowCount"));
+            assertEquals("registration/playersubscriptionAdmin.mustache", html.getTemplate());
+            Map<String, Object> model = html.getModel();
+            assertTrue(((List<?>) model.get("rows")).isEmpty());
+            assertTrue(((List<?>) model.get("pendingRows")).isEmpty());
+            assertEquals(0, model.get("rowCount"));
+            assertEquals(0, model.get("pendingRowCount"));
+        }
     }
 
     @Test
@@ -74,19 +82,23 @@ class PlayerSubscriptionAdminApiTest {
         CustomPlayerDao customDao = mock(CustomPlayerDao.class);
         when(customDao.findWithoutSubscription()).thenReturn(List.of());
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerPendingSubscriptionService", pendingDao);
-        inject(api, "find", mock(Find.class));
-        inject(api, "customPlayerService", customDao);
-        inject(api, "caches", new Caches());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setFind(mock(Find.class));
+            ctx.setCustomPlayerDao(customDao);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
 
-        MustacheHtml html = api.pageResult(5, 2, null, null, null);
+            MustacheHtml html = api.pageResult(5, 2, null, null, null);
 
-        Map<String, Object> model = html.getModel();
-        assertEquals(5, model.get("replaced"));
-        assertEquals(2, model.get("failed"));
-        assertEquals(0, model.get("orphanCount"));
+            Map<String, Object> model = html.getModel();
+            assertEquals(5, model.get("replaced"));
+            assertEquals(2, model.get("failed"));
+            assertEquals(0, model.get("orphanCount"));
+        }
     }
 
     @Test
@@ -106,24 +118,25 @@ class PlayerSubscriptionAdminApiTest {
         when(subDao.findLinkedToCustomPlayers(any(SeasonScope.class))).thenReturn(List.of());
         when(pendingDao.findAllWithEvent(any(SeasonScope.class))).thenReturn(List.of());
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerPendingSubscriptionService", pendingDao);
-        inject(api, "customPlayerService", customDao);
-        inject(api, "find", find);
-        inject(api, "caches", new Caches());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(
-                api,
-                "uriInfo",
-                mockUriInfo(
-                        URI.create(
-                                "http://localhost:8080/playersubscription-admin/result?replaced=0&failed=0&deleted=2&deleteFailed=0")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setCustomPlayerDao(customDao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(
+                            URI.create(
+                                    "http://localhost:8080/playersubscription-admin/result?replaced=0&failed=0&deleted=2&deleteFailed=0")));
 
-        Response response = api.replace(null, false, true, null, null);
+            Response response = api.replace(null, false, true, null, null);
 
-        assertEquals(303, response.getStatus());
-        verify(customDao).remove(orphan1);
-        verify(customDao).remove(orphan2);
+            assertEquals(303, response.getStatus());
+            verify(customDao).remove(orphan1);
+            verify(customDao).remove(orphan2);
+        }
     }
 
     @Test
@@ -141,23 +154,24 @@ class PlayerSubscriptionAdminApiTest {
         when(pendingDao.findAllWithEvent(any(SeasonScope.class))).thenReturn(List.of());
         when(customDao.findWithoutSubscription()).thenReturn(List.of());
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerPendingSubscriptionService", pendingDao);
-        inject(api, "customPlayerService", customDao);
-        inject(api, "find", mock(Find.class));
-        inject(api, "caches", new Caches());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(
-                api,
-                "uriInfo",
-                mockUriInfo(
-                        URI.create(
-                                "http://localhost:8080/playersubscription-admin/result?replaced=0&failed=0&deleted=1&deleteFailed=0")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setCustomPlayerDao(customDao);
+            ctx.setFind(mock(Find.class));
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(
+                            URI.create(
+                                    "http://localhost:8080/playersubscription-admin/result?replaced=0&failed=0&deleted=1&deleteFailed=0")));
 
-        Response response = api.replace(null, false, false, 7, null);
+            Response response = api.replace(null, false, false, 7, null);
 
-        assertEquals(303, response.getStatus());
-        verify(pendingDao).remove(pending);
+            assertEquals(303, response.getStatus());
+            verify(pendingDao).remove(pending);
+        }
     }
 
     @Test
@@ -190,21 +204,22 @@ class PlayerSubscriptionAdminApiTest {
         when(subDao.findLinkedToCustomPlayers(any(SeasonScope.class))).thenReturn(List.of(sub));
         when(pendingDao.findAllWithEvent(any(SeasonScope.class))).thenReturn(List.of());
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerPendingSubscriptionService", pendingDao);
-        inject(api, "customPlayerService", customDao);
-        inject(api, "find", find);
-        inject(api, "caches", new Caches());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(
-                api,
-                "uriInfo",
-                mockUriInfo(URI.create("http://localhost:8080/playersubscription-admin/result?replaced=1&failed=0")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setCustomPlayerDao(customDao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/playersubscription-admin/result?replaced=1&failed=0")));
 
-        Response response = api.replace(10, false, false, null, null);
+            Response response = api.replace(10, false, false, null, null);
 
-        assertEquals(303, response.getStatus());
-        verify(subDao).merge(sub);
+            assertEquals(303, response.getStatus());
+            verify(subDao).merge(sub);
+        }
     }
 
     @Test
@@ -237,20 +252,21 @@ class PlayerSubscriptionAdminApiTest {
         when(customDao.find(1)).thenReturn(player);
         when(find.player("LIC", null)).thenReturn(lucenePlayer);
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerPendingSubscriptionService", pendingDao);
-        inject(api, "customPlayerService", customDao);
-        inject(api, "find", find);
-        inject(api, "caches", new Caches());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(
-                api,
-                "uriInfo",
-                mockUriInfo(URI.create("http://localhost:8080/playersubscription-admin/result?replaced=1&failed=1")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setCustomPlayerDao(customDao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/playersubscription-admin/result?replaced=1&failed=1")));
 
-        Response response = api.replace(null, true, false, null, null);
+            Response response = api.replace(null, true, false, null, null);
 
-        assertEquals(303, response.getStatus());
+            assertEquals(303, response.getStatus());
+        }
     }
 
     @Test
@@ -280,55 +296,31 @@ class PlayerSubscriptionAdminApiTest {
         when(customDao.findWithoutSubscription()).thenReturn(List.of());
         when(find.player("LIC999", null)).thenReturn(player);
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerPendingSubscriptionService", pendingDao);
-        inject(api, "customPlayerService", customDao);
-        inject(api, "find", find);
-        inject(api, "caches", new Caches());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setCustomPlayerDao(customDao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
 
-        MustacheHtml html = api.page(null);
+            MustacheHtml html = api.page(null);
 
-        Map<String, Object> model = html.getModel();
-        assertEquals(1, model.get("pendingRowCount"));
-        Map<?, ?> row = (Map<?, ?>) ((List<?>) model.get("pendingRows")).get(0);
-        assertEquals(99, row.get("id"));
-        assertEquals("LIC999", row.get("licence"));
-        assertEquals("Dupont", row.get("lastname"));
-        assertEquals("Alice", row.get("firstname"));
-        assertEquals("admin@test.com", row.get("creationUser"));
-        assertEquals(42, row.get("eventId"));
-        assertEquals("Open de Paris", row.get("eventName"));
+            Map<String, Object> model = html.getModel();
+            assertEquals(1, model.get("pendingRowCount"));
+            Map<?, ?> row = (Map<?, ?>) ((List<?>) model.get("pendingRows")).get(0);
+            assertEquals(99, row.get("id"));
+            assertEquals("LIC999", row.get("licence"));
+            assertEquals("Dupont", row.get("lastname"));
+            assertEquals("Alice", row.get("firstname"));
+            assertEquals("admin@test.com", row.get("creationUser"));
+            assertEquals(42, row.get("eventId"));
+            assertEquals("Open de Paris", row.get("eventName"));
+        }
     }
 
-    private static ClubSeasonFilter mockClubSeasonFilter() {
-        ClubSeasonFilter filter = mock(ClubSeasonFilter.class);
-        when(filter.resolve(any())).thenReturn(SeasonScope.all());
-        doAnswer(invocation -> {
-            Map<String, Object> model = invocation.getArgument(0);
-            model.put("seasons", List.of());
-            model.put("seasonId", invocation.getArgument(1));
-            return null;
-        }).when(filter).addToModel(any(), any());
-        return filter;
-    }
 
-    private static UriInfo mockUriInfo(URI target) {
-        UriInfo uriInfo = mock(UriInfo.class);
-        UriBuilder uriBuilder = mock(UriBuilder.class);
 
-        when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
-        when(uriBuilder.path(org.mockito.ArgumentMatchers.anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.queryParam(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(uriBuilder);
-        when(uriBuilder.build(org.mockito.ArgumentMatchers.any())).thenReturn(target);
-
-        return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

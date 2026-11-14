@@ -1,16 +1,16 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.platform.Config;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.Caches;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -23,34 +23,16 @@ import java.util.Properties;
 @Path("auth-sim")
 public class AuthSim {
 
-    @Inject
-    private Properties properties;
-
-    @Inject
-    private Caches caches;
-
-    @Inject
-    private LoggedUser loggerUser;
-
-    @Inject
-    private Config config;
-
-    @Context
-    UriInfo uriInfo;
-
-    @Context
-    HttpServletRequest request;
-
     @GET
     @Path("logAs")
     @RequireRole(RoleCode.ADMIN)
     public Response logAs(@QueryParam("email") String email, @QueryParam("name") String name) {
         requireImpersonationAllowed();
-        loggerUser.setEmail(email);
-        loggerUser.setUsername(name);
-        loggerUser.setLogged(true);
-        caches.getDebtCache().invalidateAll();
-        caches.getRoleCache().invalidateAll();
+        RequestContext.require().loggedUser().setEmail(email);
+        RequestContext.require().loggedUser().setUsername(name);
+        RequestContext.require().loggedUser().setLogged(true);
+        AppContext.get().caches().getDebtCache().invalidateAll();
+        AppContext.get().caches().getRoleCache().invalidateAll();
         rememberAuthInSession(email);
 
         String jwt = Jwts.builder()
@@ -58,7 +40,7 @@ public class AuthSim {
                 .issuer(name)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
 
         NewCookie newCookie = new NewCookie.Builder("remember_me")
@@ -68,26 +50,26 @@ public class AuthSim {
                 .value(jwt)
                 .build();
 
-        return Response.seeOther(uriInfo.getBaseUri()).cookie(newCookie).build();
+        return Response.seeOther(RequestContext.require().uriInfo().getBaseUri()).cookie(newCookie).build();
     }
 
     @GET
     public Response doGet(@QueryParam("state") String state) throws ServletException, IOException {
         requireDevAuthSim();
 
-        loggerUser.setEmail(properties.getProperty("auth.USER_EMAIL"));
-        loggerUser.setUsername(properties.getProperty("auth.USER_NAME"));
-        loggerUser.setLogged(true);
-        caches.getDebtCache().invalidateAll();
-        caches.getRoleCache().invalidateAll();
-        rememberAuthInSession(loggerUser.getEmail());
+        RequestContext.require().loggedUser().setEmail(AppContext.get().config().getProperties().getProperty("auth.USER_EMAIL"));
+        RequestContext.require().loggedUser().setUsername(AppContext.get().config().getProperties().getProperty("auth.USER_NAME"));
+        RequestContext.require().loggedUser().setLogged(true);
+        AppContext.get().caches().getDebtCache().invalidateAll();
+        AppContext.get().caches().getRoleCache().invalidateAll();
+        rememberAuthInSession(RequestContext.require().loggedUser().getEmail());
 
         String jwt = Jwts.builder()
-                .subject(loggerUser.getEmail())
-                .issuer(loggerUser.getUsername())
+                .subject(RequestContext.require().loggedUser().getEmail())
+                .issuer(RequestContext.require().loggedUser().getUsername())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30)) // 30 jours
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
 
         NewCookie newCookie = new NewCookie.Builder("remember_me")
@@ -100,28 +82,29 @@ public class AuthSim {
         if (state != null) {
             String decodedState = new String(Base64.getUrlDecoder().decode(state), StandardCharsets.UTF_8);
             return Response.seeOther(
-                            uriInfo.getBaseUriBuilder().path(decodedState).build())
+                            RequestContext.require().uriInfo().getBaseUriBuilder().path(decodedState).build())
                     .cookie(newCookie)
                     .build();
         } else {
-            return Response.seeOther(uriInfo.getBaseUri()).cookie(newCookie).build();
+            return Response.seeOther(RequestContext.require().uriInfo().getBaseUri()).cookie(newCookie).build();
         }
     }
 
     private void rememberAuthInSession(String email) {
+        HttpServletRequest request = RequestContext.require().request();
         if (request != null) {
             request.getSession(true).setAttribute("auth.email", email);
         }
     }
 
     private void requireDevAuthSim() {
-        if (config.isOauthEnabled() || !config.isAuthSimEnabled()) {
+        if (AppContext.get().config().isOauthEnabled() || !AppContext.get().config().isAuthSimEnabled()) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
     }
 
     private void requireImpersonationAllowed() {
-        if (!config.isOauthEnabled() && !config.isTestMode()) {
+        if (!AppContext.get().config().isOauthEnabled() && !AppContext.get().config().isTestMode()) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
     }

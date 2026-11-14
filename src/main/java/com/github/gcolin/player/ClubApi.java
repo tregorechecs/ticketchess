@@ -1,11 +1,11 @@
 package com.github.gcolin.player;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.player.LuceneDb;
 import com.github.gcolin.player.Player;
 import com.github.gcolin.platform.ModelUtils;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -22,9 +22,6 @@ import org.apache.lucene.queryparser.classic.ParseException;
 @Path("club")
 public class ClubApi {
 
-    @Inject
-    private LuceneDb luceneDb;
-
     @GET
     @Path("{ref}/composition")
     @Produces(MediaType.TEXT_PLAIN)
@@ -32,7 +29,7 @@ public class ClubApi {
     public String composition(@PathParam("ref") int ref) {
         List<Player> players;
         try {
-            players = luceneDb.searchJoueursByClub(ref);
+            players = AppContext.get().luceneDb().searchJoueursByClub(ref);
         } catch (ParseException | IOException e) {
             throw new WebApplicationException(e);
         }

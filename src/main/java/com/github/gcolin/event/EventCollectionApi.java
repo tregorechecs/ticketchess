@@ -1,6 +1,8 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.event.EventCollection;
 import com.github.gcolin.event.EventCollectionOptionType;
 import com.github.gcolin.auth.RoleCode;
@@ -8,7 +10,6 @@ import com.github.gcolin.platform.Caches;
 import com.github.gcolin.registration.RegisterService;
 import com.github.gcolin.event.EventCollectionDao;
 import com.github.gcolin.event.EventCollectionOptionDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -17,7 +18,6 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -31,21 +31,6 @@ import com.github.gcolin.platform.MustacheHtml;
 @RequireRole(RoleCode.ARBITRE)
 public class EventCollectionApi {
 
-    @Inject
-    private EventCollectionDao eventCollectionService;
-
-    @Inject
-    private Caches caches;
-
-    @Inject
-    private EventCollectionOptionDao eventCollectionOptionService;
-
-    @Inject
-    private RegisterService registerService;
-
-    @Context
-    private UriInfo uriInfo;
-
     @GET
     public MustacheHtml page(
             @QueryParam("created") String created,
@@ -53,7 +38,7 @@ public class EventCollectionApi {
             @QueryParam("removed") String removed,
             @QueryParam("error") String error) {
         Map<String, Object> model = new HashMap<>();
-        List<EventCollection> eventCollections = eventCollectionService.allOrdered();
+        List<EventCollection> eventCollections = RequestContext.require().eventCollectionDao().allOrdered();
         model.put("eventCollections", eventCollections);
         model.put("created", "1".equals(created));
         model.put("updated", "1".equals(updated));
@@ -82,7 +67,7 @@ public class EventCollectionApi {
             if (id == null) {
                 return redirect("error", "missingId");
             }
-            EventCollection eventCollection = eventCollectionService.find(id);
+            EventCollection eventCollection = RequestContext.require().eventCollectionDao().find(id);
             if (eventCollection == null) {
                 return redirect("error", "notFound");
             }
@@ -91,13 +76,13 @@ public class EventCollectionApi {
                 return redirect("error", "emptyName");
             }
             eventCollection.setName(trimName);
-            eventCollectionService.merge(eventCollection);
-            eventCollectionOptionService.setOption(
+            RequestContext.require().eventCollectionDao().merge(eventCollection);
+            RequestContext.require().eventCollectionOptionDao().setOption(
                     eventCollection.getId(),
                     EventCollectionOptionType.MAX_SUBSCRIPTIONS,
                     normalizedMaxSubscribe);
             invalidateEventCaches();
-            registerService.promoteNextPendingSubscriptionInCollection(eventCollection);
+            RequestContext.require().registerService().promoteNextPendingSubscriptionInCollection(eventCollection);
             return redirectToEdit(eventCollection.getId(), "save");
         }
 
@@ -105,18 +90,18 @@ public class EventCollectionApi {
             if (id == null) {
                 return redirect("error", "missingId");
             }
-            EventCollection eventCollection = eventCollectionService.find(id);
+            EventCollection eventCollection = RequestContext.require().eventCollectionDao().find(id);
             if (eventCollection == null) {
                 return redirect("error", "notFound");
             }
-            if (eventCollectionService.countLinkedEvents(id) > 0) {
+            if (RequestContext.require().eventCollectionDao().countLinkedEvents(id) > 0) {
                 return redirect("error", "linkedEvents");
             }
             // no cascade anymore: drop the collection options (FK big_event_id) before the collection itself
             for (EventCollectionOptionType optionType : EventCollectionOptionType.values()) {
-                eventCollectionOptionService.setOption(eventCollection.getId(), optionType, null);
+                RequestContext.require().eventCollectionOptionDao().setOption(eventCollection.getId(), optionType, null);
             }
-            eventCollectionService.remove(eventCollection);
+            RequestContext.require().eventCollectionDao().remove(eventCollection);
             invalidateEventCaches();
             return redirectToAdminEvents();
         }
@@ -128,8 +113,8 @@ public class EventCollectionApi {
 
         EventCollection eventCollection = new EventCollection();
         eventCollection.setName(trimName);
-        eventCollectionService.persist(eventCollection);
-        eventCollectionOptionService.setOption(
+        RequestContext.require().eventCollectionDao().persist(eventCollection);
+        RequestContext.require().eventCollectionOptionDao().setOption(
                 eventCollection.getId(),
                 EventCollectionOptionType.MAX_SUBSCRIPTIONS,
                 normalizedMaxSubscribe);
@@ -153,11 +138,11 @@ public class EventCollectionApi {
             @PathParam("id") Integer id,
             @QueryParam("success") String success,
             @QueryParam("error") String error) {
-        EventCollection eventCollection = eventCollectionService.find(id);
+        EventCollection eventCollection = RequestContext.require().eventCollectionDao().find(id);
         if (eventCollection == null) {
             throw new NotFoundException();
         }
-        eventCollectionService.fillSubscriptionLimits(eventCollection);
+        RequestContext.require().eventCollectionDao().fillSubscriptionLimits(eventCollection);
         // Force lazy loading of events
         eventCollection.getEvents().size();
 
@@ -170,17 +155,17 @@ public class EventCollectionApi {
     }
 
     private void invalidateEventCaches() {
-        caches.getEvent().invalidateAll();
-        caches.getAllEvents().invalidateAll();
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getAllEvents().invalidateAll();
     }
 
     private Response redirectToAdminEvents() {
-        URI redirect = uriInfo.getBaseUriBuilder().path("admin/events").build();
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder().path("admin/events").build();
         return Response.seeOther(redirect).build();
     }
 
     private Response redirect(String key, String value) {
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("eventcollection")
                 .queryParam(key, value)
                 .build();
@@ -188,7 +173,7 @@ public class EventCollectionApi {
     }
 
     private Response redirectToEdit(Integer id, String success) {
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("eventcollection")
                 .path(id.toString())
                 .queryParam("success", success)
@@ -197,7 +182,7 @@ public class EventCollectionApi {
     }
 
     private Response redirectToEditError(Integer id, String error) {
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("eventcollection")
                 .path(id.toString())
                 .queryParam("error", error)

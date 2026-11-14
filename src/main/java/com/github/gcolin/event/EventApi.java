@@ -1,6 +1,8 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.platform.Config;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.LoggedOnly;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.player.CustomPlayer;
@@ -36,7 +38,6 @@ import com.github.gcolin.registration.PlayerPendingSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.event.EventCache;
 import com.github.gcolin.event.EventsCache;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -47,7 +48,6 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -71,63 +71,6 @@ import com.github.gcolin.player.Player;
 @Path("event")
 public class EventApi {
 
-    @Inject
-    private Caches caches;
-
-    @Inject
-    EventDao eventService;
-
-    @Inject
-    private EventOptionDao eventOptionService;
-
-    @Inject
-    EventGroupDao eventGroupService;
-
-    @Inject
-    EventCollectionDao eventCollectionService;
-
-    @Inject
-    private EventCollectionOptionDao eventCollectionOptionService;
-
-    @Inject
-    EventGroupFilter eventGroupFilter;
-
-    @Inject
-    ClubSeasonFilter clubSeasonFilter;
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionService;
-
-    @Inject
-    private PlayerPendingSubscriptionDao playerPendingSubscriptionDao;
-
-    @Inject
-    private LoggedUser loggerUser;
-
-    @Inject
-    private Find find;
-
-    @Inject
-    private Properties properties;
-
-    @Context
-    UriInfo uriInfo;
-
-    @Inject
-    private RegisterService registerService;
-
-    @Inject
-    private PaymentDao paymentDao;
-
-    @Inject
-    private Config config;
-
-    @Inject
-    private EventDeskHub eventDeskHub;
-
-    @Inject
-    private EventDeskService eventDeskService;
-
     private static final Logger logger = LoggerFactory.getLogger(EventApi.class);
 
     @GET
@@ -146,9 +89,9 @@ public class EventApi {
             @QueryParam("display") String display)
             throws IOException {
 
-        List<PlayerSubscription> subs = playerSubscriptionService.findByCreationUserWithEvents(loggerUser.getEmail());
+        List<PlayerSubscription> subs = RequestContext.require().playerSubscriptionDao().findByCreationUserWithEvents(RequestContext.require().loggedUser().getEmail());
         List<PlayerPendingSubscription> pendingSubs =
-            playerPendingSubscriptionDao.findByCreationUserWithEvent(loggerUser.getEmail());
+            RequestContext.require().playerPendingSubscriptionDao().findByCreationUserWithEvent(RequestContext.require().loggedUser().getEmail());
 
         List<Event> events = new ArrayList<Event>();
         for (PlayerSubscription s : subs) {
@@ -163,9 +106,9 @@ public class EventApi {
                 events.add(s.getEvent());
                 event = s.getEvent();
                 event.setPlayers(new ArrayList<DisplayPlayer>());
-                eventService.fillSubscriptionLimits(event);
+                RequestContext.require().eventDao().fillSubscriptionLimits(event);
             }
-            IPlayer p = find.player(s.getNrFfe(), null);
+            IPlayer p = RequestContext.require().find().player(s.getNrFfe(), null);
             if (p == null) {
                 logger.warn(
                         "cannot find player {} subscribed to event {}",
@@ -181,9 +124,9 @@ public class EventApi {
             }
             player.setRating(p, event.getEventType());
             if (p.isEditable()
-                    && (loggerUser.hasRole(RoleCode.ARBITRE)
+                    && (RequestContext.require().loggedUser().hasRole(RoleCode.ARBITRE)
                             || (p instanceof CustomPlayer
-                                    && loggerUser.getEmail().equals(((CustomPlayer) p).getCreationUser())))) {
+                                    && RequestContext.require().loggedUser().getEmail().equals(((CustomPlayer) p).getCreationUser())))) {
                 player.setEditable(true);
             }
             player.setStatus(s.getStatus());
@@ -228,7 +171,7 @@ public class EventApi {
                 event.setPlayers(new ArrayList<DisplayPlayer>());
             }
 
-            IPlayer p = find.player(pending.getNrFfe(), null);
+            IPlayer p = RequestContext.require().find().player(pending.getNrFfe(), null);
             if (p == null) {
                 logger.warn(
                         "cannot find player {} pending for event {}",
@@ -243,15 +186,15 @@ public class EventApi {
                     pending,
                     collectionQueueEnabledById,
                     pendingPositionsByEventId,
-                    pendingPositionsByCollectionId) - config.getPendingQueueOffset();
+                    pendingPositionsByCollectionId) - AppContext.get().config().getPendingQueueOffset();
             if(ahead < 0) {
                 ahead = 0;
             }
             player.setPendingQueueAhead(ahead);
             if (p.isEditable()
-                    && (loggerUser.hasRole(RoleCode.ARBITRE)
+                    && (RequestContext.require().loggedUser().hasRole(RoleCode.ARBITRE)
                             || (p instanceof CustomPlayer
-                                    && loggerUser.getEmail().equals(((CustomPlayer) p).getCreationUser())))) {
+                                    && RequestContext.require().loggedUser().getEmail().equals(((CustomPlayer) p).getCreationUser())))) {
                 player.setEditable(true);
             }
             event.getPlayers().add(player);
@@ -268,7 +211,7 @@ public class EventApi {
                 Comparator.comparing(Event::getStartDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
         // Build toggle URLs
-        var toggleDisplayUrlBuilder = uriInfo.getBaseUriBuilder().path("event").path("my");
+        var toggleDisplayUrlBuilder = RequestContext.require().uriInfo().getBaseUriBuilder().path("event").path("my");
         if (!showFinished) {
         	toggleDisplayUrlBuilder.queryParam("display", "all");
         }
@@ -280,12 +223,12 @@ public class EventApi {
         model.put("showFinished", showFinished);
         model.put("hasFinishedEvents", hasFinishedEvents);
         model.put("toggleDisplayUrl", toggleDisplayUrl);
-        model.put("stripePublic", Config.getStripePublicKey(properties));
-        model.put("stripeSimulated", Config.isStripeSimulated(properties));
-        model.put("stripeCardEventsEnabled", Config.isStripeCardEnabledForEvents(properties));
-        model.put("bankTransferEventsEnabled", Config.isBankTransferEnabledForEvents(properties));
+        model.put("stripePublic", Config.getStripePublicKey(AppContext.get().config().getProperties()));
+        model.put("stripeSimulated", Config.isStripeSimulated(AppContext.get().config().getProperties()));
+        model.put("stripeCardEventsEnabled", Config.isStripeCardEnabledForEvents(AppContext.get().config().getProperties()));
+        model.put("bankTransferEventsEnabled", Config.isBankTransferEnabledForEvents(AppContext.get().config().getProperties()));
         model.put("success", success);
-        model.put("paidPayments", paymentDao.findAllPaidNotFreeByUser(loggerUser.getEmail()));
+        model.put("paidPayments", RequestContext.require().paymentDao().findAllPaidNotFreeByUser(RequestContext.require().loggedUser().getEmail()));
 
         return new MustacheHtml(model, "event/myevents.mustache");
     }
@@ -304,13 +247,13 @@ public class EventApi {
             Integer collectionId = pendingEvent.getEventCollection().getId();
             Map<Integer, Integer> pendingPositions = pendingPositionsByCollectionId.computeIfAbsent(
                     collectionId,
-                    id -> buildPendingPositionsById(playerPendingSubscriptionDao.findByEventCollection(id)));
+                    id -> buildPendingPositionsById(RequestContext.require().playerPendingSubscriptionDao().findByEventCollection(id)));
             return pending.getId() == null ? 0 : pendingPositions.getOrDefault(pending.getId(), 0);
         }
 
         Map<Integer, Integer> pendingPositions = pendingPositionsByEventId.computeIfAbsent(
                 pendingEvent.getId(),
-                id -> buildPendingPositionsById(playerPendingSubscriptionDao.findByEvent(pendingEvent)));
+                id -> buildPendingPositionsById(RequestContext.require().playerPendingSubscriptionDao().findByEvent(pendingEvent)));
         return pending.getId() == null ? 0 : pendingPositions.getOrDefault(pending.getId(), 0);
     }
 
@@ -330,14 +273,14 @@ public class EventApi {
         if (event == null || event.getEventCollection() == null || event.getEventCollection().getId() == null) {
             return false;
         }
-        if (eventCollectionOptionService == null) {
+        if (RequestContext.require().eventCollectionOptionDao() == null) {
             return false;
         }
 
         Integer collectionId = event.getEventCollection().getId();
         return collectionQueueEnabledById.computeIfAbsent(collectionId, id -> {
             Integer maxCollectionSubscriptions =
-                    eventCollectionOptionService.findIntOptionValue(id, EventCollectionOptionType.MAX_SUBSCRIPTIONS);
+                    RequestContext.require().eventCollectionOptionDao().findIntOptionValue(id, EventCollectionOptionType.MAX_SUBSCRIPTIONS);
             return maxCollectionSubscriptions != null && maxCollectionSubscriptions > 0;
         });
     }
@@ -349,7 +292,7 @@ public class EventApi {
             @PathParam("playersubscriptionId") Integer playersubscriptionId,
             @PathParam("eventCollectionId") Integer eventCollectionId) {
 
-        PlayerSubscription sub = playerSubscriptionService.find(playersubscriptionId);
+        PlayerSubscription sub = RequestContext.require().playerSubscriptionDao().find(playersubscriptionId);
         if (sub == null) {
             throw new WebApplicationException("PlayerSubscription not found", Response.Status.NOT_FOUND);
         }
@@ -359,7 +302,7 @@ public class EventApi {
         }
 
         // Get player for rating validation
-        IPlayer player = find.player(sub.getNrFfe(), null);
+        IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
         if (player == null) {
             throw new WebApplicationException("Player not found", Response.Status.NOT_FOUND);
         }
@@ -374,7 +317,7 @@ public class EventApi {
             String reasonKey = null;
 
             // Get MIN_ELO and MAX_ELO options
-            List<EventOption> options = eventOptionService.findByEventId(event.getId());
+            List<EventOption> options = RequestContext.require().eventOptionDao().findByEventId(event.getId());
             Integer minElo = null;
             Integer maxElo = null;
             Integer maxSubscriptions = null;
@@ -467,7 +410,7 @@ public class EventApi {
             throw new WebApplicationException("eventId is required", Response.Status.BAD_REQUEST);
         }
 
-        PlayerSubscription sub = playerSubscriptionService.find(playersubscriptionId);
+        PlayerSubscription sub = RequestContext.require().playerSubscriptionDao().find(playersubscriptionId);
         if (sub == null) {
             throw new WebApplicationException("PlayerSubscription not found", Response.Status.NOT_FOUND);
         }
@@ -476,20 +419,20 @@ public class EventApi {
             throw new WebApplicationException("EventCollection does not match", Response.Status.BAD_REQUEST);
         }
 
-        Event newEvent = eventService.find(eventId);
+        Event newEvent = RequestContext.require().eventDao().find(eventId);
         if (newEvent == null || !newEvent.getEventCollection().getId().equals(eventCollectionId)) {
             throw new WebApplicationException("Event not found or not in EventCollection", Response.Status.BAD_REQUEST);
         }
 
         // Update the subscription to point to the new event
         sub.setEvent(newEvent);
-        playerSubscriptionService.merge(sub);
+        RequestContext.require().playerSubscriptionDao().merge(sub);
 
-        // Invalidate caches
-        caches.getEvent().invalidateAll();
-        caches.getAllEvents().invalidateAll();
+        // Invalidate AppContext.get().caches()
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getAllEvents().invalidateAll();
 
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path("my")
                 .queryParam("success", "changed")
@@ -501,11 +444,11 @@ public class EventApi {
     @Path("{id:\\d+}")
     public MustacheHtml event(@PathParam("id") Integer id, @QueryParam("success") String success) throws IOException {
 
-        EventCache cached = caches.getEvent().getIfPresent(id.toString());
+        EventCache cached = AppContext.get().caches().getEvent().getIfPresent(id.toString());
 
         if (cached == null) {
-            cached = eventService.buildCache(id);
-            caches.getEvent().put(id.toString(), cached);
+            cached = RequestContext.require().eventDao().buildCache(id);
+            AppContext.get().caches().getEvent().put(id.toString(), cached);
         }
 
         Map<String, Object> model = new HashMap<String, Object>();
@@ -536,30 +479,30 @@ public class EventApi {
             @PathParam("group") String group,
             @QueryParam("seasonId") Integer seasonId)
             throws IOException {
-        String cacheKey = statusString + group + clubSeasonFilter.effectiveSeasonId(seasonId);
-        EventsCache eventsCache = caches.getAllEvents().getIfPresent(cacheKey);
+        String cacheKey = statusString + group + RequestContext.require().clubSeasonFilter().effectiveSeasonId(seasonId);
+        EventsCache eventsCache = AppContext.get().caches().getAllEvents().getIfPresent(cacheKey);
 
         if (eventsCache == null) {
             eventsCache = new EventsCache();
             if (group != null) {
-                eventsCache.group = eventGroupService.findByShortname(group);
+                eventsCache.group = RequestContext.require().eventGroupDao().findByShortname(group);
             }
-            SeasonScope scope = clubSeasonFilter.resolve(seasonId);
+            SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
             List<Event> events = group == null
-                    ? eventService.findByStatus(EventStatus.valueOf(statusString), scope)
-                    : eventService.findByStatus(EventStatus.valueOf(statusString), eventsCache.group, scope);
+                    ? RequestContext.require().eventDao().findByStatus(EventStatus.valueOf(statusString), scope)
+                    : RequestContext.require().eventDao().findByStatus(EventStatus.valueOf(statusString), eventsCache.group, scope);
             
-            events.forEach(eventService::fillSubscriptionLimits);
-            eventService.fillNbSubscriptions(events);
-            eventService.detachAll(events);
+            events.forEach(RequestContext.require().eventDao()::fillSubscriptionLimits);
+            RequestContext.require().eventDao().fillNbSubscriptions(events);
+            RequestContext.require().eventDao().detachAll(events);
 
             eventsCache.events = events;
             logger.info(events.toString());
             if (eventsCache.group != null) {
-                eventGroupService.detach(eventsCache.group);
+                RequestContext.require().eventGroupDao().detach(eventsCache.group);
             }
 
-            caches.getAllEvents().put(cacheKey, eventsCache);
+            AppContext.get().caches().getAllEvents().put(cacheKey, eventsCache);
         }
 
         Map<String, Object> model = new HashMap<String, Object>();
@@ -568,8 +511,8 @@ public class EventApi {
         model.put("status", statusString);
         model.put("events", eventsCache.events);
         model.put("eventGroup", eventsCache.group);
-        model.put("eventgroups", eventGroupFilter.getAll(group));
-        clubSeasonFilter.addToModel(model, seasonId);
+        model.put("eventgroups", RequestContext.require().eventGroupFilter().getAll(group));
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         if (eventsCache.group != null) {
             model.put("filterUrl", "/event/" + eventsCache.group.getShortname());
         } else {
@@ -583,10 +526,10 @@ public class EventApi {
     @RequireRole(RoleCode.ARBITRE)
     public MustacheHtml edit(@PathParam("id") Integer id, @QueryParam("success") String success) {
         Map<String, Object> model = new HashMap<String, Object>();
-        boolean canEdit = loggerUser.hasRole(RoleCode.ARBITRE);
+        boolean canEdit = RequestContext.require().loggedUser().hasRole(RoleCode.ARBITRE);
         model.put("readOnly", !canEdit);
         if (id != null && id != 0) {
-            Event event = eventService.find(id);
+            Event event = RequestContext.require().eventDao().find(id);
             Map<String, String> eventOptions = loadEventOptions(id);
             if (!canEdit) {
                 eventOptions.remove(EventOptionType.FFE_PASSWORD.name());
@@ -596,8 +539,8 @@ public class EventApi {
         } else {
             model.put("event", new Event());
         }
-        model.put("eventGroups", eventGroupService.all());
-        model.put("eventCollections", eventCollectionService.allOrdered());
+        model.put("eventGroups", RequestContext.require().eventGroupDao().all());
+        model.put("eventCollections", RequestContext.require().eventCollectionDao().allOrdered());
         model.put("success", success);
         return new MustacheHtml(model, "event/eventEdit.mustache");
     }
@@ -643,20 +586,20 @@ public class EventApi {
             @FormParam("pointage") String pointage) {
         if (descriptionOnly) {
             if (eventId != null) {
-                eventService.updateDescription(eventId, description);
+                RequestContext.require().eventDao().updateDescription(eventId, description);
             }
         } else if (optionsOnly) {
             if (eventId != null) {
-                eventOptionService.setOption(eventId, EventOptionType.FFE_ID, ffeId != null ? ffeId : "");
-                eventOptionService.setOption(eventId, EventOptionType.MIN_ELO, minElo != null ? minElo : "");
-                eventOptionService.setOption(eventId, EventOptionType.MAX_ELO, maxElo != null ? maxElo : "");
-                eventOptionService.setOption(
+                RequestContext.require().eventOptionDao().setOption(eventId, EventOptionType.FFE_ID, ffeId != null ? ffeId : "");
+                RequestContext.require().eventOptionDao().setOption(eventId, EventOptionType.MIN_ELO, minElo != null ? minElo : "");
+                RequestContext.require().eventOptionDao().setOption(eventId, EventOptionType.MAX_ELO, maxElo != null ? maxElo : "");
+                RequestContext.require().eventOptionDao().setOption(
                         eventId, EventOptionType.FFE_PASSWORD, ffePassword != null ? ffePassword : "");
-                eventOptionService.setOption(
+                RequestContext.require().eventOptionDao().setOption(
                         eventId, EventOptionType.POINTAGE, "1".equals(pointage) ? "1" : "0");
             }
         } else {
-            eventId = eventService.saveEvent(
+            eventId = RequestContext.require().eventDao().saveEvent(
                     eventId,
                     name,
                     startDate,
@@ -672,9 +615,9 @@ public class EventApi {
                     pairing,
                     maxSubscriptions);
         }
-        caches.getEvent().invalidateAll();
-        caches.getAllEvents().invalidateAll();
-        URI uri = uriInfo.getBaseUriBuilder()
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getAllEvents().invalidateAll();
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path(eventId.toString())
                 .path("edit")
@@ -685,7 +628,7 @@ public class EventApi {
 
     private Map<String, String> loadEventOptions(int eventId) {
         Map<String, String> options = new HashMap<>();
-        for (EventOption option : eventOptionService.findByEventId(eventId)) {
+        for (EventOption option : RequestContext.require().eventOptionDao().findByEventId(eventId)) {
             options.put(option.getOptionType().name(), option.getValue());
         }
         return options;
@@ -699,28 +642,28 @@ public class EventApi {
         if (subId == null) {
             throw new WebApplicationException("subId is required", Response.Status.BAD_REQUEST);
         }
-        PlayerSubscription sub = playerSubscriptionService.findWithEvent(subId);
+        PlayerSubscription sub = RequestContext.require().playerSubscriptionDao().findWithEvent(subId);
         if (sub == null || sub.getEvent() == null || !eventId.equals(sub.getEvent().getId())) {
             throw new WebApplicationException("PlayerSubscription not found", Response.Status.NOT_FOUND);
         }
-        if (!loggerUser.getEmail().equals(sub.getCreationUser())) {
+        if (!RequestContext.require().loggedUser().getEmail().equals(sub.getCreationUser())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
         if (sub.getStatus() != PlayerSubscriptionStatus.PAID) {
             throw new WebApplicationException("subscription not paid", Response.Status.BAD_REQUEST);
         }
-        eventService.fillSubscriptionLimits(sub.getEvent());
+        RequestContext.require().eventDao().fillSubscriptionLimits(sub.getEvent());
         if (!sub.getEvent().isPointageEnabled()) {
             throw new WebApplicationException("pointage not enabled", Response.Status.BAD_REQUEST);
         }
         if (sub.getAttendanceAt() == null) {
             // Dao @Transactional commits before desk snapshot so a fresh EM sees attendance.
             sub.setAttendanceAt(LocalDateTime.now());
-            playerSubscriptionService.merge(sub);
-            caches.getEvent().invalidateAll();
-            eventDeskHub.publishSnapshot(eventId, eventDeskService.snapshot(eventId), null);
+            RequestContext.require().playerSubscriptionDao().merge(sub);
+            AppContext.get().caches().getEvent().invalidateAll();
+            AppContext.get().eventDeskHub().publishSnapshot(eventId, AppContext.get().eventDeskService().snapshot(eventId), null);
         }
-        URI uri = uriInfo.getBaseUriBuilder().path("event").path("my").build();
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder().path("event").path("my").build();
         return Response.seeOther(uri).build();
     }
 
@@ -733,30 +676,30 @@ public class EventApi {
             throw new WebApplicationException("nrffe is required", Response.Status.BAD_REQUEST);
         }
 
-        Event event = eventService.find(eventId);
+        Event event = RequestContext.require().eventDao().find(eventId);
         if (event == null) {
             throw new WebApplicationException("event not found", Response.Status.NOT_FOUND);
         }
 
-        PlayerSubscription sub = playerSubscriptionService.findByEventAndNrffe(event, nrffe);
+        PlayerSubscription sub = RequestContext.require().playerSubscriptionDao().findByEventAndNrffe(event, nrffe);
         if (sub == null) {
             throw new WebApplicationException(nrffe + " is not present in event " + eventId, Response.Status.NOT_FOUND);
         }
-        if (!loggerUser.getEmail().equals(sub.getCreationUser())) {
+        if (!RequestContext.require().loggedUser().getEmail().equals(sub.getCreationUser())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
 
-        EventCache cached = caches.getEvent().getIfPresent(eventId.toString());
+        EventCache cached = AppContext.get().caches().getEvent().getIfPresent(eventId.toString());
 
         if (cached == null) {
-            cached = eventService.buildCache(eventId);
-            caches.getEvent().put(eventId.toString(), cached);
+            cached = RequestContext.require().eventDao().buildCache(eventId);
+            AppContext.get().caches().getEvent().put(eventId.toString(), cached);
         }
 
-        if (!registerService.unregisterPlayerToEvent(eventId, nrffe)) {
+        if (!RequestContext.require().registerService().unregisterPlayerToEvent(eventId, nrffe)) {
             throw new WebApplicationException(nrffe + " is not present in event " + eventId, Response.Status.NOT_FOUND);
         }
-        URI uri = uriInfo.getBaseUriBuilder().path("event").path("my").build();
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder().path("event").path("my").build();
         return Response.seeOther(uri).build();
     }
 
@@ -770,23 +713,23 @@ public class EventApi {
             throw new WebApplicationException("nrffe is required", Response.Status.BAD_REQUEST);
         }
 
-        Event event = eventService.find(eventId);
+        Event event = RequestContext.require().eventDao().find(eventId);
         if (event == null) {
             throw new WebApplicationException("event not found", Response.Status.NOT_FOUND);
         }
 
-        var pending = playerPendingSubscriptionDao
-                .findByEventAndNrffeAndCreationUser(event, nrffe, loggerUser.getEmail());
+        var pending = RequestContext.require().playerPendingSubscriptionDao()
+                .findByEventAndNrffeAndCreationUser(event, nrffe, RequestContext.require().loggedUser().getEmail());
 
         if (pending == null) {
             throw new WebApplicationException("pending subscription not found", Response.Status.NOT_FOUND);
         }
 
-        playerPendingSubscriptionDao.remove(pending);
-        caches.getEvent().invalidateAll();
-        caches.getDebtCache().invalidateAll();
+        RequestContext.require().playerPendingSubscriptionDao().remove(pending);
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
 
-        URI uri = uriInfo.getBaseUriBuilder().path("event").path("my").build();
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder().path("event").path("my").build();
         return Response.seeOther(uri).build();
     }
 }

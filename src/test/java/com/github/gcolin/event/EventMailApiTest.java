@@ -1,9 +1,13 @@
 package com.github.gcolin.event;
 
+import com.github.gcolin.platform.ApiTestBase;
+
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.player.IPlayer;
@@ -23,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.SendMail;
 
-class EventMailApiTest {
+class EventMailApiTest extends ApiTestBase {
 
     @Test
     void showFormShouldReturnEventWithModel() throws Exception {
@@ -36,13 +40,19 @@ class EventMailApiTest {
 
         when(eventDao.find(1)).thenReturn(event);
 
-        inject(api, "eventService", eventDao);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(mock(com.github.gcolin.platform.Config.class));
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(mock(PlayerSubscriptionDao.class));
+        })) {
 
-        MustacheHtml html = api.showForm(1, null);
+            MustacheHtml html = api.showForm(1, null);
 
-        assertEquals("event/eventMail.mustache", html.getTemplate());
-        Map<String, Object> model = html.getModel();
-        assertEquals(event, model.get("event"));
+            assertEquals("event/eventMail.mustache", html.getTemplate());
+            Map<String, Object> model = html.getModel();
+            assertEquals(event, model.get("event"));
+        }
     }
 
     @Test
@@ -56,12 +66,18 @@ class EventMailApiTest {
 
         when(eventDao.find(1)).thenReturn(event);
 
-        inject(api, "eventService", eventDao);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(mock(com.github.gcolin.platform.Config.class));
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(mock(PlayerSubscriptionDao.class));
+        })) {
 
-        MustacheHtml html = api.showForm(1, 5);
+            MustacheHtml html = api.showForm(1, 5);
 
-        Map<String, Object> model = html.getModel();
-        assertEquals(5, model.get("sent"));
+            Map<String, Object> model = html.getModel();
+            assertEquals(5, model.get("sent"));
+        }
     }
 
     @Test
@@ -87,15 +103,19 @@ class EventMailApiTest {
         when(subDao.findByEvent(event)).thenReturn(List.of(sub));
         when(find.player("FFE123", null)).thenReturn(player);
 
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "find", find);
-        inject(api, "sendMail", mock(com.github.gcolin.platform.SendMail.class));
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/1/mail?sent=1")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setSendMail(mock(com.github.gcolin.platform.SendMail.class));
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setFind(find);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/1/mail?sent=1")));
 
-        Response response = api.sendMails(1, "Test", "Body", null, null, null, null, new ArrayList<Integer>());
+            Response response = api.sendMails(1, "Test", "Body", null, null, null, null, new ArrayList<Integer>());
 
-        assertEquals(303, response.getStatus());
+            assertEquals(303, response.getStatus());
+        }
     }
 
     @Test
@@ -123,36 +143,23 @@ class EventMailApiTest {
         when(sendMail.sendBccBatched(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyList(),
                 org.mockito.ArgumentMatchers.eq("Test"))).thenReturn(35);
 
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "sendMail", sendMail);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/1/mail?sent=35")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setSendMail(sendMail);
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(subDao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/1/mail?sent=35")));
 
-        Response response = api.sendMails(1, "Test", "Body", null, null, "true", null, new ArrayList<Integer>());
+            Response response = api.sendMails(1, "Test", "Body", null, null, "true", null, new ArrayList<Integer>());
 
-        assertEquals(303, response.getStatus());
-        org.mockito.Mockito.verify(sendMail).sendBccBatched(
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.argThat(list -> list.size() == 35),
-                org.mockito.ArgumentMatchers.eq("Test"));
+            assertEquals(303, response.getStatus());
+            org.mockito.Mockito.verify(sendMail).sendBccBatched(
+                    org.mockito.ArgumentMatchers.any(),
+                    org.mockito.ArgumentMatchers.argThat(list -> list.size() == 35),
+                    org.mockito.ArgumentMatchers.eq("Test"));
+        }
     }
 
-    private static UriInfo mockUriInfo(URI target) {
-        UriInfo uriInfo = mock(UriInfo.class);
-        UriBuilder uriBuilder = mock(UriBuilder.class);
 
-        when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
-        when(uriBuilder.path(org.mockito.ArgumentMatchers.anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.queryParam(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt()))
-                .thenReturn(uriBuilder);
-        when(uriBuilder.build(org.mockito.ArgumentMatchers.anyInt())).thenReturn(target);
-
-        return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

@@ -1,45 +1,39 @@
 package com.github.gcolin.auth;
 
+import com.github.gcolin.platform.Redirects;
 import com.github.gcolin.platform.RequestContext;
 import jakarta.annotation.Priority;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
-import jakarta.ws.rs.container.ResourceInfo;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriInfo;
-import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
-import com.github.gcolin.platform.Redirects;
 
-@Provider
+/**
+ * Enforces one {@link RequireRole}. Instances are created per resource method / class by {@link
+ * RequireRoleFeature}, so no Jersey injection is needed.
+ */
 @Priority(Priorities.AUTHORIZATION)
-public class RequireRoleFilter implements ContainerRequestFilter {
+public class EnforceRoleFilter implements ContainerRequestFilter {
 
-    @Context
-    private ResourceInfo resourceInfo;
+    private final RequireRole requiredRole;
 
-    @Context
-    private UriInfo uriInfo;
+    public EnforceRoleFilter(RequireRole requiredRole) {
+        this.requiredRole = requiredRole;
+    }
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
-        RequireRole requiredRole = findRequiredRole();
-        if (requiredRole == null) {
-            return;
-        }
-
         var user = RequestContext.require().loggedUser();
 
         if (user == null || user.getEmail() == null) {
             if (shouldRedirectToAdmin(requestContext)) {
-                URI adminUri = uriInfo.getBaseUriBuilder().path("admin").build();
+                URI adminUri =
+                        requestContext.getUriInfo().getBaseUriBuilder().path("admin").build();
                 requestContext.abortWith(
                         Response.seeOther(Redirects.toSameOriginRelative(adminUri)).build());
             } else {
@@ -61,26 +55,6 @@ public class RequireRoleFilter implements ContainerRequestFilter {
                     .type(MediaType.TEXT_PLAIN)
                     .build());
         }
-    }
-
-    private RequireRole findRequiredRole() {
-        if (resourceInfo == null) {
-            return null;
-        }
-
-        Method method = resourceInfo.getResourceMethod();
-        if (method != null) {
-            RequireRole methodAnnotation = method.getAnnotation(RequireRole.class);
-            if (methodAnnotation != null) {
-                return methodAnnotation;
-            }
-        }
-
-        Class<?> resourceClass = resourceInfo.getResourceClass();
-        if (resourceClass == null) {
-            return null;
-        }
-        return resourceClass.getAnnotation(RequireRole.class);
     }
 
     private static boolean shouldRedirectToAdmin(ContainerRequestContext requestContext) {

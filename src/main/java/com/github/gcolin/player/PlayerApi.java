@@ -1,8 +1,8 @@
 package com.github.gcolin.player;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RoleCode;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -17,16 +17,13 @@ import org.json.JSONObject;
 @Path("player")
 public class PlayerApi {
 
-    @Inject
-    private LuceneDb luceneDb;
-
     @GET
     @Path("{licence}")
     @Produces(MediaType.APPLICATION_JSON + ";charset=UTF-8")
     @RequireRole(RoleCode.ADMIN)
     public String getPlayers(@PathParam("licence") String licence) {
         try {
-            Player p = luceneDb.searchJoueur(licence);
+            Player p = AppContext.get().luceneDb().searchJoueur(licence);
             if (p == null) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
             }

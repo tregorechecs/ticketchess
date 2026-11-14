@@ -70,7 +70,11 @@ public abstract class PlaywrightBaseTest {
     }
 
     public void login(Page page) {
-        page.navigate(BASE_URL);
+        login(page, BASE_URL);
+    }
+
+    public void login(Page page, String baseUrl) {
+        page.navigate(baseUrl);
         Locator bouton = page.locator("#googleauth");
         assertTrue(bouton.isVisible());
         bouton.click();

@@ -1,6 +1,7 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.event.EventCollection;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.registration.PlayerSubscription;
@@ -14,7 +15,6 @@ import com.github.gcolin.platform.MailTemplate;
 import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.platform.Config;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -24,7 +24,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -42,32 +41,17 @@ import org.commonmark.renderer.html.HtmlRenderer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.github.gcolin.platform.MustacheHtml;
+import com.github.gcolin.platform.AppContext;
 
 @Path("eventcollection/{id:\\d+}/mail")
 @RequireRole(RoleCode.ARBITRE)
 public class EventCollectionMailApi {
 
-    @Inject
-    private EventCollectionDao eventCollectionService;
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionService;
-
-    @Inject    private Config config;
-
-    @Inject    private SendMail sendMail;
-
-    @Context
-    UriInfo uriInfo;
-
-    @Inject
-    private Find find;
-
     private static final Logger logger = LoggerFactory.getLogger(EventCollectionMailApi.class);
 
     @GET
     public MustacheHtml showForm(@PathParam("id") Integer id, @QueryParam("sent") Integer sent) {
-        EventCollection eventCollection = eventCollectionService.find(id);
+        EventCollection eventCollection = RequestContext.require().eventCollectionDao().find(id);
         if (eventCollection == null) {
             throw new NotFoundException();
         }
@@ -85,7 +69,7 @@ public class EventCollectionMailApi {
     @Produces(MediaType.TEXT_HTML)
     public Response preview(
             @PathParam("id") Integer id, @FormParam("body") String body, @FormParam("bcc") boolean bcc) {
-        EventCollection eventCollection = eventCollectionService.find(id);
+        EventCollection eventCollection = RequestContext.require().eventCollectionDao().find(id);
         if (eventCollection == null) {
             throw new NotFoundException();
         }
@@ -99,7 +83,7 @@ public class EventCollectionMailApi {
         mail.setBody(renderer.render(document));
 
         try {
-            config.applyOrg(mail);
+            AppContext.get().config().applyOrg(mail);
             MailTemplate tmpl = new MailTemplate();
             String html = tmpl.render(mail.getTemplate(), mail);
             return Response.ok(html, MediaType.TEXT_HTML).build();
@@ -119,18 +103,18 @@ public class EventCollectionMailApi {
             @FormParam("minElo") Integer minElo,
             @FormParam("maxElo") Integer maxElo,
             @FormParam("sendAsBcc") String sendAsBcc) {
-        EventCollection eventCollection = eventCollectionService.find(id);
+        EventCollection eventCollection = RequestContext.require().eventCollectionDao().find(id);
         if (eventCollection == null) {
             throw new NotFoundException();
         }
-        List<PlayerSubscription> subscriptions = playerSubscriptionService.findByEventCollection(id);
+        List<PlayerSubscription> subscriptions = RequestContext.require().playerSubscriptionDao().findByEventCollection(id);
 
         int sent = "true".equals(sendAsBcc)
                 ? sendBccMails(eventCollection, subscriptions, body, subject, subscriptionStatus, minElo, maxElo, id)
                 : sendIndividualMails(
                         eventCollection, subscriptions, body, subject, subscriptionStatus, minElo, maxElo, id);
 
-        URI location = uriInfo.getBaseUriBuilder()
+        URI location = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("eventcollection/{id}/mail")
                 .queryParam("sent", sent)
                 .build(id);
@@ -157,7 +141,7 @@ public class EventCollectionMailApi {
         }
         try {
             BroadcastMail mail = buildBroadcastMail(eventCollection, body, "", null);
-            sendMail.sendBcc(mail, bccAddresses, subject);
+            AppContext.get().sendMail().sendBcc(mail, bccAddresses, subject);
             return bccAddresses.size();
         } catch (Exception e) {
             logger.error("Failed to send BCC broadcast mail for eventCollection {}: {}", collectionId, e.getMessage());
@@ -178,10 +162,10 @@ public class EventCollectionMailApi {
         for (PlayerSubscription sub : subscriptions) {
             if (statusMatches(sub, subscriptionStatus) && isValidCreationUser(sub) && eloMatches(sub, minElo, maxElo)) {
                 try {
-                    IPlayer player = find.player(sub.getNrFfe(), null);
+                    IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
                     BroadcastMail mail =
                             buildBroadcastMail(eventCollection, body, player != null ? player.getFullname() : "", sub.getCreationUser());
-                    sendMail.send(mail, sub.getCreationUser(), subject);
+                    AppContext.get().sendMail().send(mail, sub.getCreationUser(), subject);
                     sent++;
                 } catch (Exception e) {
                     logger.error(
@@ -197,7 +181,7 @@ public class EventCollectionMailApi {
             return true;
         }
         try {
-            IPlayer player = find.player(sub.getNrFfe(), null);
+            IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
             if (player == null) {
                 return minElo == null;
             }
@@ -249,9 +233,9 @@ public class EventCollectionMailApi {
                 .issuer(eventCollection.getName())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
-            String loginUrl = uriInfo.getBaseUri() + "login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8);
+            String loginUrl = RequestContext.require().uriInfo().getBaseUri() + "login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8);
             mail.setLoginUrl(loginUrl);
         }
         return mail;

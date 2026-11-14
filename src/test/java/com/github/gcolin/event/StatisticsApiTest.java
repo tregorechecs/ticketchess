@@ -1,5 +1,7 @@
 package com.github.gcolin.event;
 
+import com.github.gcolin.platform.ApiTestBase;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.event.Event;
@@ -16,14 +19,13 @@ import com.github.gcolin.player.Find;
 import com.github.gcolin.event.EventDao;
 import com.github.gcolin.payment.PaymentDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.github.gcolin.platform.MustacheHtml;
 
-class StatisticsApiTest {
+class StatisticsApiTest extends ApiTestBase {
 
     @Test
     void pageShouldBuildModelFromDaos() throws Exception {
@@ -45,20 +47,23 @@ class StatisticsApiTest {
 
         ClubSeasonFilter clubSeasonFilter = mockClubSeasonFilter();
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "paymentDao", paymentDao);
-        inject(api, "playerSubscriptionDao", playerSubscriptionDao);
-        inject(api, "find", find);
-        inject(api, "clubSeasonFilter", clubSeasonFilter);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPaymentDao(paymentDao);
+            ctx.setPlayerSubscriptionDao(playerSubscriptionDao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(clubSeasonFilter);
+        })) {
 
-        MustacheHtml html = api.page(null);
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.page(null);
+            Map<String, Object> model = html.getModel();
 
-        assertEquals("event/statistics.mustache", html.getTemplate());
-        assertSame(closestEvents, model.get("closestEvents"));
-        assertSame(topEvents, model.get("topEvents"));
-        assertEquals(12345L, (Long) model.get("totalPayments"));
-        assertEquals(0L, (Long) model.get("unpaidPlayerSubscriptions"));
+            assertEquals("event/statistics.mustache", html.getTemplate());
+            assertSame(closestEvents, model.get("closestEvents"));
+            assertSame(topEvents, model.get("topEvents"));
+            assertEquals(12345L, (Long) model.get("totalPayments"));
+            assertEquals(0L, (Long) model.get("unpaidPlayerSubscriptions"));
+        }
     }
 
     @Test
@@ -77,36 +82,22 @@ class StatisticsApiTest {
 
         ClubSeasonFilter clubSeasonFilter = mockClubSeasonFilter();
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "paymentDao", paymentDao);
-        inject(api, "playerSubscriptionDao", playerSubscriptionDao);
-        inject(api, "find", find);
-        inject(api, "clubSeasonFilter", clubSeasonFilter);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPaymentDao(paymentDao);
+            ctx.setPlayerSubscriptionDao(playerSubscriptionDao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(clubSeasonFilter);
+        })) {
 
-        MustacheHtml html = api.page(null);
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.page(null);
+            Map<String, Object> model = html.getModel();
 
-        assertEquals(0L, (Long) model.get("totalPayments"));
-        assertEquals(0L, (Long) model.get("unpaidPlayerSubscriptions"));
-        assertTrue(((List<?>) model.get("closestEvents")).isEmpty());
-        assertTrue(((List<?>) model.get("topEvents")).isEmpty());
+            assertEquals(0L, (Long) model.get("totalPayments"));
+            assertEquals(0L, (Long) model.get("unpaidPlayerSubscriptions"));
+            assertTrue(((List<?>) model.get("closestEvents")).isEmpty());
+            assertTrue(((List<?>) model.get("topEvents")).isEmpty());
+        }
     }
 
-    private static ClubSeasonFilter mockClubSeasonFilter() {
-        ClubSeasonFilter clubSeasonFilter = mock(ClubSeasonFilter.class);
-        when(clubSeasonFilter.resolve(null)).thenReturn(SeasonScope.all());
-        doAnswer(invocation -> {
-            Map<String, Object> model = invocation.getArgument(0);
-            model.put("seasons", List.of());
-            model.put("seasonId", invocation.getArgument(1));
-            return null;
-        }).when(clubSeasonFilter).addToModel(any(), any());
-        return clubSeasonFilter;
-    }
-
-    private static void inject(StatisticsApi api, String fieldName, Object value) throws Exception {
-        Field field = StatisticsApi.class.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(api, value);
-    }
 }

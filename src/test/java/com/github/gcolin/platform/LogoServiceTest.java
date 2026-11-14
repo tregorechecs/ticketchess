@@ -53,7 +53,7 @@ class LogoServiceTest {
         LogoService service = new LogoService();
         Config config = mock(Config.class);
         when(config.getConfigDir()).thenReturn(tempDir.toString());
-        Field field = LogoService.class.getDeclaredField("config");
+        Field field = AbstractOrgImageFileService.class.getDeclaredField("config");
         field.setAccessible(true);
         field.set(service, config);
         return service;

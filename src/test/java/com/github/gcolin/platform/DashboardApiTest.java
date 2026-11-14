@@ -13,12 +13,11 @@ import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.registration.PlayerSubscriptionStatus;
 import com.github.gcolin.player.Find;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class DashboardApiTest {
+class DashboardApiTest extends ApiTestBase {
 
     @Test
     void pageShouldBuildDashboardWithSubscriptions() throws Exception {
@@ -36,17 +35,20 @@ class DashboardApiTest {
 
         ClubSeasonFilter clubSeasonFilter = mockClubSeasonFilter();
 
-        inject(api, "playerSubscriptionDao", dao);
-        inject(api, "find", find);
-        inject(api, "clubSeasonFilter", clubSeasonFilter);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setPlayerSubscriptionDao(dao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(clubSeasonFilter);
+        })) {
 
-        MustacheHtml html = api.page(null);
+            MustacheHtml html = api.page(null);
 
-        assertEquals("platform/dashboard.mustache", html.getTemplate());
-        Map<String, Object> model = html.getModel();
-        assertEquals(1, ((List<?>) model.get("subsWithoutPayment")).size());
-        assertEquals(0, ((List<?>) model.get("cancelledSubs")).size());
-        assertEquals(0, ((List<?>) model.get("notPaidSubs")).size());
+            assertEquals("platform/dashboard.mustache", html.getTemplate());
+            Map<String, Object> model = html.getModel();
+            assertEquals(1, ((List<?>) model.get("subsWithoutPayment")).size());
+            assertEquals(0, ((List<?>) model.get("cancelledSubs")).size());
+            assertEquals(0, ((List<?>) model.get("notPaidSubs")).size());
+        }
     }
 
     @Test
@@ -71,33 +73,19 @@ class DashboardApiTest {
 
         ClubSeasonFilter clubSeasonFilter = mockClubSeasonFilter();
 
-        inject(api, "playerSubscriptionDao", dao);
-        inject(api, "find", find);
-        inject(api, "clubSeasonFilter", clubSeasonFilter);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setPlayerSubscriptionDao(dao);
+            ctx.setFind(find);
+            ctx.setClubSeasonFilter(clubSeasonFilter);
+        })) {
 
-        MustacheHtml html = api.page(null);
+            MustacheHtml html = api.page(null);
 
-        Map<String, Object> model = html.getModel();
-        assertEquals(1, ((List<?>) model.get("subsWithoutPayment")).size());
-        assertEquals(1, ((List<?>) model.get("cancelledSubs")).size());
-        assertEquals(1, ((List<?>) model.get("notPaidSubs")).size());
+            Map<String, Object> model = html.getModel();
+            assertEquals(1, ((List<?>) model.get("subsWithoutPayment")).size());
+            assertEquals(1, ((List<?>) model.get("cancelledSubs")).size());
+            assertEquals(1, ((List<?>) model.get("notPaidSubs")).size());
+        }
     }
 
-    private static ClubSeasonFilter mockClubSeasonFilter() {
-        ClubSeasonFilter clubSeasonFilter = mock(ClubSeasonFilter.class);
-        when(clubSeasonFilter.resolve(null)).thenReturn(SeasonScope.all());
-        doAnswer(invocation -> {
-            Map<String, Object> model = invocation.getArgument(0);
-            model.put("seasons", List.of());
-            model.put("seasonId", invocation.getArgument(1));
-            return null;
-        }).when(clubSeasonFilter).addToModel(any(), any());
-        return clubSeasonFilter;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

@@ -24,6 +24,7 @@ import com.github.gcolin.payment.PaymentType;
 import com.github.gcolin.payment.PaymentMail;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.Mails;
 import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.event.EventCache;
 import com.github.gcolin.event.EventDao;
@@ -275,7 +276,7 @@ public class EventDeskService {
             registrationMail.setEvenDate(sdf.format(event.getStartDateAsDate()));
             registrationMail.setEventName(event.getName());
             registrationMail.setReference(sub.getCreationUser());
-            mail.send(registrationMail, sub.getCreationUser(), "Confirmation paiement " + event.getName());
+            Mails.send(mail, registrationMail, sub.getCreationUser(), "Confirmation paiement " + event.getName());
         } catch (Exception e) {
             logger.error(
                     "[email={},player={},event={}] cannot send payment email. {}",

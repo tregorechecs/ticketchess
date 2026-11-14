@@ -7,6 +7,7 @@ import com.github.gcolin.membership.Membership;
 import com.github.gcolin.membership.MembershipDao;
 import com.github.gcolin.membership.MembershipStatus;
 import com.github.gcolin.platform.Caches;
+import com.github.gcolin.platform.Mails;
 import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.platform.ServiceUtils;
 import com.github.gcolin.player.Find;
@@ -223,7 +224,7 @@ public class DebtService {
                     caches.getEvent().invalidate(String.valueOf(event.getId()));
                 }
                 try {
-                    sendMail.send(registrationMail, email, "Confirmation paiement " + event.getName());
+                    Mails.send(sendMail, registrationMail, email, "Confirmation paiement " + event.getName());
                 } catch (Exception e) {
                     logger.error("[email={}] {}", email, e.toString());
                 }

@@ -1,6 +1,8 @@
 package com.github.gcolin.membership;
 
 import com.github.gcolin.auth.LoggedUser;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.club.ClubSeasonFilter;
@@ -11,7 +13,6 @@ import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.MailTemplate;
 import com.github.gcolin.platform.SendMail;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -21,7 +22,6 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.StreamingOutput;
@@ -53,45 +53,18 @@ public class MembershipOptionFileAdminApi {
     private static final Logger logger = LoggerFactory.getLogger(MembershipOptionFileAdminApi.class);
     private static final String SHARED_FILES_ANCHOR_PREFIX = "shared-file-";
 
-    @Inject
-    private MembershipOptionDao membershipOptionDao;
-
-    @Inject
-    private MembershipOptionFileDao membershipOptionFileDao;
-
-    @Inject
-    private MembershipOptionFileService membershipOptionFileService;
-
-    @Inject
-    private MembershipOptionSubscriptionDao membershipOptionSubscriptionDao;
-
-    @Inject
-    private LoggedUser loggedUser;
-
-    @Inject
-    private ClubSeasonFilter clubSeasonFilter;
-
-    @Inject
-    private Config config;
-
-    @Inject
-    private SendMail sendMail;
-
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public MustacheHtml page(
             @QueryParam("optionId") Integer optionId,
             @QueryParam("seasonId") Integer seasonId,
             @QueryParam("error") String error,
             @QueryParam("sent") Integer sent) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<MembershipOption> options = membershipOptionDao.all(scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<MembershipOption> options = RequestContext.require().membershipOptionDao().all(scope);
         MembershipOption selected = resolveSelectedOption(options, optionId);
 
         List<MembershipOptionFile> files = selected != null && selected.getId() != null
-                ? membershipOptionFileDao.findByOptionId(selected.getId())
+                ? RequestContext.require().membershipOptionFileDao().findByOptionId(selected.getId())
                 : Collections.emptyList();
         Map<String, Object> model = new HashMap<>();
         model.put("options", options);
@@ -99,8 +72,8 @@ public class MembershipOptionFileAdminApi {
         model.put("files", files);
         model.put("error", error);
         model.put("sent", sent);
-        model.put("seasonId", clubSeasonFilter.effectiveSeasonId(seasonId));
-        clubSeasonFilter.addToModel(model, seasonId);
+        model.put("seasonId", RequestContext.require().clubSeasonFilter().effectiveSeasonId(seasonId));
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         MembershipMustacheView.enrichOptionFilesPage(model, options, selected, files, error);
         return new MustacheHtml(model, "membership/membershipOptionFiles.mustache");
     }
@@ -132,15 +105,15 @@ public class MembershipOptionFileAdminApi {
         MembershipOption option = requireOption(optionId);
         try {
             MembershipOptionFileService.StoredFile stored =
-                    membershipOptionFileService.save(option.getId(), filename, null, file);
+                    AppContext.get().membershipOptionFileService().save(option.getId(), filename, null, file);
             MembershipOptionFile entity = new MembershipOptionFile();
             entity.setMembershipOption(option);
             entity.setOriginalName(stored.originalName());
             entity.setStoredName(stored.storedName());
             entity.setContentType(stored.contentType());
             entity.setSizeBytes(stored.sizeBytes());
-            entity.setUploadedBy(loggedUser != null ? loggedUser.getEmail() : null);
-            membershipOptionFileDao.persist(entity);
+            entity.setUploadedBy(RequestContext.require().loggedUser() != null ? RequestContext.require().loggedUser().getEmail() : null);
+            RequestContext.require().membershipOptionFileDao().persist(entity);
             return Response.seeOther(pageUri(option.getId(), seasonId, null)).build();
         } catch (WebApplicationException e) {
             String error = "uploadFailed";
@@ -165,7 +138,7 @@ public class MembershipOptionFileAdminApi {
             @PathParam("fileId") Integer fileId,
             @FormParam("optionId") Integer optionId,
             @FormParam("seasonId") Integer seasonId) {
-        MembershipOptionFile file = membershipOptionFileDao.findWithOption(fileId);
+        MembershipOptionFile file = RequestContext.require().membershipOptionFileDao().findWithOption(fileId);
         if (file == null || file.getMembershipOption() == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -174,23 +147,23 @@ public class MembershipOptionFileAdminApi {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
         try {
-            membershipOptionFileService.delete(file);
+            AppContext.get().membershipOptionFileService().delete(file);
         } catch (IOException e) {
             logger.warn("cannot delete membership option file from disk: {}", e.getMessage());
         }
-        membershipOptionFileDao.remove(file);
+        RequestContext.require().membershipOptionFileDao().remove(file);
         return Response.seeOther(pageUri(resolvedOptionId, seasonId, null)).build();
     }
 
     @GET
     @Path("{fileId}/download")
     public Response download(@PathParam("fileId") Integer fileId) {
-        MembershipOptionFile file = membershipOptionFileDao.findWithOption(fileId);
+        MembershipOptionFile file = RequestContext.require().membershipOptionFileDao().findWithOption(fileId);
         if (file == null) {
             throw new jakarta.ws.rs.NotFoundException("File not found");
         }
         try {
-            var path = membershipOptionFileService.resolveStoredFile(file);
+            var path = AppContext.get().membershipOptionFileService().resolveStoredFile(file);
             if (!Files.isRegularFile(path)) {
                 throw new jakarta.ws.rs.NotFoundException("Stored file missing");
             }
@@ -225,11 +198,11 @@ public class MembershipOptionFileAdminApi {
         model.put("recipients", recipients);
         model.put("defaultBody", defaultMarkdownBody(file, option));
         model.put("defaultSubject", defaultSubject(file, option));
-        model.put("seasonId", clubSeasonFilter.effectiveSeasonId(seasonId));
+        model.put("seasonId", RequestContext.require().clubSeasonFilter().effectiveSeasonId(seasonId));
         if (sent != null) {
             model.put("sent", sent);
         }
-        clubSeasonFilter.addToModel(model, seasonId);
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         MembershipMustacheView.enrichOptionFileMailPage(model, file, option, recipients);
         return new MustacheHtml(model, "membership/membershipOptionFileMail.mustache");
     }
@@ -243,7 +216,7 @@ public class MembershipOptionFileAdminApi {
         MembershipOption option = file.getMembershipOption();
         try {
             BroadcastMail mail = buildBroadcastMail(file, option, body, "NOM Prénom", null);
-            config.applyOrg(mail);
+            AppContext.get().config().applyOrg(mail);
             String html = new MailTemplate().render(mail.getTemplate(), mail);
             return Response.ok(html, MediaType.TEXT_HTML).build();
         } catch (Exception e) {
@@ -268,7 +241,7 @@ public class MembershipOptionFileAdminApi {
             try {
                 BroadcastMail mail =
                         buildBroadcastMail(file, option, body, recipient.displayName(), recipient.email());
-                sendMail.send(mail, recipient.email(), resolvedSubject);
+                AppContext.get().sendMail().send(mail, recipient.email(), resolvedSubject);
                 sent++;
             } catch (Exception e) {
                 logger.error(
@@ -278,7 +251,7 @@ public class MembershipOptionFileAdminApi {
                         e.getMessage());
             }
         }
-        UriBuilder builder = uriInfo.getBaseUriBuilder()
+        UriBuilder builder = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("membership-option-files")
                 .path(fileId.toString())
                 .path("mail")
@@ -322,7 +295,7 @@ public class MembershipOptionFileAdminApi {
                 .issuer(issuer)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
         String redirect = "/club-register#" + SHARED_FILES_ANCHOR_PREFIX + fileId;
         return baseUrl()
@@ -337,7 +310,7 @@ public class MembershipOptionFileAdminApi {
     }
 
     private String baseUrl() {
-        String base = config.getProperties().getProperty("baseurl", "http://localhost:8080");
+        String base = AppContext.get().config().getProperties().getProperty("baseurl", "http://localhost:8080");
         if (base.endsWith("/")) {
             return base.substring(0, base.length() - 1);
         }
@@ -365,7 +338,7 @@ public class MembershipOptionFileAdminApi {
 
     private List<MailRecipient> buildRecipients(Integer optionId) {
         Map<String, MailRecipient> byEmail = new LinkedHashMap<>();
-        for (MembershipOptionSubscription sub : membershipOptionSubscriptionDao.findByOptionId(optionId)) {
+        for (MembershipOptionSubscription sub : RequestContext.require().membershipOptionSubscriptionDao().findByOptionId(optionId)) {
             Membership membership = sub.getMembership();
             if (membership == null || membership.getUser() == null || membership.getUser().isBlank()) {
                 continue;
@@ -386,11 +359,12 @@ public class MembershipOptionFileAdminApi {
     private static boolean isPaidOrApproved(MembershipStatus status) {
         return status == MembershipStatus.APPROVED
                 || status == MembershipStatus.PAID
+                || status == MembershipStatus.PARTIALLY_PAID
                 || status == MembershipStatus.FREE;
     }
 
     private MembershipOptionFile requireFile(Integer fileId) {
-        MembershipOptionFile file = membershipOptionFileDao.findWithOption(fileId);
+        MembershipOptionFile file = RequestContext.require().membershipOptionFileDao().findWithOption(fileId);
         if (file == null || file.getMembershipOption() == null || file.getMembershipOption().getId() == null) {
             throw new jakarta.ws.rs.NotFoundException("File not found");
         }
@@ -415,7 +389,7 @@ public class MembershipOptionFileAdminApi {
         if (optionId == null) {
             throw new WebApplicationException("Option is required", 400);
         }
-        MembershipOption option = membershipOptionDao.find(optionId);
+        MembershipOption option = RequestContext.require().membershipOptionDao().find(optionId);
         if (option == null) {
             throw new jakarta.ws.rs.NotFoundException("Option not found");
         }
@@ -423,7 +397,7 @@ public class MembershipOptionFileAdminApi {
     }
 
     private URI pageUri(Integer optionId, Integer seasonId, String error) {
-        UriBuilder builder = uriInfo.getBaseUriBuilder().path("membership-option-files");
+        UriBuilder builder = RequestContext.require().uriInfo().getBaseUriBuilder().path("membership-option-files");
         if (optionId != null) {
             builder.queryParam("optionId", optionId);
         }

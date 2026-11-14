@@ -32,9 +32,13 @@ class RateLimitFilterTest {
         RateLimitFilter filter = filterFor("limited", "10.0.0.1");
         ContainerRequestContext request = request(null, null, "10.0.0.1");
         ContainerResponseContext response = response(401);
-        filter.filter(request, response);
-        verify(response, never()).setStatus(Response.Status.TOO_MANY_REQUESTS.getStatusCode());
-        filter.filter(request, response);
+        HttpServletRequest servlet = mock(HttpServletRequest.class);
+        when(servlet.getRemoteAddr()).thenReturn("10.0.0.1");
+        try (TestContext ignored = TestContext.open(servlet, null)) {
+            filter.filter(request, response);
+            verify(response, never()).setStatus(Response.Status.TOO_MANY_REQUESTS.getStatusCode());
+            filter.filter(request, response);
+        }
         verify(response).setStatus(429);
         verify(response).setEntity("Too many failed attempts. Please try again later.");
     }
@@ -51,8 +55,12 @@ class RateLimitFilterTest {
         RateLimitFilter filter = filterFor("limited", remote);
         ContainerRequestContext request = request(forwarded, real, remote);
         ContainerResponseContext response = response(401);
-        filter.filter(request, response);
-        filter.filter(request, response);
+        HttpServletRequest servlet = mock(HttpServletRequest.class);
+        when(servlet.getRemoteAddr()).thenReturn(remote);
+        try (TestContext ignored = TestContext.open(servlet, null)) {
+            filter.filter(request, response);
+            filter.filter(request, response);
+        }
         verify(response).setStatus(429);
     }
 
@@ -62,9 +70,6 @@ class RateLimitFilterTest {
         when(info.getResourceMethod()).thenReturn(DummyResource.class.getDeclaredMethod(methodName));
         when(info.getResourceClass()).thenReturn((Class) DummyResource.class);
         inject(filter, "resourceInfo", info);
-        HttpServletRequest servlet = mock(HttpServletRequest.class);
-        when(servlet.getRemoteAddr()).thenReturn(remote);
-        inject(filter, "servletRequest", servlet);
         return filter;
     }
 

@@ -1,5 +1,6 @@
 package com.github.gcolin.registration;
 
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.membership.LicensePriceService;
 import com.github.gcolin.membership.Membership;
@@ -58,20 +60,23 @@ class ClubRegisterApiUnitTest {
             when(memberships.findByUser("member@test.com")).thenReturn(List.of(membership));
             when(subscriptions.findByMembershipIds(List.of(4))).thenReturn(List.of(subscription(option)));
             when(service.resolveStoredFile(file)).thenReturn(path);
-            inject(api, "membershipOptionFileDao", files);
-            inject(api, "membershipOptionFileService", service);
-            inject(api, "membershipDao", memberships);
-            inject(api, "membershipOptionSubscriptionDao", subscriptions);
-            inject(api, "loggedUser", user);
+            try (TestContext tc = TestContext.open(app -> {
+                app.setMembershipOptionFileService(service);
+            }, ctx -> {
+                ctx.setMembershipOptionFileDao(files);
+                ctx.setMembershipDao(memberships);
+                ctx.setMembershipOptionSubscriptionDao(subscriptions);
+                ctx.setLoggedUser(user);
+            })) {
+                Response response = api.downloadSharedFile(1);
+                assertEquals(200, response.getStatus());
+                assertEquals("application/pdf", response.getMediaType().toString());
+                assertEquals("attachment; filename*=UTF-8''my%20file.pdf",
+                        response.getHeaderString("Content-Disposition"));
 
-            Response response = api.downloadSharedFile(1);
-            assertEquals(200, response.getStatus());
-            assertEquals("application/pdf", response.getMediaType().toString());
-            assertEquals("attachment; filename*=UTF-8''my%20file.pdf",
-                    response.getHeaderString("Content-Disposition"));
-
-            when(subscriptions.findByMembershipIds(List.of(4))).thenReturn(List.of());
-            assertThrowsStatus(403, () -> api.downloadSharedFile(1));
+                when(subscriptions.findByMembershipIds(List.of(4))).thenReturn(List.of());
+                assertThrowsStatus(403, () -> api.downloadSharedFile(1));
+            }
         } finally {
             Files.deleteIfExists(path);
         }
@@ -89,14 +94,18 @@ class ClubRegisterApiUnitTest {
         membership.setStatus(MembershipStatus.PENDING_CONFIRMATION);
         when(user.getEmail()).thenReturn("member@test.com");
         when(dao.find(8)).thenReturn(membership);
-        inject(api, "membershipDao", dao);
-        inject(api, "loggedUser", user);
-        inject(api, "caches", caches);
-        inject(api, "uriInfo", uriInfo());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(caches);
+        }, ctx -> {
+            ctx.setMembershipDao(dao);
+            ctx.setLoggedUser(user);
+        })) {
+            RequestContext.require().setUriInfo(uriInfo());
 
-        assertEquals(303, api.confirmMembership(8).getStatus());
-        assertEquals(MembershipStatus.APPROVED, membership.getStatus());
-        verify(dao).merge(membership);
+            assertEquals(303, api.confirmMembership(8).getStatus());
+            assertEquals(MembershipStatus.APPROVED, membership.getStatus());
+            verify(dao).merge(membership);
+        }
     }
 
     @Test
@@ -105,14 +114,17 @@ class ClubRegisterApiUnitTest {
         MembershipDao dao = mock(MembershipDao.class);
         LoggedUser user = mock(LoggedUser.class);
         when(user.getEmail()).thenReturn("other@test.com");
-        inject(api, "membershipDao", dao);
-        inject(api, "loggedUser", user);
-        when(dao.find(1)).thenReturn(null);
-        assertThrowsStatus(404, () -> api.confirmMembership(1));
-        Membership membership = new Membership();
-        membership.setUser("owner@test.com");
-        when(dao.find(1)).thenReturn(membership);
-        assertThrowsStatus(403, () -> api.confirmMembership(1));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(dao);
+            ctx.setLoggedUser(user);
+        })) {
+            when(dao.find(1)).thenReturn(null);
+            assertThrowsStatus(404, () -> api.confirmMembership(1));
+            Membership membership = new Membership();
+            membership.setUser("owner@test.com");
+            when(dao.find(1)).thenReturn(membership);
+            assertThrowsStatus(403, () -> api.confirmMembership(1));
+        }
     }
 
     @Test
@@ -120,12 +132,15 @@ class ClubRegisterApiUnitTest {
         ClubRegisterApi api = new ClubRegisterApi();
         LicensePriceService prices = mock(LicensePriceService.class);
         when(prices.getLicensePrice(anyString(), any(Character.class))).thenReturn(1234);
-        inject(api, "licensePriceService", prices);
-        Method method = ClubRegisterApi.class.getDeclaredMethod("calculateLicensePriceCents", String.class, char.class);
-        method.setAccessible(true);
-        assertNull(method.invoke(api, "xx", 'A'));
-        assertEquals(1234, method.invoke(api, "2010-01-01", 'A'));
-        assertNull(method.invoke(api, "20x0", 'A'));
+        try (TestContext tc = TestContext.openApp(app -> {
+            app.setLicensePriceService(prices);
+        })) {
+            Method method = ClubRegisterApi.class.getDeclaredMethod("calculateLicensePriceCents", String.class, char.class);
+            method.setAccessible(true);
+            assertNull(method.invoke(api, "xx", 'A'));
+            assertEquals(1234, method.invoke(api, "2010-01-01", 'A'));
+            assertNull(method.invoke(api, "20x0", 'A'));
+        }
     }
 
     @Test
@@ -133,8 +148,11 @@ class ClubRegisterApiUnitTest {
         ClubRegisterApi api = new ClubRegisterApi();
         MembershipOptionFileDao dao = mock(MembershipOptionFileDao.class);
         when(dao.findWithOption(2)).thenReturn(null);
-        inject(api, "membershipOptionFileDao", dao);
-        assertThrowsStatus(404, () -> api.downloadSharedFile(2));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipOptionFileDao(dao);
+        })) {
+            assertThrowsStatus(404, () -> api.downloadSharedFile(2));
+        }
     }
 
     private static MembershipOptionSubscription subscription(MembershipOption option) {
@@ -163,9 +181,4 @@ class ClubRegisterApiUnitTest {
         throw new AssertionError("Expected HTTP " + status);
     }
 
-    private static void inject(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

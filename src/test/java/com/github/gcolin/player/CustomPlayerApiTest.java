@@ -1,5 +1,8 @@
 package com.github.gcolin.player;
 
+import com.github.gcolin.platform.ApiTestBase;
+
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -7,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.player.CustomPlayer;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.registration.PlayerSubscription;
@@ -28,7 +32,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.github.gcolin.platform.MustacheHtml;
 
-class CustomPlayerApiTest {
+class CustomPlayerApiTest extends ApiTestBase {
 
     @Test
     void playersShouldPaginateAndReturnModel() throws Exception {
@@ -41,29 +45,36 @@ class CustomPlayerApiTest {
         PagedList<CustomPlayer> paged = new PagedList<>(List.of(p), 0, 50);
         when(dao.pageSorted(0, 25)).thenReturn(paged);
 
-        inject(api, "customPlayerService", dao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setCustomPlayerDao(dao);
+        })) {
 
-        MustacheHtml html = api.players(1, 25);
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.players(1, 25);
+            Map<String, Object> model = html.getModel();
 
-        assertEquals("player/players.mustache", html.getTemplate());
-        assertEquals(1, model.get("currentPage"));
-        assertEquals(25, model.get("pageSize"));
-        assertEquals(50L, model.get("totalItems"));
-        assertTrue((Boolean) model.get("hasNext"));
-        assertFalse((Boolean) model.get("hasPrev"));
+            assertEquals("player/players.mustache", html.getTemplate());
+            assertEquals(1, model.get("currentPage"));
+            assertEquals(25, model.get("pageSize"));
+            assertEquals(50L, model.get("totalItems"));
+            assertTrue((Boolean) model.get("hasNext"));
+            assertFalse((Boolean) model.get("hasPrev"));
+        }
     }
 
     @Test
     void newplayerShouldReturnTemplateWithDefaultPlayer() throws Exception {
         CustomPlayerApi api = new CustomPlayerApi();
 
-        MustacheHtml html = api.newplayer(null);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setLoggedUser(mock(LoggedUser.class));
+        })) {
+            MustacheHtml html = api.newplayer(null);
 
-        assertEquals("player/customplayer.mustache", html.getTemplate());
-        CustomPlayer player = (CustomPlayer) html.getModel().get("player");
-        assertEquals("", player.getName());
-        assertEquals("", player.getElo());
+            assertEquals("player/customplayer.mustache", html.getTemplate());
+            CustomPlayer player = (CustomPlayer) html.getModel().get("player");
+            assertEquals("", player.getName());
+            assertEquals("", player.getElo());
+        }
     }
 
     @Test
@@ -77,12 +88,16 @@ class CustomPlayerApiTest {
 
         when(dao.find(3)).thenReturn(player);
 
-        inject(api, "customPlayerService", dao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setCustomPlayerDao(dao);
+            ctx.setLoggedUser(mock(LoggedUser.class));
+        })) {
 
-        MustacheHtml html = api.edit(3, null);
+            MustacheHtml html = api.edit(3, null);
 
-        assertEquals("player/customplayer.mustache", html.getTemplate());
-        assertEquals(player, html.getModel().get("player"));
+            assertEquals("player/customplayer.mustache", html.getTemplate());
+            assertEquals(player, html.getModel().get("player"));
+        }
     }
 
     @Test
@@ -94,17 +109,21 @@ class CustomPlayerApiTest {
         when(user.getEmail()).thenReturn("user@test.com");
         when(user.isAdmin()).thenReturn(false);
 
-        inject(api, "customPlayerService", dao);
-        inject(api, "loggerUser", user);
-        inject(api, "caches", new Caches());
-        inject(api, "registerService", mock(RegisterService.class));
-        inject(api, "eventService", mock(EventDao.class));
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?success=register")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setCustomPlayerDao(dao);
+            ctx.setLoggedUser(user);
+            ctx.setRegisterService(mock(RegisterService.class));
+            ctx.setEventDao(mock(EventDao.class));
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my?success=register")));
 
-        Response response = api.save(null, null, "LIC", "Smith", "1990", "John", "true", "1800");
+            Response response = api.save(null, null, "LIC", "Smith", "1990", "John", "true", "1800");
 
-        assertEquals(303, response.getStatus());
-        verify(dao).persist(org.mockito.ArgumentMatchers.any(CustomPlayer.class));
+            assertEquals(303, response.getStatus());
+            verify(dao).persist(org.mockito.ArgumentMatchers.any(CustomPlayer.class));
+        }
     }
 
     @Test
@@ -130,35 +149,22 @@ class CustomPlayerApiTest {
                         org.mockito.ArgumentMatchers.eq("user@test.com")))
                 .thenReturn(sub);
 
-        inject(api, "customPlayerService", dao);
-        inject(api, "loggerUser", user);
-        inject(api, "caches", new Caches());
-        inject(api, "registerService", registerService);
-        inject(api, "eventService", eventDao);
-        inject(api, "find", mock(Find.class));
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/5?success=register")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setCustomPlayerDao(dao);
+            ctx.setLoggedUser(user);
+            ctx.setRegisterService(registerService);
+            ctx.setEventDao(eventDao);
+            ctx.setFind(mock(Find.class));
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/5?success=register")));
 
-        Response response = api.save(null, 5, "LIC", "Smith", "1990", "John", "false", "1600");
+            Response response = api.save(null, 5, "LIC", "Smith", "1990", "John", "false", "1600");
 
-        assertEquals(303, response.getStatus());
+            assertEquals(303, response.getStatus());
+        }
     }
 
-    private static UriInfo mockUriInfo(URI target) {
-        UriInfo uriInfo = mock(UriInfo.class);
-        UriBuilder uriBuilder = mock(UriBuilder.class);
 
-        when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
-        when(uriBuilder.path(org.mockito.ArgumentMatchers.anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.queryParam(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
-                .thenReturn(uriBuilder);
-        when(uriBuilder.build()).thenReturn(target);
-
-        return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

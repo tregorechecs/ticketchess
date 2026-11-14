@@ -1,5 +1,8 @@
 package com.github.gcolin.event;
 
+import com.github.gcolin.platform.ApiTestBase;
+
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +16,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.event.EventCollection;
@@ -54,7 +58,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.github.gcolin.platform.MustacheHtml;
 
-class EventApiTest {
+class EventApiTest extends ApiTestBase {
 
     @Test
     void eventsShouldUseCacheOnSecondCall() throws Exception {
@@ -71,18 +75,22 @@ class EventApiTest {
         when(eventGroupFilter.getAll(null)).thenReturn(List.<SelectItem>of());
         when(clubSeasonFilter.resolve(null)).thenReturn(SeasonScope.all());
 
-        inject(api, "caches", caches);
-        inject(api, "eventService", eventDao);
-        inject(api, "eventGroupFilter", eventGroupFilter);
-        inject(api, "clubSeasonFilter", clubSeasonFilter);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(caches);
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setEventGroupFilter(eventGroupFilter);
+            ctx.setClubSeasonFilter(clubSeasonFilter);
+        })) {
 
-        MustacheHtml first = api.events("ACTIVE", null);
-        MustacheHtml second = api.events("ACTIVE", null);
+            MustacheHtml first = api.events("ACTIVE", null);
+            MustacheHtml second = api.events("ACTIVE", null);
 
-        assertEquals("event/events.mustache", first.getTemplate());
-        assertEquals("event/events.mustache", second.getTemplate());
-        verify(eventDao, times(1)).findByStatus(eq(EventStatus.ACTIVE), any(SeasonScope.class));
-        verify(eventDao, times(1)).detachAll(anyList());
+            assertEquals("event/events.mustache", first.getTemplate());
+            assertEquals("event/events.mustache", second.getTemplate());
+            verify(eventDao, times(1)).findByStatus(eq(EventStatus.ACTIVE), any(SeasonScope.class));
+            verify(eventDao, times(1)).detachAll(anyList());
+        }
     }
 
     @Test
@@ -100,17 +108,21 @@ class EventApiTest {
 
         when(eventDao.buildCache(33)).thenReturn(eventCache);
 
-        inject(api, "caches", caches);
-        inject(api, "eventService", eventDao);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(caches);
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+        })) {
 
-        MustacheHtml first = api.event(33, "ok");
-        MustacheHtml second = api.event(33, "ok");
+            MustacheHtml first = api.event(33, "ok");
+            MustacheHtml second = api.event(33, "ok");
 
-        assertEquals("event/event.mustache", first.getTemplate());
-        assertEquals("event/event.mustache", second.getTemplate());
-        assertEquals(event, first.getModel().get("event"));
-        assertEquals(List.of(), first.getModel().get("missingPlayers"));
-        verify(eventDao, times(1)).buildCache(33);
+            assertEquals("event/event.mustache", first.getTemplate());
+            assertEquals("event/event.mustache", second.getTemplate());
+            assertEquals(event, first.getModel().get("event"));
+            assertEquals(List.of(), first.getModel().get("missingPlayers"));
+            verify(eventDao, times(1)).buildCache(33);
+        }
     }
 
     @Test
@@ -135,13 +147,17 @@ class EventApiTest {
 
         when(eventDao.buildCache(44)).thenReturn(eventCache);
 
-        inject(api, "caches", caches);
-        inject(api, "eventService", eventDao);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(caches);
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+        })) {
 
-        MustacheHtml html = api.event(44, null);
+            MustacheHtml html = api.event(44, null);
 
-        assertEquals("event/event.mustache", html.getTemplate());
-        assertEquals(event, html.getModel().get("event"));
+            assertEquals("event/event.mustache", html.getTemplate());
+            assertEquals(event, html.getModel().get("event"));
+        }
     }
 
     @Test
@@ -166,50 +182,52 @@ class EventApiTest {
         when(eventCollectionDao.allOrdered()).thenReturn(List.of());
         when(eventGroupDao.all()).thenReturn(List.of());
 
-        inject(api, "eventService", eventDao);
-        inject(api, "eventOptionService", eventOptionDao);
-        inject(api, "eventGroupService", eventGroupDao);
-        inject(api, "eventCollectionService", eventCollectionDao);
 
         LoggedUser loggedUser = mock(LoggedUser.class);
         when(loggedUser.hasRole(RoleCode.ARBITRE)).thenReturn(true);
-        inject(api, "loggerUser", loggedUser);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setEventOptionDao(eventOptionDao);
+            ctx.setEventGroupDao(eventGroupDao);
+            ctx.setEventCollectionDao(eventCollectionDao);
+            ctx.setLoggedUser(loggedUser);
+        })) {
 
-        MustacheHtml html = api.edit(5, "save");
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.edit(5, "save");
+            Map<String, Object> model = html.getModel();
 
-        assertEquals("event/eventEdit.mustache", html.getTemplate());
-        assertEquals(event, model.get("event"));
-        assertEquals("hello", ((Event) model.get("event")).getDescription());
-        assertEquals("save", model.get("success"));
-        @SuppressWarnings("unchecked")
-        Map<String, String> options = (Map<String, String>) model.get("eventOptions");
-        assertEquals("abc", options.get("FFE_ID"));
+            assertEquals("event/eventEdit.mustache", html.getTemplate());
+            assertEquals(event, model.get("event"));
+            assertEquals("hello", ((Event) model.get("event")).getDescription());
+            assertEquals("save", model.get("success"));
+            @SuppressWarnings("unchecked")
+            Map<String, String> options = (Map<String, String>) model.get("eventOptions");
+            assertEquals("abc", options.get("FFE_ID"));
+        }
     }
 
     @Test
     void editWithoutIdShouldReturnEventEditTemplate() {
         EventApi api = new EventApi();
 
-        try {
-            EventCollectionDao eventCollectionDao = mock(EventCollectionDao.class);
-            EventGroupDao eventGroupDao = mock(EventGroupDao.class);
-            when(eventCollectionDao.allOrdered()).thenReturn(List.of());
-            when(eventGroupDao.all()).thenReturn(List.of());
-            inject(api, "eventGroupService", eventGroupDao);
-            inject(api, "eventCollectionService", eventCollectionDao);
+        EventCollectionDao eventCollectionDao = mock(EventCollectionDao.class);
+        EventGroupDao eventGroupDao = mock(EventGroupDao.class);
+        when(eventCollectionDao.allOrdered()).thenReturn(List.of());
+        when(eventGroupDao.all()).thenReturn(List.of());
 
-            LoggedUser loggedUser = mock(LoggedUser.class);
-            when(loggedUser.hasRole(RoleCode.ARBITRE)).thenReturn(true);
-            inject(api, "loggerUser", loggedUser);
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
+        LoggedUser loggedUser = mock(LoggedUser.class);
+        when(loggedUser.hasRole(RoleCode.ARBITRE)).thenReturn(true);
+
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventGroupDao(eventGroupDao);
+            ctx.setEventCollectionDao(eventCollectionDao);
+            ctx.setLoggedUser(loggedUser);
+        })) {
+            MustacheHtml html = api.edit(null, null);
+
+            assertEquals("event/eventEdit.mustache", html.getTemplate());
+            assertTrue(html.getModel().get("event") instanceof Event);
         }
-
-        MustacheHtml html = api.edit(null, null);
-
-        assertEquals("event/eventEdit.mustache", html.getTemplate());
-        assertTrue(html.getModel().get("event") instanceof Event);
     }
 
     @Test
@@ -217,18 +235,22 @@ class EventApiTest {
         EventApi api = new EventApi();
         EventDao eventDao = mock(EventDao.class);
 
-        inject(api, "eventOptionService", mock(EventOptionDao.class));
-        inject(api, "eventService", eventDao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/9/edit?success=save")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventOptionDao(mock(EventOptionDao.class));
+            ctx.setEventDao(eventDao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/9/edit?success=save")));
 
-        Response response = api.postEventEdit(
-                true, false, 9, "desc", null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null);
+            Response response = api.postEventEdit(
+                    true, false, 9, "desc", null, null, null, null, null, null, null, null, null, null, null, null,
+                    null, null, null, null, null, null);
 
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/9/edit?success=save"), response.getLocation());
-        verify(eventDao).updateDescription(9, "desc");
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/9/edit?success=save"), response.getLocation());
+            verify(eventDao).updateDescription(9, "desc");
+        }
     }
 
     @Test
@@ -246,20 +268,24 @@ class EventApiTest {
         EventApi api = new EventApi();
         EventOptionDao optionDao = mock(EventOptionDao.class);
 
-        inject(api, "eventOptionService", optionDao);
-        inject(api, "eventService", mock(EventDao.class));
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/11/edit?success=save")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventOptionDao(optionDao);
+            ctx.setEventDao(mock(EventDao.class));
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/11/edit?success=save")));
 
-        Response response = api.postEventEdit(
-                false, true, 11, null, "login", null, null, "pwd", null, null, null, null, null, null, null,
-                null, null, null, null, null, null, "1");
+            Response response = api.postEventEdit(
+                    false, true, 11, null, "login", null, null, "pwd", null, null, null, null, null, null, null,
+                    null, null, null, null, null, null, "1");
 
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/11/edit?success=save"), response.getLocation());
-        verify(optionDao).setOption(11, EventOptionType.FFE_ID, "login");
-        verify(optionDao).setOption(11, EventOptionType.FFE_PASSWORD, "pwd");
-        verify(optionDao).setOption(11, EventOptionType.POINTAGE, "1");
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/11/edit?success=save"), response.getLocation());
+            verify(optionDao).setOption(11, EventOptionType.FFE_ID, "login");
+            verify(optionDao).setOption(11, EventOptionType.FFE_PASSWORD, "pwd");
+            verify(optionDao).setOption(11, EventOptionType.POINTAGE, "1");
+        }
     }
 
     @Test
@@ -278,17 +304,21 @@ class EventApiTest {
         when(subDao.findByEventAndNrffe(event, "A1")).thenReturn(null);
         when(user.getEmail()).thenReturn("u@test.com");
 
-        inject(api, "caches", caches);
-        inject(api, "registerService", registerService);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my")));
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "loggerUser", user);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(caches);
+        }, ctx -> {
+            ctx.setRegisterService(registerService);
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setLoggedUser(user);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my")));
 
-        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> api.unregister(12, "A1"));
+            WebApplicationException ex = assertThrows(WebApplicationException.class, () -> api.unregister(12, "A1"));
 
-        assertEquals(404, ex.getResponse().getStatus());
-        assertNotNull(ex.getMessage());
+            assertEquals(404, ex.getResponse().getStatus());
+            assertNotNull(ex.getMessage());
+        }
     }
 
     @Test
@@ -307,13 +337,16 @@ class EventApiTest {
         when(subDao.findByEventAndNrffe(event, "A1")).thenReturn(sub);
         when(user.getEmail()).thenReturn("attacker@test.com");
 
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "loggerUser", user);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setLoggedUser(user);
+        })) {
 
-        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> api.unregister(12, "A1"));
+            WebApplicationException ex = assertThrows(WebApplicationException.class, () -> api.unregister(12, "A1"));
 
-        assertEquals(403, ex.getResponse().getStatus());
+            assertEquals(403, ex.getResponse().getStatus());
+        }
     }
 
     @Test
@@ -339,17 +372,21 @@ class EventApiTest {
         when(user.getEmail()).thenReturn("u@test.com");
         when(registerService.unregisterPlayerToEvent(20, "B2")).thenReturn(true);
 
-        inject(api, "caches", caches);
-        inject(api, "registerService", registerService);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my")));
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "loggerUser", user);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(caches);
+        }, ctx -> {
+            ctx.setRegisterService(registerService);
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setLoggedUser(user);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my")));
 
-        Response response = api.unregister(20, "B2");
+            Response response = api.unregister(20, "B2");
 
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/my"), response.getLocation());
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/my"), response.getLocation());
+        }
     }
 
     @Test
@@ -387,23 +424,26 @@ class EventApiTest {
         when(find.player("123456", null)).thenReturn(player);
         when(paymentDao.findAllPaidNotFreeByUser("u@test.com")).thenReturn(List.of());
 
-        inject(api, "playerSubscriptionService", subscriptionDao);
-        inject(api, "playerPendingSubscriptionDao", pendingDao);
-        inject(api, "loggerUser", user);
-        inject(api, "find", find);
-        inject(api, "paymentDao", paymentDao);
-        inject(api, "config", mockConfig());
-        inject(api, "properties", new java.util.Properties());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?display=all")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(mockConfig());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subscriptionDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setLoggedUser(user);
+            ctx.setFind(find);
+            ctx.setPaymentDao(paymentDao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my?display=all")));
 
-        MustacheHtml html = api.myevents(null, "all");
+            MustacheHtml html = api.myevents(null, "all");
 
-        assertEquals("event/myevents.mustache", html.getTemplate());
-        @SuppressWarnings("unchecked")
-        List<Event> pendingEvents = (List<Event>) html.getModel().get("pendingEvents");
-        assertEquals(1, pendingEvents.size());
-        assertEquals("Pending Event", pendingEvents.get(0).getName());
-        assertEquals(1, pendingEvents.get(0).getPlayers().size());
+            assertEquals("event/myevents.mustache", html.getTemplate());
+            @SuppressWarnings("unchecked")
+            List<Event> pendingEvents = (List<Event>) html.getModel().get("pendingEvents");
+            assertEquals(1, pendingEvents.size());
+            assertEquals("Pending Event", pendingEvents.get(0).getName());
+            assertEquals(1, pendingEvents.get(0).getPlayers().size());
+        }
     }
 
     @Test
@@ -461,23 +501,26 @@ class EventApiTest {
         when(find.player("123456", null)).thenReturn(player);
         when(paymentDao.findAllPaidNotFreeByUser("u@test.com")).thenReturn(List.of());
 
-        inject(api, "playerSubscriptionService", subscriptionDao);
-        inject(api, "playerPendingSubscriptionDao", pendingDao);
-        inject(api, "eventCollectionOptionService", eventCollectionOptionDao);
-        inject(api, "loggerUser", user);
-        inject(api, "find", find);
-        inject(api, "paymentDao", paymentDao);
-        inject(api, "config", mockConfig());
-        inject(api, "properties", new java.util.Properties());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?display=all")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(mockConfig());
+        }, ctx -> {
+            ctx.setPlayerSubscriptionDao(subscriptionDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setEventCollectionOptionDao(eventCollectionOptionDao);
+            ctx.setLoggedUser(user);
+            ctx.setFind(find);
+            ctx.setPaymentDao(paymentDao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my?display=all")));
 
-        MustacheHtml html = api.myevents(null, "all");
+            MustacheHtml html = api.myevents(null, "all");
 
-        @SuppressWarnings("unchecked")
-        List<Event> pendingEvents = (List<Event>) html.getModel().get("pendingEvents");
-        assertEquals(1, pendingEvents.size());
-        DisplayPlayer pendingPlayer = pendingEvents.get(0).getPlayers().get(0);
-        assertEquals(1, pendingPlayer.getPendingQueueAhead());
+            @SuppressWarnings("unchecked")
+            List<Event> pendingEvents = (List<Event>) html.getModel().get("pendingEvents");
+            assertEquals(1, pendingEvents.size());
+            DisplayPlayer pendingPlayer = pendingEvents.get(0).getPlayers().get(0);
+            assertEquals(1, pendingPlayer.getPendingQueueAhead());
+        }
     }
 
     @Test
@@ -500,40 +543,29 @@ class EventApiTest {
         when(user.getEmail()).thenReturn("u@test.com");
         when(pendingDao.findByEventAndNrffeAndCreationUser(event, "123456", "u@test.com")).thenReturn(pending);
 
-        inject(api, "eventService", eventDao);
-        inject(api, "playerPendingSubscriptionDao", pendingDao);
-        inject(api, "loggerUser", user);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerPendingSubscriptionDao(pendingDao);
+            ctx.setLoggedUser(user);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my")));
 
-        Response response = api.unregisterPending(2, "123456");
+            Response response = api.unregisterPending(2, "123456");
 
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/my"), response.getLocation());
-        verify(pendingDao).remove(pending);
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/my"), response.getLocation());
+            verify(pendingDao).remove(pending);
+        }
     }
 
     private static Config mockConfig() {
         Config config = mock(Config.class);
         when(config.getPendingQueueOffset()).thenReturn(0);
+        when(config.getProperties()).thenReturn(new java.util.Properties());
         return config;
     }
 
-    private static UriInfo mockUriInfo(URI target) {
-        UriInfo uriInfo = mock(UriInfo.class);
-        UriBuilder uriBuilder = mock(UriBuilder.class);
 
-        when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
-        when(uriBuilder.path(anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.queryParam(anyString(), anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.build()).thenReturn(target);
-
-        return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

@@ -1,5 +1,6 @@
 package com.github.gcolin.membership;
 
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -10,6 +11,7 @@ import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.platform.SendMail;
+import com.github.gcolin.platform.TestContext;
 import io.jsonwebtoken.security.Keys;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
@@ -23,17 +25,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import javax.crypto.SecretKey;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class MembershipOptionFileAdminApiTest {
     @TempDir Path temp;
 
-    private static void inject(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
+    private TestContext tc;
+
+    @AfterEach
+    void closeContext() {
+        if (tc != null) {
+            tc.close();
+            tc = null;
+        }
     }
+
 
     private static UriInfo uriInfo() {
         UriInfo info = mock(UriInfo.class);
@@ -84,15 +92,20 @@ class MembershipOptionFileAdminApiTest {
         when(config.getProperties()).thenReturn(properties);
         when(config.getKeys()).thenReturn(Keys.hmacShaKeyFor(
                 "integration-test-jwt-key-not-for-production-use-only-pad".getBytes()));
-        inject(api, "membershipOptionDao", options);
-        inject(api, "membershipOptionFileDao", files);
-        inject(api, "membershipOptionFileService", service);
-        inject(api, "membershipOptionSubscriptionDao", subscriptions);
-        inject(api, "loggedUser", mock(LoggedUser.class));
-        inject(api, "clubSeasonFilter", seasons);
-        inject(api, "config", config);
-        inject(api, "sendMail", mock(SendMail.class));
-        inject(api, "uriInfo", uriInfo());
+        LoggedUser loggedUser = mock(LoggedUser.class);
+        SendMail sendMail = mock(SendMail.class);
+        tc = TestContext.open(app -> {
+            app.setConfig(config);
+            app.setSendMail(sendMail);
+            app.setMembershipOptionFileService(service);
+        }, ctx -> {
+            ctx.setMembershipOptionDao(options);
+            ctx.setMembershipOptionFileDao(files);
+            ctx.setMembershipOptionSubscriptionDao(subscriptions);
+            ctx.setLoggedUser(loggedUser);
+            ctx.setClubSeasonFilter(seasons);
+        });
+        RequestContext.require().setUriInfo(uriInfo());
         return api;
     }
 

@@ -27,14 +27,17 @@ class HomeApiTest {
         when(uriBuilder.path(anyString())).thenReturn(uriBuilder);
         when(uriBuilder.build()).thenReturn(target);
 
-        Field field = HomeApi.class.getDeclaredField("uriInfo");
-        field.setAccessible(true);
-        field.set(api, uriInfo);
+        Page page = mock(Page.class);
+        when(page.isEventsEnabled()).thenReturn(true);
+        Config config = mock(Config.class);
+        when(config.pageForRequest()).thenReturn(page);
 
-        Response response = api.home();
+        try (TestContext tc = TestContext.open(app -> app.setConfig(config), ctx -> ctx.setUriInfo(uriInfo))) {
+            Response response = api.home();
 
-        assertNotNull(response);
-        assertEquals(303, response.getStatus());
-        assertEquals(target, response.getLocation());
+            assertNotNull(response);
+            assertEquals(303, response.getStatus());
+            assertEquals(target, response.getLocation());
+        }
     }
 }

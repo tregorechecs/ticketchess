@@ -1,6 +1,8 @@
 package com.github.gcolin.registration;
 
 import com.github.gcolin.auth.LoggedOnly;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.club.ClubSeason;
 import com.github.gcolin.club.ClubSeasonDao;
 import com.github.gcolin.club.SeasonScope;
@@ -31,14 +33,12 @@ import com.github.gcolin.platform.Caches;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.platform.BroadcastMail;
 import com.github.gcolin.platform.SendMail;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.StreamingOutput;
@@ -74,57 +74,6 @@ public class ClubRegisterApi {
     private static final LocalDate LICENSE_REFERENCE_DATE = LocalDate.of(2026, 9, 30);
     private static final Logger logger = LoggerFactory.getLogger(ClubRegisterApi.class);
 
-    @Inject
-    private LuceneDb luceneDb;
-
-    @Inject
-    private LoggedUser loggedUser;
-
-    @Inject
-    private Find find;
-
-    @Inject
-    private MembershipOptionDao membershipOptionDao;
-
-    @Inject
-    private MembershipDao membershipDao;
-
-    @Inject
-    private MembershipOptionSubscriptionDao membershipOptionSubscriptionDao;
-
-    @Inject
-    private MembershipOptionFileDao membershipOptionFileDao;
-
-    @Inject
-    private MembershipOptionFileService membershipOptionFileService;
-
-    @Inject
-    private LicenseDao licenseDao;
-
-    @Inject
-    private LicensePriceService licensePriceService;
-
-    @Inject
-    private SendMail sendMail;
-
-    @Inject
-    private Properties properties;
-
-    @Inject
-    private ClubSeasonDao clubSeasonDao;
-
-    @Inject
-    private DebtService debtService;
-
-    @Inject
-    private PaymentDao paymentDao;
-
-    @Inject
-    private Caches caches;
-
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public MustacheHtml page(@QueryParam("query") String query, @QueryParam("success") String success) {
         Map<String, Object> model = new HashMap<>();
@@ -134,28 +83,28 @@ public class ClubRegisterApi {
         model.put("clubRegisterDescriptionKey", "clubRegister.description");
         model.put("query", query);
         model.put("success", success);
-        ClubSeason currentSeason = clubSeasonDao.findCurrent();
+        ClubSeason currentSeason = RequestContext.require().clubSeasonDao().findCurrent();
         SeasonScope scope = currentSeason != null ? SeasonScope.of(currentSeason) : SeasonScope.all();
         model.put("clubSeasonName", currentSeason != null ? currentSeason.getName() : "");
 
-        boolean isLogged = loggedUser != null && loggedUser.getEmail() != null;
+        boolean isLogged = RequestContext.require().loggedUser() != null && RequestContext.require().loggedUser().getEmail() != null;
         if (isLogged) {
-            List<Membership> memberships = membershipDao.findByUser(loggedUser.getEmail(), scope);
+            List<Membership> memberships = RequestContext.require().membershipDao().findByUser(RequestContext.require().loggedUser().getEmail(), scope);
             model.put("memberships", memberships);
-            model.put("membershipDebt", debtService.calculateMembershipDebt(loggedUser.getEmail(), scope));
-            model.put("stripePublic", Config.getStripePublicKey(properties));
-            model.put("stripeSimulated", Config.isStripeSimulated(properties));
-            model.put("stripeCardMembershipsEnabled", Config.isStripeCardEnabledForMemberships(properties));
-            model.put("bankTransferMembershipsEnabled", Config.isBankTransferEnabledForMemberships(properties));
-            model.put("paidMembershipPayments", paymentDao.findAllPaidWithMembershipsByUser(loggedUser.getEmail()));
-            model.put("paidDonationPayments", paymentDao.findAllPaidDonationsByUser(loggedUser.getEmail()));
+            model.put("membershipDebt", RequestContext.require().debtService().calculateMembershipDebt(RequestContext.require().loggedUser().getEmail(), scope));
+            model.put("stripePublic", Config.getStripePublicKey(AppContext.get().config().getProperties()));
+            model.put("stripeSimulated", Config.isStripeSimulated(AppContext.get().config().getProperties()));
+            model.put("stripeCardMembershipsEnabled", Config.isStripeCardEnabledForMemberships(AppContext.get().config().getProperties()));
+            model.put("bankTransferMembershipsEnabled", Config.isBankTransferEnabledForMemberships(AppContext.get().config().getProperties()));
+            model.put("paidMembershipPayments", RequestContext.require().paymentDao().findAllPaidWithMembershipsByUser(RequestContext.require().loggedUser().getEmail()));
+            model.put("paidDonationPayments", RequestContext.require().paymentDao().findAllPaidDonationsByUser(RequestContext.require().loggedUser().getEmail()));
             List<Integer> membershipIds = memberships.stream().map(Membership::getId).collect(Collectors.toList());
             Map<String, List<MembershipOptionSubscription>> subscriptionsByMembership =
-                membershipOptionSubscriptionDao.findByMembershipIds(membershipIds).stream()
+                RequestContext.require().membershipOptionSubscriptionDao().findByMembershipIds(membershipIds).stream()
                     .collect(Collectors.groupingBy(s -> s.getMembership().getId().toString()));
             model.put("membershipSubscriptions", subscriptionsByMembership);
 
-            List<MembershipOptionSubscription> allSubscriptions = membershipOptionSubscriptionDao.findByMembershipIds(membershipIds);
+            List<MembershipOptionSubscription> allSubscriptions = RequestContext.require().membershipOptionSubscriptionDao().findByMembershipIds(membershipIds);
             Map<Integer, MembershipOption> optionsById = new LinkedHashMap<>();
             for (MembershipOptionSubscription sub : allSubscriptions) {
                 MembershipOption option = sub.getMembershipOption();
@@ -164,7 +113,7 @@ public class ClubRegisterApi {
                 }
             }
             List<Integer> optionIds = new ArrayList<>(optionsById.keySet());
-            List<MembershipOptionFile> optionFiles = membershipOptionFileDao.findByOptionIds(optionIds);
+            List<MembershipOptionFile> optionFiles = RequestContext.require().membershipOptionFileDao().findByOptionIds(optionIds);
             Map<String, List<MembershipOptionFile>> filesByOptionId = optionFiles.stream()
                     .collect(Collectors.groupingBy(
                             f -> f.getMembershipOption().getId().toString(), LinkedHashMap::new, Collectors.toList()));
@@ -177,7 +126,7 @@ public class ClubRegisterApi {
             } else {
                 List<Player> players;
                 try {
-                    players = luceneDb.searchJoueur(query, 20, null);
+                    players = AppContext.get().luceneDb().searchJoueur(query, 20, null);
                 } catch (ParseException | IOException e) {
                     throw new WebApplicationException(e);
                 }
@@ -209,7 +158,7 @@ public class ClubRegisterApi {
         IPlayer player = null;
         boolean manualPlayer = nrffe == null || nrffe.isBlank();
         if (!manualPlayer) {
-            player = find.player(nrffe, null);
+            player = RequestContext.require().find().player(nrffe, null);
             if (player == null) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
             }
@@ -219,15 +168,15 @@ public class ClubRegisterApi {
 
         boolean young = manualPlayer ? ModelUtils.isYoung(calculateCategory(birthdate)) : player.isYoung();
 
-        ClubSeason currentSeason = clubSeasonDao.findCurrent();
+        ClubSeason currentSeason = RequestContext.require().clubSeasonDao().findCurrent();
         List<MembershipOption> options = currentSeason != null
-                ? membershipOptionDao.all(SeasonScope.of(currentSeason))
-                : membershipOptionDao.all(SeasonScope.all());
+                ? RequestContext.require().membershipOptionDao().all(SeasonScope.of(currentSeason))
+                : RequestContext.require().membershipOptionDao().all(SeasonScope.all());
         options.sort(Comparator.comparing(MembershipOption::getOptionType).thenComparing(MembershipOption::getOptionValue));
 
         // Build licenses list with prices (filtered by access rule)
         String category = manualPlayer ? calculateCategory(birthdate) : player.getCategory();
-        List<License> allLicenses = licenseDao.all();
+        List<License> allLicenses = RequestContext.require().licenseDao().all();
         allLicenses.sort(Comparator.comparing(License::getName));
         
         List<Map<String, Object>> licensesWithPrices = new ArrayList<>();
@@ -236,7 +185,7 @@ public class ClubRegisterApi {
             if (!isLicenseAccessible(license.getAccessRule(), young)) {
                 continue;
             }
-            Integer price = licensePriceService.getLicensePrice(category, license.getName().charAt(0));
+            Integer price = AppContext.get().licensePriceService().getLicensePrice(category, license.getName().charAt(0));
             Map<String, Object> licenseData = new HashMap<>();
             licenseData.put("name", license.getName());
             licenseData.put("id", license.getId());
@@ -308,7 +257,7 @@ public class ClubRegisterApi {
         String membershipRef = manualPlayer ? "" : nrffe;
 
         Membership membership = new Membership();
-        membership.setUser(loggedUser.getEmail());
+        membership.setUser(RequestContext.require().loggedUser().getEmail());
         membership.setNrFfe(membershipRef);
         membership.setLastname(lastname);
         membership.setFirstname(firstname);
@@ -316,14 +265,14 @@ public class ClubRegisterApi {
         membership.setClubRef(0);
         membership.setStatus(MembershipStatus.PENDING_APPROVAL);
         membership.setLicenseType(Membership.normalizeLicenseType(licenseType));
-        membership.setSeason(clubSeasonDao.findCurrent());
+        membership.setSeason(RequestContext.require().clubSeasonDao().findCurrent());
 
         int totalAmountCents = 0;
         if (manualPlayer) {
             Integer licensePrice = calculateLicensePriceCents(birthdate, licenseType.charAt(0));
             totalAmountCents += licensePrice == null ? 0 : licensePrice;
         } else {
-            IPlayer player = find.player(nrffe, null);
+            IPlayer player = RequestContext.require().find().player(nrffe, null);
             if (player != null) {
                 membership.setLastname(player.getName());
                 membership.setFirstname(player.getFirstname());
@@ -335,11 +284,11 @@ public class ClubRegisterApi {
 
         boolean young = manualPlayer
                 ? ModelUtils.isYoung(calculateCategory(birthdate))
-                : find.player(nrffe, null) != null && find.player(nrffe, null).isYoung();
+                : RequestContext.require().find().player(nrffe, null) != null && RequestContext.require().find().player(nrffe, null).isYoung();
 
         List<MembershipOption> selectedOptions = new ArrayList<>();
         for (Integer id : ids) {
-            MembershipOption option = membershipOptionDao.find(id);
+            MembershipOption option = RequestContext.require().membershipOptionDao().find(id);
             if (option != null && isOptionAccessible(option, young)) {
                 selectedOptions.add(option);
                 totalAmountCents += option.getAmountCents() == null ? 0 : option.getAmountCents();
@@ -347,20 +296,20 @@ public class ClubRegisterApi {
         }
         // Persist an explicit computed amount (license + selected options), never negative.
         membership.setAmountCents(Math.max(0, totalAmountCents));
-        membershipDao.persist(membership);
+        RequestContext.require().membershipDao().persist(membership);
 
         for (MembershipOption option : selectedOptions) {
             MembershipOptionSubscription sub = new MembershipOptionSubscription();
             sub.setMembership(membership);
             sub.setMembershipOption(option);
             sub.setNrFfe(membershipRef);
-            membershipOptionSubscriptionDao.persist(sub);
+            RequestContext.require().membershipOptionSubscriptionDao().persist(sub);
         }
 
         notifyMembershipSubmission(membership, licenseType, selectedOptions);
-        caches.getDebtCache().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
 
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("club-register")
                 .queryParam("success", "membership")
                 .build();
@@ -371,7 +320,7 @@ public class ClubRegisterApi {
     @Path("files/{fileId}/download")
     @LoggedOnly
     public Response downloadSharedFile(@PathParam("fileId") Integer fileId) {
-        MembershipOptionFile file = membershipOptionFileDao.findWithOption(fileId);
+        MembershipOptionFile file = RequestContext.require().membershipOptionFileDao().findWithOption(fileId);
         if (file == null || file.getMembershipOption() == null || file.getMembershipOption().getId() == null) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
@@ -379,7 +328,7 @@ public class ClubRegisterApi {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
         try {
-            var path = membershipOptionFileService.resolveStoredFile(file);
+            var path = AppContext.get().membershipOptionFileService().resolveStoredFile(file);
             if (!Files.isRegularFile(path)) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
             }
@@ -399,15 +348,15 @@ public class ClubRegisterApi {
     }
 
     private boolean userHasAccessToOption(Integer optionId) {
-        if (loggedUser == null || loggedUser.getEmail() == null || optionId == null) {
+        if (RequestContext.require().loggedUser() == null || RequestContext.require().loggedUser().getEmail() == null || optionId == null) {
             return false;
         }
-        List<Membership> memberships = membershipDao.findByUser(loggedUser.getEmail());
+        List<Membership> memberships = RequestContext.require().membershipDao().findByUser(RequestContext.require().loggedUser().getEmail());
         List<Integer> membershipIds = memberships.stream()
                 .map(Membership::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        return membershipOptionSubscriptionDao.findByMembershipIds(membershipIds).stream()
+        return RequestContext.require().membershipOptionSubscriptionDao().findByMembershipIds(membershipIds).stream()
                 .anyMatch(sub -> sub.getMembershipOption() != null
                         && optionId.equals(sub.getMembershipOption().getId()));
     }
@@ -417,20 +366,20 @@ public class ClubRegisterApi {
     @LoggedOnly
     @Transactional
     public Response confirmMembership(@PathParam("id") Integer id) {
-        Membership membership = membershipDao.find(id);
+        Membership membership = RequestContext.require().membershipDao().find(id);
         if (membership == null) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
-        if (!loggedUser.getEmail().equals(membership.getUser())) {
+        if (!RequestContext.require().loggedUser().getEmail().equals(membership.getUser())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
         if (membership.getStatus() == MembershipStatus.PENDING_CONFIRMATION) {
             membership.setStatus(MembershipStatus.APPROVED);
-            membershipDao.merge(membership);
-            caches.getDebtCache().invalidateAll();
+            RequestContext.require().membershipDao().merge(membership);
+            AppContext.get().caches().getDebtCache().invalidateAll();
         }
 
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("club-register")
                 .queryParam("success", "confirmation")
                 .build();
@@ -448,7 +397,7 @@ public class ClubRegisterApi {
             throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
-        var uriBuilder = uriInfo.getBaseUriBuilder()
+        var uriBuilder = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("club-register")
                 .path("membership-options");
         if (!isBlank(nrffe)) {
@@ -473,7 +422,7 @@ public class ClubRegisterApi {
             return null;
         }
         String category = calculateCategory(birthYear);
-        Integer licensePrice = licensePriceService.getLicensePrice(category, licenseType);
+        Integer licensePrice = AppContext.get().licensePriceService().getLicensePrice(category, licenseType);
         if (licensePrice == null) {
             return null;
         }
@@ -487,7 +436,7 @@ public class ClubRegisterApi {
         }
 
         String category = calculateCategory(birthYear);
-        Integer licensePrice = licensePriceService.getLicensePrice(category, licenseType);
+        Integer licensePrice = AppContext.get().licensePriceService().getLicensePrice(category, licenseType);
         if (licensePrice == null) {
             return null;
         }
@@ -567,7 +516,7 @@ public class ClubRegisterApi {
         mail.setBody(buildMembershipNotificationBody(membership, licenseType, selectedOptions));
 
         try {
-            sendMail.sendBcc(mail, recipients, "Nouvelle demande adhesion club");
+            AppContext.get().sendMail().sendBcc(mail, recipients, "Nouvelle demande adhesion club");
         } catch (Exception e) {
             logger.error(
                     "Failed to send membership notification mail for membership {}: {}",
@@ -584,7 +533,7 @@ public class ClubRegisterApi {
 
         String firstname = membership.getFirstname() == null ? "" : membership.getFirstname().trim();
         String greeting = firstname.isEmpty() ? "Bonjour" : "Bonjour " + escapeHtml(firstname);
-        String baseUrl = properties.getProperty("baseurl", "");
+        String baseUrl = AppContext.get().config().getProperties().getProperty("baseurl", "");
         if (baseUrl == null) {
             baseUrl = "";
         }
@@ -609,7 +558,7 @@ public class ClubRegisterApi {
         }
 
         try {
-            sendMail.send(mail, recipient, "Votre demande d'adhésion a bien été enregistrée");
+            AppContext.get().sendMail().send(mail, recipient, "Votre demande d'adhésion a bien été enregistrée");
         } catch (Exception e) {
             logger.error(
                     "Failed to send membership registrant mail for membership {}: {}",
@@ -619,7 +568,7 @@ public class ClubRegisterApi {
     }
 
     private List<String> getMembershipNotificationEmails() {
-        String raw = properties.getProperty("membership.notif.emails", "");
+        String raw = AppContext.get().config().getProperties().getProperty("membership.notif.emails", "");
         if (raw == null || raw.isBlank()) {
             return Collections.emptyList();
         }

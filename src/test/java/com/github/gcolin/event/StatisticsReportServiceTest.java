@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.player.IPlayer;
 import com.github.gcolin.registration.PlayerSubscriptionStatus;
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -226,11 +225,5 @@ class StatisticsReportServiceTest {
             assertEquals(0, report.getAgePyramid().size());
             assertEquals(0, report.getTotalAmount(), 0.001);
         }
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }

@@ -49,7 +49,7 @@ mkdocs build --strict
 
 ## Architecture (aperçu)
 
-- **API REST** : Jersey (`@Path`, `@Inject` au moyen de HK2 et de `JerseyDiFeature`)
+- **API REST** : Jersey (`@Path`) ; dépendances via `AppContext` / `RequestContext` (pas de HK2)
 - **Templates** : JTE (`src/main/jte/`)
 - **Persistance** : JPA / Hibernate, `RequestContext` par requête
 - **Configuration** : `params.properties` chargé par `Config`, avec surcharge possible grâce à `CONFIG_DIR`

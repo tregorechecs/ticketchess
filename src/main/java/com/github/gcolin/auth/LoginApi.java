@@ -1,6 +1,8 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.platform.RateLimit;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.platform.Redirects;
@@ -8,12 +10,10 @@ import com.github.gcolin.auth.LoggedUser;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -22,21 +22,6 @@ import java.util.Date;
 
 @Path("login")
 public class LoginApi {
-
-    @Inject
-    private Config config;
-
-    @Inject
-    private LoggedUser loggedUser;
-
-    @Inject
-    private Caches caches;
-
-    @Context
-    private HttpServletRequest request;
-
-    @Context
-    private UriInfo uriInfo;
 
     @GET
     @RateLimit(maxAttempts = 3, windowSeconds = 60)
@@ -50,7 +35,7 @@ public class LoginApi {
         final Claims claims;
         try {
             claims = Jwts.parser()
-                    .verifyWith(config.getKeys())
+                    .verifyWith(AppContext.get().config().getKeys())
                     .build()
                     .parseSignedClaims(jwt)
                     .getPayload();
@@ -67,19 +52,19 @@ public class LoginApi {
                     .build();
         }
 
-        request.getSession(true);
-        loggedUser.setEmail(email);
-        loggedUser.setUsername(claims.getIssuer() == null || claims.getIssuer().isBlank() ? email : claims.getIssuer());
-        loggedUser.setLogged(true);
-        caches.getDebtCache().invalidateAll();
-        caches.getRoleCache().invalidateAll();
+        RequestContext.require().request().getSession(true);
+        RequestContext.require().loggedUser().setEmail(email);
+        RequestContext.require().loggedUser().setUsername(claims.getIssuer() == null || claims.getIssuer().isBlank() ? email : claims.getIssuer());
+        RequestContext.require().loggedUser().setLogged(true);
+        AppContext.get().caches().getDebtCache().invalidateAll();
+        AppContext.get().caches().getRoleCache().invalidateAll();
 
         String rememberJwt = Jwts.builder()
                 .subject(email)
-                .issuer(loggedUser.getUsername())
+                .issuer(RequestContext.require().loggedUser().getUsername())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
 
         NewCookie newCookie = new NewCookie.Builder("remember_me")
@@ -89,7 +74,7 @@ public class LoginApi {
                 .value(rememberJwt)
                 .build();
 
-        URI redirectTo = Redirects.safeRedirect(redirectUri, uriInfo.getBaseUri(), uriInfo);
+        URI redirectTo = Redirects.safeRedirect(redirectUri, RequestContext.require().uriInfo().getBaseUri(), RequestContext.require().uriInfo());
 
         return Response.seeOther(redirectTo).cookie(newCookie).build();
     }

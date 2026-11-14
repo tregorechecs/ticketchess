@@ -1,6 +1,8 @@
 package com.github.gcolin.registration;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.registration.PlayerSubscriptionOption;
@@ -9,7 +11,6 @@ import com.github.gcolin.registration.PlayerSubscriptionOptionStatus;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -17,7 +18,6 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
@@ -30,18 +30,6 @@ import com.github.gcolin.platform.MustacheHtml;
 @Path("event/{id:\\d+}/register/{subId:\\d+}/option")
 @RequireRole(RoleCode.ARBITRE)
 public class PlayerSubscriptionOptionApi {
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionService;
-
-    @Inject
-    private PlayerSubscriptionOptionDao playerSubscriptionOptionService;
-
-    @Inject
-    private Caches caches;
-
-    @Context
-    UriInfo uriInfo;
 
     @GET
     @Path("new")
@@ -73,9 +61,9 @@ public class PlayerSubscriptionOptionApi {
         if (option.getAmountCents() == 0L) {
             option.setStatus(PlayerSubscriptionOptionStatus.PAID);
         }
-        playerSubscriptionOptionService.persist(option);
-        caches.getEvent().invalidateAll();
-        caches.getDebtCache().invalidateAll();
+        RequestContext.require().playerSubscriptionOptionDao().persist(option);
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
         return redirectToSubEdit(eventId, subId);
     }
 
@@ -112,22 +100,22 @@ public class PlayerSubscriptionOptionApi {
         requireSubscription(eventId, subId);
         PlayerSubscriptionOption option = requireOption(subId, optionId);
         if ("true".equals(toRemove)) {
-            playerSubscriptionOptionService.remove(option);
-            caches.getEvent().invalidateAll();
-            caches.getDebtCache().invalidateAll();
+            RequestContext.require().playerSubscriptionOptionDao().remove(option);
+            AppContext.get().caches().getEvent().invalidateAll();
+            AppContext.get().caches().getDebtCache().invalidateAll();
             return redirectToSubEdit(eventId, subId);
         }
         option.setDescription(description);
         option.setAmountCents(amountCents != null ? amountCents : 0L);
         option.setStatus(parseStatus(status));
-        playerSubscriptionOptionService.merge(option);
-        caches.getEvent().invalidateAll();
-        caches.getDebtCache().invalidateAll();
+        RequestContext.require().playerSubscriptionOptionDao().merge(option);
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
         return redirectToSubEdit(eventId, subId);
     }
 
     private PlayerSubscription requireSubscription(Integer eventId, Integer subId) {
-        PlayerSubscription sub = playerSubscriptionService.findWithEvent(subId);
+        PlayerSubscription sub = RequestContext.require().playerSubscriptionDao().findWithEvent(subId);
         if (sub == null || sub.getEvent() == null || !eventId.equals(sub.getEvent().getId())) {
             throw new WebApplicationException("PlayerSubscription not found", Status.NOT_FOUND);
         }
@@ -135,7 +123,7 @@ public class PlayerSubscriptionOptionApi {
     }
 
     private PlayerSubscriptionOption requireOption(Integer subId, Integer optionId) {
-        PlayerSubscriptionOption option = playerSubscriptionOptionService.findWithSubscription(optionId);
+        PlayerSubscriptionOption option = RequestContext.require().playerSubscriptionOptionDao().findWithSubscription(optionId);
         if (option == null
                 || option.getPlayerSubscription() == null
                 || !subId.equals(option.getPlayerSubscription().getId())) {
@@ -152,7 +140,7 @@ public class PlayerSubscriptionOptionApi {
     }
 
     private Response redirectToSubEdit(Integer eventId, Integer subId) {
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path(eventId.toString())
                 .path("register")

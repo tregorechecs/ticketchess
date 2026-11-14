@@ -1,7 +1,10 @@
 package com.github.gcolin.player;
 
 import com.github.gcolin.event.EventType;
+import com.github.gcolin.platform.AppContext;
+import com.github.gcolin.platform.plugin.PlayerSearchContributor;
 import java.io.IOException;
+import java.util.List;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +27,12 @@ public class Find {
         }
         String ref = nrffe.trim();
         if (ref.startsWith("@")) {
+            for (PlayerSearchContributor contributor : hookContributors()) {
+                IPlayer fromHook = contributor.find(ref, eventType);
+                if (fromHook != null) {
+                    return fromHook;
+                }
+            }
             return resolveCustomPlayer(ref, eventType);
         }
         try {
@@ -31,6 +40,19 @@ public class Find {
         } catch (ParseException | IOException e) {
             LoggerFactory.getLogger(getClass()).error("cannot find player " + ref, e);
             return null;
+        }
+    }
+
+    /** For hook contributors; does not consult {@link com.github.gcolin.platform.plugin.HookBus}. */
+    IPlayer resolveCustomPlayerWithoutHooks(String ref, EventType eventType) {
+        return resolveCustomPlayer(ref, eventType);
+    }
+
+    private static List<PlayerSearchContributor> hookContributors() {
+        try {
+            return AppContext.get().hookBus().playerSearchContributors();
+        } catch (IllegalStateException e) {
+            return List.of();
         }
     }
 

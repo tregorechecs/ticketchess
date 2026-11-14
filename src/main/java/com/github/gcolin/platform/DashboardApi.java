@@ -11,7 +11,6 @@ import com.github.gcolin.player.IPlayer;
 import com.github.gcolin.registration.PlayerSubscriptionStatus;
 import com.github.gcolin.player.Find;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
@@ -22,27 +21,18 @@ import java.util.Map;
 @Path("dashboard")
 public class DashboardApi {
 
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionDao;
-
-    @Inject
-    private Find find;
-
-    @Inject
-    private ClubSeasonFilter clubSeasonFilter;
-
     @GET
     @RequireRole(RoleCode.ARBITRE)
     @Transactional
     public MustacheHtml page(@QueryParam("seasonId") Integer seasonId) {
         Map<String, Object> model = new HashMap<>();
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        clubSeasonFilter.addToModel(model, seasonId);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
 
         List<PlayerSubscription> subsWithoutPayment =
-                playerSubscriptionDao.findWithoutPaymentWithEvent(PlayerSubscriptionStatus.PAID, scope);
-        List<PlayerSubscription> cancelledSubs = playerSubscriptionDao.findCancelledWithEvent(scope);
-        List<PlayerSubscription> notPaidSubs = playerSubscriptionDao.findNotPaidWithEvent(scope);
+                RequestContext.require().playerSubscriptionDao().findWithoutPaymentWithEvent(PlayerSubscriptionStatus.PAID, scope);
+        List<PlayerSubscription> cancelledSubs = RequestContext.require().playerSubscriptionDao().findCancelledWithEvent(scope);
+        List<PlayerSubscription> notPaidSubs = RequestContext.require().playerSubscriptionDao().findNotPaidWithEvent(scope);
         fillPlayers(subsWithoutPayment);
         fillPlayers(cancelledSubs);
         fillPlayers(notPaidSubs);
@@ -54,7 +44,7 @@ public class DashboardApi {
 
     private void fillPlayers(List<PlayerSubscription> subs) {
         for (PlayerSubscription sub : subs) {
-            IPlayer player = find.player(sub.getNrFfe(), null);
+            IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
             if (player != null) {
                 sub.setDisplayPlayer(new DisplayPlayer(player));
             }

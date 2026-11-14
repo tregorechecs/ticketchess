@@ -1,6 +1,11 @@
 package com.github.gcolin.registration;
 
 import com.github.gcolin.auth.LoggedOnly;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
+import com.github.gcolin.platform.plugin.OrgPlugins;
+import com.github.gcolin.platform.plugin.PluginIds;
+import com.github.gcolin.platform.plugin.RegistrationPlayerSource;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.player.CustomPlayer;
 import com.github.gcolin.event.Event;
@@ -25,7 +30,6 @@ import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
 import com.github.gcolin.payment.PaymentMail;
 import com.github.gcolin.platform.SendMail;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -34,7 +38,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
@@ -59,56 +62,20 @@ import com.github.gcolin.platform.MustacheHtml;
 @Path("event/{id:\\d+}/register")
 public class EventRegisterApi {
 
-    @Inject
-    private RegisterService registerService;
-
-    @Inject
-    private CustomPlayerDao customPlayerService;
-
-    @Inject
-    private LuceneDb luceneDb;
-
-    @Inject
-    private EventDao eventService;
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionService;
-
-    @Inject
-    private PlayerSubscriptionOptionDao playerSubscriptionOptionService;
-
-    @Inject
-    private PlayerPendingSubscriptionDao playerPendingSubscriptionDao;
-
-    @Inject
-    private LoggedUser loggerUser;
-
-    @Inject
-    private Find find;
-
-    @Inject
-    private Caches caches;
-
-    @Context
-    UriInfo uriInfo;
-
-    @Inject
-    private SendMail mail;
-
     private static final Logger logger = LoggerFactory.getLogger(EventRegisterApi.class);
 
     @GET
     @LoggedOnly
     public MustacheHtml register(@PathParam("id") Integer eventId, @QueryParam("query") String query) {
         Map<String, Object> model = new HashMap<String, Object>();
-        Event event = eventService.find(eventId);
-        eventService.fillSubscriptionLimits(event);
+        Event event = RequestContext.require().eventDao().find(eventId);
+        RequestContext.require().eventDao().fillSubscriptionLimits(event);
         model.put("event", event);
         String registrationClosedMessageKey = getRegistrationClosedMessageKey(event);
         model.put("registrationClosed", registrationClosedMessageKey != null);
         model.put("registrationClosedMessageKey", registrationClosedMessageKey);
         Set<String> subscriptionsRefs = new HashSet<>();
-        List<PlayerSubscription> subscriptions = playerSubscriptionService.findByEvent(event);
+        List<PlayerSubscription> subscriptions = RequestContext.require().playerSubscriptionDao().findByEvent(event);
         for (PlayerSubscription sub : subscriptions) {
             if (sub.getStatus() != PlayerSubscriptionStatus.CANCELLED) {
                 subscriptionsRefs.add(sub.getNrFfe());
@@ -116,13 +83,13 @@ public class EventRegisterApi {
         }
         if (event.getEventCollection() != null && event.getEventCollection().getId() != null) {
             subscriptionsRefs.addAll(
-                    playerSubscriptionService.findActiveRefsByEventCollection(event.getEventCollection().getId()));
+                    RequestContext.require().playerSubscriptionDao().findActiveRefsByEventCollection(event.getEventCollection().getId()));
         }
 
         if (query != null && !query.isEmpty()) {
             List<Player> players;
             try {
-                players = luceneDb.searchJoueur(query, 20, null);
+                players = AppContext.get().luceneDb().searchJoueur(query, 20, null);
             } catch (ParseException | IOException e) {
                 throw new WebApplicationException(e);
             }
@@ -150,13 +117,13 @@ public class EventRegisterApi {
         }
 
         List<PlayerSubscription> userSubscriptions =
-                playerSubscriptionService.findByCreationUserWithEvents(loggerUser.getEmail());
+                RequestContext.require().playerSubscriptionDao().findByCreationUserWithEvents(RequestContext.require().loggedUser().getEmail());
         List<DisplayPlayer> favoritePlayers = new ArrayList<>();
         Set<String> ids = new HashSet<String>();
         ids.addAll(subscriptionsRefs);
         for (PlayerSubscription sub : userSubscriptions) {
             if (!sub.getEvent().getId().equals(eventId) && !ids.contains(sub.getNrFfe())) {
-                IPlayer player = find.player(sub.getNrFfe(), null);
+                IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
                 ids.add(sub.getNrFfe());
                 if (player != null) {
                     DisplayPlayer p = new DisplayPlayer(player);
@@ -170,14 +137,20 @@ public class EventRegisterApi {
             }
         }
 
-        List<CustomPlayer> internalPlayers = customPlayerService.findByCreationUser(loggerUser.getEmail());
-        for (CustomPlayer customPlayer : internalPlayers) {
-            if (!ids.contains(customPlayer.getNrffe())) {
-                DisplayPlayer p = new DisplayPlayer(customPlayer);
-                p.setPriceCents(ServiceUtils.calculatePrice(customPlayer, event));
-                p.setRating(customPlayer.getRating());
-                favoritePlayers.add(p);
+        String userEmail = RequestContext.require().loggedUser().getEmail();
+        for (IPlayer extra : registrationPlayersFor(userEmail)) {
+            if (extra == null || ids.contains(extra.getNrffe())) {
+                continue;
             }
+            DisplayPlayer p = new DisplayPlayer(extra);
+            p.setPriceCents(ServiceUtils.calculatePrice(extra, event));
+            if (extra instanceof CustomPlayer cp) {
+                p.setRating(cp.getRating());
+            } else {
+                p.setRating(extra, event.getEventType());
+            }
+            ids.add(extra.getNrffe());
+            favoritePlayers.add(p);
         }
 
         favoritePlayers.sort((p1, p2) -> {
@@ -190,6 +163,25 @@ public class EventRegisterApi {
         model.put("favoritePlayers", favoritePlayers);
 
         return new MustacheHtml(model, "registration/register.mustache");
+    }
+
+    private static List<? extends IPlayer> registrationPlayersFor(String userEmail) {
+        List<IPlayer> players = new ArrayList<>();
+        try {
+            for (RegistrationPlayerSource source :
+                    AppContext.get().hookBus().registrationPlayerSources()) {
+                List<? extends IPlayer> batch = source.playersFor(userEmail);
+                if (batch != null) {
+                    players.addAll(batch);
+                }
+            }
+        } catch (IllegalStateException ignored) {
+            // unit tests without AppContext
+        }
+        if (players.isEmpty() && OrgPlugins.isEnabled(PluginIds.CUSTOM_PLAYER)) {
+            return RequestContext.require().customPlayerDao().findByCreationUser(userEmail);
+        }
+        return players;
     }
 
     private String getRegistrationClosedMessageKey(Event event) {
@@ -223,17 +215,17 @@ public class EventRegisterApi {
         if (nrffe == null || nrffe.isBlank()) {
             throw new WebApplicationException("nrffe is required", Response.Status.BAD_REQUEST);
         }
-        PlayerSubscription sub = registerService.registerPlayerToEvent(eventId, nrffe, loggerUser.getEmail());
-        caches.getEvent().invalidateAll();
-        caches.getDebtCache().invalidateAll();
+        PlayerSubscription sub = RequestContext.require().registerService().registerPlayerToEvent(eventId, nrffe, RequestContext.require().loggedUser().getEmail());
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
         if (sub == null) {
-            Event event = eventService.find(eventId);
-            PlayerPendingSubscription pending = playerPendingSubscriptionDao.findByEventAndNrffe(event, nrffe);
+            Event event = RequestContext.require().eventDao().find(eventId);
+            PlayerPendingSubscription pending = RequestContext.require().playerPendingSubscriptionDao().findByEventAndNrffe(event, nrffe);
             if (pending == null) {
                 throw new WebApplicationException(Status.CONFLICT);
             }
 
-            URI uri = uriInfo.getBaseUriBuilder()
+            URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                     .path("event")
                     .path("my")
                     .queryParam("success", "pending")
@@ -241,14 +233,14 @@ public class EventRegisterApi {
             return Response.seeOther(uri).build();
         }
         if (sub.getStatus() == PlayerSubscriptionStatus.PAID) {
-            URI uri = uriInfo.getBaseUriBuilder()
+            URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                     .path("event")
                     .path(sub.getEvent().getId().toString())
                     .queryParam("success", "register")
                     .build();
             return Response.seeOther(uri).build();
         } else {
-            URI uri = uriInfo.getBaseUriBuilder()
+            URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                     .path("event")
                     .path("my")
                     .queryParam("success", "register")
@@ -261,11 +253,11 @@ public class EventRegisterApi {
     @Path("{subId}")
     @RequireRole(RoleCode.ARBITRE)
     public MustacheHtml registeredit(@PathParam("id") Integer eventId, @PathParam("subId") Integer subId) {
-        PlayerSubscription sub = playerSubscriptionService.findWithEvent(subId);
+        PlayerSubscription sub = RequestContext.require().playerSubscriptionDao().findWithEvent(subId);
         Map<String, Object> model = new HashMap<>();
         model.put("sub", sub);
-        model.put("player", find.player(sub.getNrFfe(), null));
-        model.put("options", playerSubscriptionOptionService.findByPlayerSubscription(subId));
+        model.put("player", RequestContext.require().find().player(sub.getNrFfe(), null));
+        model.put("options", RequestContext.require().playerSubscriptionOptionDao().findByPlayerSubscription(subId));
         if (sub.getStatus() != null) {
             model.put("status", sub.getStatus().name());
         }
@@ -287,39 +279,39 @@ public class EventRegisterApi {
             @FormParam("status") String status,
             @FormParam("amountCents") Long amountCents) {
         if (toRemove.equals("true")) {
-            PlayerSubscription removed = playerSubscriptionService.findWithEvent(subId);
-            playerSubscriptionOptionService.removeByPlayerSubscription(subId);
-            playerSubscriptionService.remove(subId);
-            caches.getEvent().invalidateAll();
-            caches.getDebtCache().invalidateAll();
+            PlayerSubscription removed = RequestContext.require().playerSubscriptionDao().findWithEvent(subId);
+            RequestContext.require().playerSubscriptionOptionDao().removeByPlayerSubscription(subId);
+            RequestContext.require().playerSubscriptionDao().remove(subId);
+            AppContext.get().caches().getEvent().invalidateAll();
+            AppContext.get().caches().getDebtCache().invalidateAll();
             if (removed != null && removed.getEvent() != null) {
-                registerService.promoteNextPendingSubscription(removed.getEvent());
+                RequestContext.require().registerService().promoteNextPendingSubscription(removed.getEvent());
             }
-            URI uri = uriInfo.getBaseUriBuilder()
+            URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                     .path("event")
                     .path(eventId.toString())
                     .build();
             return Response.seeOther(uri).build();
         }
-        PlayerSubscription prevSub = playerSubscriptionService.find(subId);
+        PlayerSubscription prevSub = RequestContext.require().playerSubscriptionDao().find(subId);
 
         PlayerSubscription sub = new PlayerSubscription();
         sub.setId(subId);
         sub.setNrFfe(nrFFE);
-        sub.setEvent(eventService.find(eventId));
+        sub.setEvent(RequestContext.require().eventDao().find(eventId));
         sub.setCreationUser(creationUser);
         sub.setStatus(PlayerSubscriptionStatus.valueOf(status));
         sub.setPayment(prevSub == null ? null : prevSub.getPayment());
         sub.setAmountCents(amountCents != null ? amountCents : (prevSub == null ? null : prevSub.getAmountCents()));
         sub.setAttendanceAt(prevSub == null ? null : prevSub.getAttendanceAt());
 
-        PlayerSubscription prevSubDetached = playerSubscriptionService.detach(prevSub);
-        playerSubscriptionService.merge(sub);
+        PlayerSubscription prevSubDetached = RequestContext.require().playerSubscriptionDao().detach(prevSub);
+        RequestContext.require().playerSubscriptionDao().merge(sub);
 
         if (prevSubDetached != null
                 && prevSubDetached.getStatus() == PlayerSubscriptionStatus.NOT_PAID
                 && sub.getStatus() == PlayerSubscriptionStatus.PAID) {
-            IPlayer player = find.player(sub.getNrFfe(), null);
+            IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
             Event event = sub.getEvent();
 
             SimpleDateFormat sdf = new SimpleDateFormat("EEEE dd MMMM yyyy", Locale.FRANCE);
@@ -334,7 +326,7 @@ public class EventRegisterApi {
             registrationMail.setReference(sub.getCreationUser());
 
             try {
-                mail.send(registrationMail, sub.getCreationUser(), "Confirmation paiement " + event.getName());
+                AppContext.get().sendMail().send(registrationMail, sub.getCreationUser(), "Confirmation paiement " + event.getName());
             } catch (Exception e) {
                 logger.error(
                         "[email={},player={},event={}] cannot send email. {}",
@@ -345,10 +337,10 @@ public class EventRegisterApi {
             }
         }
 
-        caches.getEvent().invalidateAll();
-        caches.getDebtCache().invalidateAll();
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
 
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path(eventIdPath.toString())
                 .build();
@@ -364,16 +356,16 @@ public class EventRegisterApi {
             @PathParam("id") Integer eventId,
             @PathParam("subId") Integer subId,
             @FormParam("present") Boolean present) {
-        PlayerSubscription sub = playerSubscriptionService.findWithEvent(subId);
+        PlayerSubscription sub = RequestContext.require().playerSubscriptionDao().findWithEvent(subId);
         if (sub == null || sub.getEvent() == null || !eventId.equals(sub.getEvent().getId())) {
             throw new WebApplicationException("PlayerSubscription not found", Status.NOT_FOUND);
         }
         boolean markPresent = present == null || present;
         sub.setAttendanceAt(markPresent ? LocalDateTime.now() : null);
-        playerSubscriptionService.merge(sub);
-        caches.getEvent().invalidateAll();
+        RequestContext.require().playerSubscriptionDao().merge(sub);
+        AppContext.get().caches().getEvent().invalidateAll();
 
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path(eventId.toString())
                 .build();

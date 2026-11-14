@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.github.gcolin.platform.Page;
+import com.github.gcolin.platform.plugin.PluginIds;
+import com.github.gcolin.platform.plugin.PluginRegistry;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class OrgFeatureFilterTest {
@@ -62,8 +65,37 @@ class OrgFeatureFilterTest {
         assertFalse(OrgFeatureFilter.isBlocked("/admin/organisations", page));
     }
 
-    private static Page enabledAll() {
-        Page page = new Page();
+    @Test
+    void registryOwnershipGatesPathsWhenPresent() {
+        PluginRegistry registry = PluginRegistry.load();
+        Page page = enabledAll();
+        Set<String> noPayments = Set.of(PluginIds.EVENTS, PluginIds.MEMBERSHIP, PluginIds.EMAIL);
+        assertTrue(OrgFeatureFilter.isBlocked("/payment", page, registry, noPayments));
+        assertFalse(OrgFeatureFilter.isBlocked("/event", page, registry, noPayments));
+        assertTrue(OrgFeatureFilter.isBlocked("/admin/mail", page, registry, Set.of(PluginIds.EVENTS)));
+        assertFalse(OrgFeatureFilter.isBlocked("/admin", page, registry, Set.of()));
+    }
+
+    @Test
+    void registryStillAppliesStatisticsPageRule() {
+        PluginRegistry registry = PluginRegistry.load();
+        Page page = enabledAll();
+        page.setEventsEnabled(false);
+        page.setPaymentsEnabled(false);
+        assertTrue(OrgFeatureFilter.isBlocked("/statistics", page, registry, Set.of(PluginIds.MEMBERSHIP)));
+        page.setPaymentsEnabled(true);
+        assertFalse(OrgFeatureFilter.isBlocked("/statistics", page, registry, Set.of(PluginIds.PAYMENTS)));
+    }
+
+    @Test
+    void pageFallbackWhenNoRegistry() {
+        Page page = enabledAll();
+        page.setEventsEnabled(false);
+        assertTrue(OrgFeatureFilter.isBlocked("/event", page, null, Set.of()));
+        assertFalse(OrgFeatureFilter.isBlocked("/payment", page, null, Set.of()));
+    }
+
+    private static Page enabledAll() {        Page page = new Page();
         page.setEventsEnabled(true);
         page.setMembershipsEnabled(true);
         page.setPaymentsEnabled(true);

@@ -1,11 +1,13 @@
 package com.github.gcolin.auth;
 
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.auth.ActiveLoggedUsers;
 import com.github.gcolin.auth.LoggedUser;
@@ -36,18 +38,22 @@ class LogoutApiTest {
         when(config.getLoginUrl()).thenReturn("http://localhost:8080");
         when(uriInfo.getBaseUri()).thenReturn(URI.create("http://localhost:8080"));
 
-        inject(api, "request", request);
-        inject(api, "loggerUser", loggedUser);
-        inject(api, "config", config);
-        inject(api, "activeLoggedUsers", activeLoggedUsers);
-        inject(api, "uriInfo", uriInfo);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(config);
+            app.setActiveLoggedUsers(activeLoggedUsers);
+        }, ctx -> {
+            ctx.setLoggedUser(loggedUser);
+        })) {
+            RequestContext.require().setRequest(request);
+            RequestContext.require().setUriInfo(uriInfo);
 
-        Response response = api.logout();
+            Response response = api.logout();
 
-        assertEquals(303, response.getStatus());
-        verify(session).invalidate();
-        verify(activeLoggedUsers).remove("session-id-123");
-        assertNotNull(response.getCookies().get("remember_me"));
+            assertEquals(303, response.getStatus());
+            verify(session).invalidate();
+            verify(activeLoggedUsers).remove("session-id-123");
+            assertNotNull(response.getCookies().get("remember_me"));
+        }
     }
 
     @Test
@@ -64,20 +70,19 @@ class LogoutApiTest {
         when(config.getLoginUrl()).thenReturn("http://localhost:8080");
         when(uriInfo.getBaseUri()).thenReturn(URI.create("http://localhost:8080"));
 
-        inject(api, "request", request);
-        inject(api, "loggerUser", loggedUser);
-        inject(api, "config", config);
-        inject(api, "activeLoggedUsers", mock(ActiveLoggedUsers.class));
-        inject(api, "uriInfo", uriInfo);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(config);
+            app.setActiveLoggedUsers(mock(ActiveLoggedUsers.class));
+        }, ctx -> {
+            ctx.setLoggedUser(loggedUser);
+        })) {
+            RequestContext.require().setRequest(request);
+            RequestContext.require().setUriInfo(uriInfo);
 
-        Response response = api.logout();
+            Response response = api.logout();
 
-        assertEquals(303, response.getStatus());
+            assertEquals(303, response.getStatus());
+        }
     }
 
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

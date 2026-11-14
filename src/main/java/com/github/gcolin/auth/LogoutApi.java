@@ -1,12 +1,12 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.platform.Config;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import io.jsonwebtoken.Claims;
-import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -18,26 +18,11 @@ import java.util.Date;
 @Path("logout")
 public class LogoutApi {
 
-    @Inject
-    private Config config;
-
-    @Context
-    HttpServletRequest request;
-
-    @Inject
-    private LoggedUser loggerUser;
-
-    @Inject
-    private ActiveLoggedUsers activeLoggedUsers;
-
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public Response logout() {
-        var session = request.getSession(false);
+        var session = RequestContext.require().request().getSession(false);
         if (session != null) {
-            activeLoggedUsers.remove(session.getId());
+            AppContext.get().activeLoggedUsers().remove(session.getId());
             session.invalidate();
         }
 
@@ -47,9 +32,9 @@ public class LogoutApi {
                 .maxAge(0)
                 .build();
 
-        String logoutUrl = config.getOauthLogoutUrl();
+        String logoutUrl = AppContext.get().config().getOauthLogoutUrl();
         if (logoutUrl != null && !logoutUrl.isBlank()) {
-            Claims claims = loggerUser.getClaims();
+            Claims claims = RequestContext.require().loggedUser().getClaims();
             if (claims != null) {
                 Date nowPlus5Min = new Date(new Date().getTime() + 5 * 60 * 1000);
                 if (claims.getIssuedAt().before(nowPlus5Min)) {
@@ -59,13 +44,13 @@ public class LogoutApi {
                                         + "?id_token_hint="
                                         + id
                                         + "&post_logout_redirect_uri="
-                                        + URLEncoder.encode(config.getPublicBaseUrl(), StandardCharsets.UTF_8)))
+                                        + URLEncoder.encode(AppContext.get().config().getPublicBaseUrl(), StandardCharsets.UTF_8)))
                                 .cookie(cookie)
                                 .build();
                     }
                 }
             }
         }
-        return Response.seeOther(uriInfo.getBaseUri()).cookie(cookie).build();
+        return Response.seeOther(RequestContext.require().uriInfo().getBaseUri()).cookie(cookie).build();
     }
 }

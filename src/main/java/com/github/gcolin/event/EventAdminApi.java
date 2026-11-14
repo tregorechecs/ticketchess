@@ -1,11 +1,11 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.platform.MustacheHtml;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
@@ -17,27 +17,18 @@ import java.util.Map;
 @Path("admin/events")
 public class EventAdminApi {
 
-    @Inject
-    private EventDao eventDao;
-
-    @Inject
-    private EventGroupDao eventGroupDao;
-
-    @Inject
-    private ClubSeasonFilter clubSeasonFilter;
-
     private final EventAdminTreeBuilder treeBuilder = new EventAdminTreeBuilder();
 
     @GET
     public MustacheHtml page(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Event> events = eventDao.findAllForAdmin(scope);
-        eventDao.fillNbSubscriptions(events);
-        eventDao.detachAll(events);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Event> events = RequestContext.require().eventDao().findAllForAdmin(scope);
+        RequestContext.require().eventDao().fillNbSubscriptions(events);
+        RequestContext.require().eventDao().detachAll(events);
 
         Map<String, Object> model = new HashMap<>();
-        model.put("groups", treeBuilder.build(eventGroupDao.all(), events));
-        clubSeasonFilter.addToModel(model, seasonId);
+        model.put("groups", treeBuilder.build(RequestContext.require().eventGroupDao().all(), events));
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         return new MustacheHtml(model, "event/eventAdminTree.mustache");
     }
 }

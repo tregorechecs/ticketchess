@@ -2,6 +2,8 @@ package com.github.gcolin.platform;
 
 import static org.mockito.Mockito.mock;
 
+import com.github.gcolin.auth.LoginMail;
+import com.github.gcolin.organisation.Organisation;
 import jakarta.servlet.ServletContext;
 import java.nio.file.Path;
 import java.util.Properties;
@@ -58,6 +60,22 @@ class ConfigTest {
     void testGetPage() {
         Assertions.assertNotNull(config.getPage());
         Assertions.assertNotNull(config.getPage().getTitle());
+    }
+
+    @Test
+    void applyOrgUsesCurrentOrganisationNameNotPlatformTitle() {
+        config.getProperties().setProperty("title", "Event Test");
+        config.applyRuntime();
+        Assertions.assertEquals("Event Test", config.getPage().getOrgName());
+
+        Organisation org = new Organisation();
+        org.setId(1);
+        org.setName("Trégor Échecs");
+        try (TestContext ignored = TestContext.openRequest(ctx -> ctx.setOrganisation(org))) {
+            LoginMail mail = new LoginMail();
+            config.applyOrg(mail);
+            Assertions.assertEquals("Trégor Échecs", mail.getOrgName());
+        }
     }
 
     @Test

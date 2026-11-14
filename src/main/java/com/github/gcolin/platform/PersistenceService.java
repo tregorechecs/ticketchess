@@ -56,6 +56,7 @@ public class PersistenceService {
         initDatasource();
         initSchemaIfNeeded();
         //applySchemaPatches();
+        migrateLegacyPermissionGrantsToRoles();
         dropLegacyChessEventOptions();
         renameOrganisationTransferColumns();
         dropOrganisationThemeColumn();
@@ -67,6 +68,15 @@ public class PersistenceService {
         dropOrganisationSlugColumn();
         normalizeOrganisationSettingsAliases();
         //backfillMembershipSeasonIdsAfterBootstrap();
+    }
+
+    /** Maps legacy permission / EVENT_ADMIN grants to RoleCode values and realigns the role check. */
+    private void migrateLegacyPermissionGrantsToRoles() {
+        try (Connection connection = dataSource.getConnection()) {
+            migratePermissionsToRoles(connection);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to migrate user_authorization roles", e);
+        }
     }
 
     /** Creates the schema from {@code schema.sql} when the key tables are missing. */
@@ -446,22 +456,79 @@ public class PersistenceService {
         }
     }
 
+    /**
+     * Adds {@code org_id} when missing, backfills nulls from the first organisation, then sets NOT NULL.
+     * Safe to call before and after {@link com.github.gcolin.organisation.OrganisationBootstrap}: if no
+     * organisation row exists yet, the column stays nullable until a later pass.
+     */
     private boolean ensureOrgIdColumn(Connection connection, String table) throws SQLException {
-        if (!tableExists(connection, table) || columnExists(connection, table, "org_id")) {
+        if (!tableExists(connection, table)) {
             return false;
         }
-        try (Statement st = connection.createStatement()) {
-            if (isH2()) {
-                st.execute("ALTER TABLE " + table + " ADD COLUMN org_id INTEGER");
-            } else {
-                st.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS org_id INTEGER");
+        boolean changed = false;
+        if (!columnExists(connection, table, "org_id")) {
+            try (Statement st = connection.createStatement()) {
+                if (isH2()) {
+                    st.execute("ALTER TABLE " + table + " ADD COLUMN org_id INTEGER");
+                } else {
+                    st.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS org_id INTEGER");
+                }
             }
-            st.execute(
-                    "UPDATE " + table + " SET org_id = (SELECT MIN(id) FROM organisation) WHERE org_id IS NULL");
-            st.execute("ALTER TABLE " + table + " ALTER COLUMN org_id SET NOT NULL");
+            tableColumnsCache.remove(table.toLowerCase(Locale.ROOT));
+            changed = true;
         }
-        tableColumnsCache.remove(table.toLowerCase(Locale.ROOT));
-        return true;
+        Integer defaultOrgId = minOrganisationId(connection);
+        if (defaultOrgId == null) {
+            return changed;
+        }
+        try (Statement st = connection.createStatement()) {
+            int updated = st.executeUpdate(
+                    "UPDATE " + table + " SET org_id = " + defaultOrgId + " WHERE org_id IS NULL");
+            if (updated > 0) {
+                changed = true;
+            }
+            if (isColumnNullable(connection, table, "org_id")) {
+                st.execute("ALTER TABLE " + table + " ALTER COLUMN org_id SET NOT NULL");
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** Re-run org_id backfill after {@code OrganisationBootstrap} has created the default org. */
+    public void ensureOrgIdsAfterOrganisationBootstrap() {
+        ensureOrgIdOnClubSeasonAndLicense();
+        ensureOrgIdOnEventTables();
+    }
+
+    private Integer minOrganisationId(Connection connection) throws SQLException {
+        if (!tableExists(connection, "organisation")) {
+            return null;
+        }
+        try (Statement st = connection.createStatement();
+                ResultSet rs = st.executeQuery("SELECT MIN(id) FROM organisation")) {
+            if (!rs.next()) {
+                return null;
+            }
+            int id = rs.getInt(1);
+            return rs.wasNull() ? null : id;
+        }
+    }
+
+    private boolean isColumnNullable(Connection connection, String table, String column) throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND LOWER(COLUMN_NAME) = ?")) {
+            ps.setString(1, informationSchemaName());
+            ps.setString(2, informationSchemaTableName(table));
+            ps.setString(3, column.toLowerCase(Locale.ROOT));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return false;
+                }
+                return "YES".equalsIgnoreCase(rs.getString(1));
+            }
+        }
     }
 
     private boolean ensureLicenseOrgNameUnique(Connection connection) throws SQLException {

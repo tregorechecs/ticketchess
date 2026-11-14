@@ -52,7 +52,10 @@ public final class OrganisationFiles {
         for (String name : LEGACY_ROOT_FILES) {
             moveIfMissing(root.resolve(name), target.resolve(name));
         }
-        moveIfMissing(root.resolve("lucene").resolve("manual-players.json"), target.resolve("lucene").resolve("manual-players.json"));
+        Path sharedLucene = root.resolve("lucene");
+        Path legacyOrgLucene = target.resolve("lucene");
+        moveIfMissing(legacyOrgLucene.resolve("manual-players.json"), sharedLucene.resolve("manual-players.json"));
+        moveIfMissing(legacyOrgLucene.resolve("index"), sharedLucene.resolve("index"));
         for (String name : LEGACY_SHARED_FILES) {
             moveIfMissing(root.resolve(name), sharedDir(config).resolve(name));
         }

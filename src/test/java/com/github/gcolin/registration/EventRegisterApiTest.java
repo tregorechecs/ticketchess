@@ -4,40 +4,33 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.any;
 
+import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.event.EventCollection;
-import com.github.gcolin.registration.PlayerPendingSubscription;
-import com.github.gcolin.registration.PlayerSubscription;
-import com.github.gcolin.player.LuceneDb;
-import com.github.gcolin.player.DisplayPlayer;
-import com.github.gcolin.player.Player;
-import com.github.gcolin.registration.PlayerSubscriptionStatus;
-import com.github.gcolin.platform.Caches;
-import com.github.gcolin.player.Find;
-import com.github.gcolin.auth.LoggedUser;
-import com.github.gcolin.registration.RegisterService;
-import com.github.gcolin.player.CustomPlayerDao;
 import com.github.gcolin.event.EventDao;
-import com.github.gcolin.registration.PlayerPendingSubscriptionDao;
-import com.github.gcolin.registration.PlayerSubscriptionDao;
-import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
+import com.github.gcolin.platform.Caches;
+import com.github.gcolin.platform.MustacheHtml;
+import com.github.gcolin.platform.TestContext;
+import com.github.gcolin.player.CustomPlayerDao;
+import com.github.gcolin.player.DisplayPlayer;
+import com.github.gcolin.player.Find;
+import com.github.gcolin.player.LuceneDb;
+import com.github.gcolin.player.Player;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.MustacheHtml;
 
 class EventRegisterApiTest {
 
@@ -58,17 +51,21 @@ class EventRegisterApiTest {
         when(subDao.findByCreationUserWithEvents("user@test.com")).thenReturn(List.of());
         when(customPlayerDao.findByCreationUser("user@test.com")).thenReturn(List.of());
 
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "customPlayerService", customPlayerDao);
-        inject(api, "loggerUser", user);
-        inject(api, "find", mock(Find.class));
+        try (TestContext tc = TestContext.open(
+                app -> {},
+                ctx -> {
+                    ctx.setEventDao(eventDao);
+                    ctx.setPlayerSubscriptionDao(subDao);
+                    ctx.setCustomPlayerDao(customPlayerDao);
+                    ctx.setLoggedUser(user);
+                    ctx.setFind(mock(Find.class));
+                })) {
+            MustacheHtml html = api.register(1, "");
+            Map<String, Object> model = html.getModel();
 
-        MustacheHtml html = api.register(1, "");
-        Map<String, Object> model = html.getModel();
-
-        assertEquals("registration/register.mustache", html.getTemplate());
-        assertTrue(((List<?>) model.get("players")).isEmpty());
+            assertEquals("registration/register.mustache", html.getTemplate());
+            assertTrue(((List<?>) model.get("players")).isEmpty());
+        }
     }
 
     @Test
@@ -96,7 +93,7 @@ class EventRegisterApiTest {
 
         Player p2 = new Player();
         p2.setNrffe("LIC2");
-        p2.setName("Filtered");
+        p2.setName("Zulu");
         p2.setFirstname("B");
         p2.setCategory("SenM");
 
@@ -113,22 +110,25 @@ class EventRegisterApiTest {
         when(subDao.findByCreationUserWithEvents("user@test.com")).thenReturn(List.of());
         when(customPlayerDao.findByCreationUser("user@test.com")).thenReturn(List.of());
 
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "customPlayerService", customPlayerDao);
-        inject(api, "loggerUser", user);
-        inject(api, "luceneDb", luceneDb);
-        inject(api, "find", mock(Find.class));
+        try (TestContext tc = TestContext.open(
+                app -> app.setLuceneDb(luceneDb),
+                ctx -> {
+                    ctx.setEventDao(eventDao);
+                    ctx.setPlayerSubscriptionDao(subDao);
+                    ctx.setCustomPlayerDao(customPlayerDao);
+                    ctx.setLoggedUser(user);
+                    ctx.setFind(mock(Find.class));
+                })) {
+            MustacheHtml html = api.register(2, "abc");
+            Map<String, Object> model = html.getModel();
 
-        MustacheHtml html = api.register(2, "abc");
-        Map<String, Object> model = html.getModel();
-
-        assertEquals("abc", model.get("query"));
-        @SuppressWarnings("unchecked")
-        List<DisplayPlayer> players = (List<DisplayPlayer>) model.get("players");
-        assertEquals(2, players.size());
-        assertEquals("Alpha", players.get(0).getName());
-        assertEquals("Bravo", players.get(1).getName());
+            assertEquals("abc", model.get("query"));
+            @SuppressWarnings("unchecked")
+            List<DisplayPlayer> players = (List<DisplayPlayer>) model.get("players");
+            assertEquals(2, players.size());
+            assertEquals("Alpha", players.get(0).getName());
+            assertEquals("Bravo", players.get(1).getName());
+        }
     }
 
     @Test
@@ -168,20 +168,23 @@ class EventRegisterApiTest {
         when(subDao.findByCreationUserWithEvents("user@test.com")).thenReturn(List.of());
         when(customPlayerDao.findByCreationUser("user@test.com")).thenReturn(List.of());
 
-        inject(api, "eventService", eventDao);
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "customPlayerService", customPlayerDao);
-        inject(api, "loggerUser", user);
-        inject(api, "luceneDb", luceneDb);
-        inject(api, "find", mock(Find.class));
+        try (TestContext tc = TestContext.open(
+                app -> app.setLuceneDb(luceneDb),
+                ctx -> {
+                    ctx.setEventDao(eventDao);
+                    ctx.setPlayerSubscriptionDao(subDao);
+                    ctx.setCustomPlayerDao(customPlayerDao);
+                    ctx.setLoggedUser(user);
+                    ctx.setFind(mock(Find.class));
+                })) {
+            MustacheHtml html = api.register(2, "abc");
+            Map<String, Object> model = html.getModel();
 
-        MustacheHtml html = api.register(2, "abc");
-        Map<String, Object> model = html.getModel();
-
-        @SuppressWarnings("unchecked")
-        List<DisplayPlayer> players = (List<DisplayPlayer>) model.get("players");
-        assertEquals(1, players.size());
-        assertEquals("LIC1", players.get(0).getLicence());
+            @SuppressWarnings("unchecked")
+            List<DisplayPlayer> players = (List<DisplayPlayer>) model.get("players");
+            assertEquals(1, players.size());
+            assertEquals("LIC1", players.get(0).getLicence());
+        }
     }
 
     @Test
@@ -200,16 +203,19 @@ class EventRegisterApiTest {
         when(eventDao.find(4)).thenReturn(event);
         when(pendingDao.findByEventAndNrffe(event, "123")).thenReturn(null);
 
-        inject(api, "registerService", registerService);
-        inject(api, "loggerUser", user);
-        inject(api, "eventService", eventDao);
-        inject(api, "playerPendingSubscriptionDao", pendingDao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?success=register")));
-
-        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> api.registerSave(4, "123"));
-
-        assertEquals(409, ex.getResponse().getStatus());
+        try (TestContext tc = TestContext.open(
+                app -> app.setCaches(new Caches()),
+                ctx -> {
+                    ctx.setRegisterService(registerService);
+                    ctx.setLoggedUser(user);
+                    ctx.setEventDao(eventDao);
+                    ctx.setPlayerPendingSubscriptionDao(pendingDao);
+                    ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my?success=register")));
+                })) {
+            WebApplicationException ex =
+                    assertThrows(WebApplicationException.class, () -> api.registerSave(4, "123"));
+            assertEquals(409, ex.getResponse().getStatus());
+        }
     }
 
     @Test
@@ -232,17 +238,20 @@ class EventRegisterApiTest {
         when(eventDao.find(5)).thenReturn(event);
         when(pendingDao.findByEventAndNrffe(event, "123")).thenReturn(pending);
 
-        inject(api, "registerService", registerService);
-        inject(api, "loggerUser", user);
-        inject(api, "eventService", eventDao);
-        inject(api, "playerPendingSubscriptionDao", pendingDao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?success=pending")));
+        try (TestContext tc = TestContext.open(
+                app -> app.setCaches(new Caches()),
+                ctx -> {
+                    ctx.setRegisterService(registerService);
+                    ctx.setLoggedUser(user);
+                    ctx.setEventDao(eventDao);
+                    ctx.setPlayerPendingSubscriptionDao(pendingDao);
+                    ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my?success=pending")));
+                })) {
+            Response response = api.registerSave(5, "123");
 
-        Response response = api.registerSave(5, "123");
-
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/my?success=pending"), response.getLocation());
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/my?success=pending"), response.getLocation());
+        }
     }
 
     @Test
@@ -261,15 +270,18 @@ class EventRegisterApiTest {
         when(user.getEmail()).thenReturn("user@test.com");
         when(registerService.registerPlayerToEvent(8, "777", "user@test.com")).thenReturn(sub);
 
-        inject(api, "registerService", registerService);
-        inject(api, "loggerUser", user);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/8?success=register")));
+        try (TestContext tc = TestContext.open(
+                app -> app.setCaches(new Caches()),
+                ctx -> {
+                    ctx.setRegisterService(registerService);
+                    ctx.setLoggedUser(user);
+                    ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/8?success=register")));
+                })) {
+            Response response = api.registerSave(8, "777");
 
-        Response response = api.registerSave(8, "777");
-
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/8?success=register"), response.getLocation());
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/8?success=register"), response.getLocation());
+        }
     }
 
     @Test
@@ -288,15 +300,18 @@ class EventRegisterApiTest {
         when(user.getEmail()).thenReturn("user@test.com");
         when(registerService.registerPlayerToEvent(9, "555", "user@test.com")).thenReturn(sub);
 
-        inject(api, "registerService", registerService);
-        inject(api, "loggerUser", user);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/my?success=register")));
+        try (TestContext tc = TestContext.open(
+                app -> app.setCaches(new Caches()),
+                ctx -> {
+                    ctx.setRegisterService(registerService);
+                    ctx.setLoggedUser(user);
+                    ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/my?success=register")));
+                })) {
+            Response response = api.registerSave(9, "555");
 
-        Response response = api.registerSave(9, "555");
-
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/my?success=register"), response.getLocation());
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/my?success=register"), response.getLocation());
+        }
     }
 
     @Test
@@ -312,14 +327,16 @@ class EventRegisterApiTest {
         Find find = mock(Find.class);
         when(find.player(any(), any())).thenReturn(new DisplayPlayer());
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerSubscriptionOptionService", optionDao);
-        inject(api, "find", find);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setPlayerSubscriptionDao(subDao);
+            ctx.setPlayerSubscriptionOptionDao(optionDao);
+            ctx.setFind(find);
+        })) {
+            MustacheHtml html = api.registeredit(1, 7);
 
-        MustacheHtml html = api.registeredit(1, 7);
-
-        assertEquals("registration/subEdit.mustache", html.getTemplate());
-        assertEquals(sub, html.getModel().get("sub"));
+            assertEquals("registration/subEdit.mustache", html.getTemplate());
+            assertEquals(sub, html.getModel().get("sub"));
+        }
     }
 
     @Test
@@ -336,19 +353,22 @@ class EventRegisterApiTest {
         sub.setEvent(event);
         when(subDao.findWithEvent(22)).thenReturn(sub);
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "playerSubscriptionOptionService", optionDao);
-        inject(api, "registerService", registerService);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/9")));
+        try (TestContext tc = TestContext.open(
+                app -> app.setCaches(new Caches()),
+                ctx -> {
+                    ctx.setPlayerSubscriptionDao(subDao);
+                    ctx.setPlayerSubscriptionOptionDao(optionDao);
+                    ctx.setRegisterService(registerService);
+                    ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/9")));
+                })) {
+            Response response = api.registerEditSave(9, 9, 22, "true", "u@test.com", "777", "PAID", null);
 
-        Response response = api.registerEditSave(9, 9, 22, "true", "u@test.com", "777", "PAID", null);
-
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/9"), response.getLocation());
-        verify(optionDao).removeByPlayerSubscription(22);
-        verify(subDao).remove(22);
-        verify(registerService).promoteNextPendingSubscription(event);
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/9"), response.getLocation());
+            verify(optionDao).removeByPlayerSubscription(22);
+            verify(subDao).remove(22);
+            verify(registerService).promoteNextPendingSubscription(event);
+        }
     }
 
     @Test
@@ -365,16 +385,19 @@ class EventRegisterApiTest {
 
         when(subDao.findWithEvent(22)).thenReturn(sub);
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "caches", caches);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/9")));
+        try (TestContext tc = TestContext.open(
+                app -> app.setCaches(caches),
+                ctx -> {
+                    ctx.setPlayerSubscriptionDao(subDao);
+                    ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/9")));
+                })) {
+            Response response = api.markAttendance(9, 22, true);
 
-        Response response = api.markAttendance(9, 22, true);
-
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/9"), response.getLocation());
-        assertNotNull(sub.getAttendanceAt());
-        verify(subDao).merge(sub);
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/9"), response.getLocation());
+            assertNotNull(sub.getAttendanceAt());
+            verify(subDao).merge(sub);
+        }
     }
 
     @Test
@@ -392,15 +415,18 @@ class EventRegisterApiTest {
 
         when(subDao.findWithEvent(22)).thenReturn(sub);
 
-        inject(api, "playerSubscriptionService", subDao);
-        inject(api, "caches", caches);
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/event/9")));
+        try (TestContext tc = TestContext.open(
+                app -> app.setCaches(caches),
+                ctx -> {
+                    ctx.setPlayerSubscriptionDao(subDao);
+                    ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/event/9")));
+                })) {
+            Response response = api.markAttendance(9, 22, false);
 
-        Response response = api.markAttendance(9, 22, false);
-
-        assertEquals(303, response.getStatus());
-        assertEquals(null, sub.getAttendanceAt());
-        verify(subDao).merge(sub);
+            assertEquals(303, response.getStatus());
+            assertEquals(null, sub.getAttendanceAt());
+            verify(subDao).merge(sub);
+        }
     }
 
     private static UriInfo mockUriInfo(URI target) {
@@ -413,11 +439,5 @@ class EventRegisterApiTest {
         when(uriBuilder.build()).thenReturn(target);
 
         return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }

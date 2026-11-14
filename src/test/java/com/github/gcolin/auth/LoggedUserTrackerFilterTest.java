@@ -5,11 +5,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.platform.TestContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.ws.rs.container.ContainerRequestContext;
-import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 
 class LoggedUserTrackerFilterTest {
@@ -28,9 +29,8 @@ class LoggedUserTrackerFilterTest {
         when(request.getSession(false)).thenReturn(session);
         when(session.getId()).thenReturn("sid");
 
-        inject(filter, "request", request);
-
         try (TestContext ignored = TestContext.open(user, active)) {
+            RequestContext.require().setRequest(request);
             filter.filter(mock(ContainerRequestContext.class));
         }
 
@@ -55,11 +55,5 @@ class LoggedUserTrackerFilterTest {
                         org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.anyBoolean());
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }

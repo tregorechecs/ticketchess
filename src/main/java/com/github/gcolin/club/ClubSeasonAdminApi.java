@@ -1,16 +1,15 @@
 package com.github.gcolin.club;
 
 import com.github.gcolin.auth.RoleCode;
+import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.platform.MustacheHtml;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -24,16 +23,10 @@ import java.util.Map;
 @Path("admin/seasons")
 public class ClubSeasonAdminApi {
 
-    @Inject
-    private ClubSeasonDao clubSeasonDao;
-
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public MustacheHtml list() {
         Map<String, Object> model = new HashMap<>();
-        List<ClubSeason> seasons = clubSeasonDao.allOrderByStartDateDesc();
+        List<ClubSeason> seasons = RequestContext.require().clubSeasonDao().allOrderByStartDateDesc();
         model.put("seasons", seasons);
         ClubMustacheView.enrichSeasonAdmin(model, seasons);
         model.put("titleKey", "page.seasons");
@@ -54,7 +47,7 @@ public class ClubSeasonAdminApi {
     @GET
     @Path("{id}/edit")
     public MustacheHtml editPage(@PathParam("id") Integer id) {
-        ClubSeason season = clubSeasonDao.find(id);
+        ClubSeason season = RequestContext.require().clubSeasonDao().find(id);
         if (season == null) {
             return new MustacheHtml(Map.of(
                     "statusCode", 404,
@@ -78,7 +71,7 @@ public class ClubSeasonAdminApi {
         season.setName(name);
         season.setStartDate(LocalDate.parse(startDate));
         season.setEndDate(LocalDate.parse(endDate));
-        clubSeasonDao.save(season, isChecked(current));
+        RequestContext.require().clubSeasonDao().save(season, isChecked(current));
         return redirectToList();
     }
 
@@ -91,26 +84,26 @@ public class ClubSeasonAdminApi {
             @FormParam("startDate") String startDate,
             @FormParam("endDate") String endDate,
             @FormParam("current") String current) {
-        ClubSeason season = clubSeasonDao.find(id);
+        ClubSeason season = RequestContext.require().clubSeasonDao().find(id);
         if (season == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
         season.setName(name);
         season.setStartDate(LocalDate.parse(startDate));
         season.setEndDate(LocalDate.parse(endDate));
-        clubSeasonDao.save(season, isChecked(current));
+        RequestContext.require().clubSeasonDao().save(season, isChecked(current));
         return redirectToList();
     }
 
     @POST
     @Path("{id}/delete")
     public Response delete(@PathParam("id") Integer id) {
-        clubSeasonDao.remove(id);
+        RequestContext.require().clubSeasonDao().remove(id);
         return redirectToList();
     }
 
     private Response redirectToList() {
-        URI redirect = uriInfo.getBaseUriBuilder().path("admin/seasons").build();
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder().path("admin/seasons").build();
         return Response.seeOther(redirect).build();
     }
 

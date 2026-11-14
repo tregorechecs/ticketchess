@@ -4,32 +4,30 @@ import com.github.gcolin.platform.Config;
 import com.github.gcolin.player.Club;
 import com.github.gcolin.player.ManualPlayerEntry;
 import com.github.gcolin.player.Player;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.Tokenizer;
-import org.apache.lucene.analysis.miscellaneous.ASCIIFoldingFilter;
-import org.apache.lucene.analysis.standard.StandardTokenizer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.document.IntPoint;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
@@ -47,6 +45,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class LuceneDb {
+
+    /** Enough for FFE+FIDE rebuild with a 32 MB Lucene RAM buffer; keep low for Pi hosts. */
+    static final String INDEXER_HEAP = "-Xmx384m";
+    private static final long INDEXER_TIMEOUT_MINUTES = 30;
+    private static final int INDEXER_OUTPUT_CAP = 64_000;
 
     private IndexSearcher searcher;
     private Analyzer analyzer;
@@ -66,21 +69,20 @@ public class LuceneDb {
     public synchronized void downloadAndExtractFFeDb() throws IOException {
         String url = "https://www.echecs.asso.fr/Papi/PapiData.zip";
         File dbDir = new File(mdbFile).getAbsoluteFile().getParentFile();
-        String zipPath = new File(dbDir, "PapiData.zip").getAbsolutePath();
-        new File(zipPath).delete();
-        logger.info("download {}", url);
-        IOUtils.downloadFile(url, zipPath);
-        logger.info("unzip {}", zipPath);
-        IOUtils.unzip(zipPath, dbDir.getAbsolutePath());
-        new File(zipPath).delete();
+        // Stream unzip from the URL so we never keep PapiData.zip + Data.mdb in RAM/disk together.
+        logger.info("download and extract {}", url);
+        IOUtils.downloadAndUnzip(url, dbDir.getAbsolutePath());
     }
 
     public synchronized void downloadFideDB() throws IOException {
         String url = "https://ratings.fide.com/download/players_list_xml.zip";
         File dbDir = new File(mdbFile).getAbsoluteFile().getParentFile();
         String zipPath = new File(dbDir, "players_list_xml.zip").getAbsolutePath();
+        File partial = new File(zipPath + ".partial");
+        partial.delete();
         logger.info("download {}", url);
-        IOUtils.downloadFile(url, zipPath);
+        IOUtils.downloadFile(url, partial.getAbsolutePath());
+        Files.move(partial.toPath(), Path.of(zipPath), StandardCopyOption.REPLACE_EXISTING);
     }
 
     public File getMdbFile() {
@@ -95,150 +97,12 @@ public class LuceneDb {
         return new File(manualPlayersFile);
     }
 
-    private void loadToLucene() throws IOException {
-        if (!"true".equals(System.getProperty("test"))) {
-            if (dir.exists()) {
-                IOUtils.deleteDirectory(dir.toPath());
-            }
-            dir.mkdirs();
-        }
-
-        IndexWriterConfig config = new IndexWriterConfig(createAnalyzer());
-        config.setOpenMode(IndexWriterConfig.OpenMode.CREATE);
-        config.setRAMBufferSizeMB(256); // important pour 600k
-
-        boolean loadtest = "true".equals(System.getProperty("loadtest"));
-
-        try (IndexWriter writer = new IndexWriter(directory, config)) {
-
-            boolean hasFFE = !loadtest && Files.exists(Paths.get(mdbFile));
-            boolean hasFide = !loadtest && Files.exists(Paths.get(fideFile));
-
-            if (hasFFE) {
-                logger.info("load FFE db");
-                boolean excludeAffTypeN = this.config != null
-                        && Boolean.parseBoolean(this.config.getProperty("ffe.excludeAffTypeN", "false"));
-                new FFELoader(excludeAffTypeN).load(writer, mdbFile);
-            }
-
-            if (hasFide) {
-                logger.info("load Fide db");
-                new FideLoader().load(writer, fideFile);
-            }
-
-            if (!hasFFE && !hasFide) {
-                new TestLoader().load(writer);
-            }
-
-            mergeManualPlayers(writer);
-
-            writer.commit();
-            logger.info("Indexation terminée");
-        }
-    }
-
-    private void mergeManualPlayers(IndexWriter writer) throws IOException {
-        List<ManualPlayerEntry> manualPlayers = readManualPlayersInternal();
-        if (manualPlayers.isEmpty()) {
-            return;
-        }
-
-        List<ManualPlayerEntry> kept = new ArrayList<>();
-        try (DirectoryReader reader = DirectoryReader.open(writer)) {
-            IndexSearcher indexSearcher = new IndexSearcher(reader);
-            for (ManualPlayerEntry player : manualPlayers) {
-                if (isImportedByFfeOrFide(player, indexSearcher)) {
-                    logger.info("remove manual player {} because it is now imported", player.getKey());
-                    continue;
-                }
-                writer.addDocument(manualPlayerToDocument(player));
-                kept.add(player);
-            }
-        }
-
-        if (kept.size() != manualPlayers.size()) {
-            writeManualPlayersInternal(kept);
-        }
-    }
-
-    private boolean isImportedByFfeOrFide(ManualPlayerEntry player, IndexSearcher indexSearcher) throws IOException {
-        String nrffe = trimToNull(player.getNrffe());
-        if (nrffe != null) {
-            Query nrffeQuery = new TermQuery(new Term("nrffe", nrffe));
-            TopDocs byNrffe = indexSearcher.search(nrffeQuery, 1);
-            if (byNrffe.scoreDocs.length > 0) {
-                return true;
-            }
-        }
-
-        String fide = trimToNull(player.getFide());
-        if (fide != null && !"0".equals(fide)) {
-            Query fideQuery = new TermQuery(new Term("fide", fide));
-            TopDocs byFide = indexSearcher.search(fideQuery, 1);
-            return byFide.scoreDocs.length > 0;
-        }
-        return false;
-    }
-
-    private Document manualPlayerToDocument(ManualPlayerEntry player) {
-        Document doc = new Document();
-        doc.add(new StringField("type", "joueur", Field.Store.YES));
-
-        String nrffe = trimToNull(player.getNrffe());
-        String fide = trimToNull(player.getFide());
-        String name = defaultString(trimToNull(player.getName()));
-        String firstname = defaultString(trimToNull(player.getFirstname()));
-
-        doc.add(new StringField("nrffe", defaultString(nrffe), Field.Store.YES));
-        doc.add(new StringField("fide", fide == null ? "0" : fide, Field.Store.YES));
-
-        doc.add(new TextField("nom", name, Field.Store.YES));
-        doc.add(new TextField("prenom", firstname, Field.Store.YES));
-        doc.add(new TextField(
-                "fullName",
-                (firstname + " " + name + " " + defaultString(nrffe) + " " + defaultString(fide)).trim(),
-                Field.Store.NO));
-
-        doc.add(new StringField("birth", defaultString(trimToNull(player.getBirth())), Field.Store.YES));
-        doc.add(new StringField("cat", defaultString(trimToNull(player.getCategory()), "SenM"), Field.Store.YES));
-        doc.add(new StringField("affType", defaultString(trimToNull(player.getAffType()), "A"), Field.Store.YES));
-        doc.add(new StringField(
-                "fideCode", defaultString(trimToNull(player.getFideCode()), defaultString(fide)), Field.Store.YES));
-        if (player.getFideTitre() != null && !player.getFideTitre().isEmpty()) {
-            doc.add(new StringField("fideTitre", defaultString(trimToNull(player.getFideTitre())), Field.Store.YES));
-        }
-        doc.add(new StringField(
-                "federation", defaultString(trimToNull(player.getFederation()), "FRA"), Field.Store.YES));
-        doc.add(new StringField("club", defaultString(trimToNull(player.getClub())), Field.Store.YES));
-        doc.add(new StringField("eloStd", defaultString(trimToNull(player.getEloStd()), "1399F"), Field.Store.YES));
-        doc.add(new StringField(
-                "eloRapide", defaultString(trimToNull(player.getEloRapide()), "1399F"), Field.Store.YES));
-        doc.add(new StringField("eloBlitz", defaultString(trimToNull(player.getEloBlitz()), "1399F"), Field.Store.YES));
-        return doc;
-    }
-
-    private Analyzer createAnalyzer() {
-        Analyzer analyzer = new Analyzer() {
-            @Override
-            protected TokenStreamComponents createComponents(String fieldName) {
-                Tokenizer tokenizer = new StandardTokenizer();
-                TokenStream stream = new LowerCaseFilter(tokenizer);
-                stream = new ASCIIFoldingFilter(stream);
-                return new TokenStreamComponents(tokenizer, stream);
-            }
-        };
-        return analyzer;
-    }
-
+    /** Shared FFE/FIDE index for all organisations: {@code CONFIG_DIR/lucene} + {@code CONFIG_DIR/shared}. */
     public void init() {
-        init(com.github.gcolin.organisation.OrgScope.DEFAULT_ORG_ID);
-    }
-
-    public void init(int orgId) {
-        java.nio.file.Path orgDir = com.github.gcolin.organisation.OrganisationFiles.orgDir(config, orgId);
-        java.nio.file.Path shared = com.github.gcolin.organisation.OrganisationFiles.sharedDir(config);
-        dir = orgDir.resolve("lucene").resolve("index").toFile();
-        manualPlayersFile = orgDir.resolve("lucene").resolve("manual-players.json").toString();
+        Path root = Path.of(config.getConfigDir());
+        Path shared = com.github.gcolin.organisation.OrganisationFiles.sharedDir(config);
+        dir = root.resolve("lucene").resolve("index").toFile();
+        manualPlayersFile = root.resolve("lucene").resolve("manual-players.json").toString();
         mdbFile = shared.resolve("Data.mdb").toString();
         fideFile = shared.resolve("players_list_xml.zip").toString();
     }
@@ -250,33 +114,139 @@ public class LuceneDb {
     }
 
     public synchronized void load(boolean refresh) throws IOException {
-
         close();
         logger.info("load LuceneDb from {}", dir.getAbsolutePath());
 
         if ("true".equals(System.getProperty("test"))) {
             directory = new ByteBuffersDirectory();
-            loadToLucene();
-        } else {
-            directory = FSDirectory.open(Paths.get(dir.getAbsolutePath()));
-            if (!DirectoryReader.indexExists(directory) || refresh) {
-                loadToLucene();
-            }
+            LuceneIndexBuilder.fill(directory, mdbFile, fideFile, manualPlayersFile, config);
+            openForRead();
+            return;
         }
 
+        if (refresh || !indexExistsOnDisk()) {
+            rebuildIndexOutOfProcess();
+        }
+
+        directory = FSDirectory.open(Paths.get(dir.getAbsolutePath()));
         try {
             openForRead();
         } catch (IOException e) {
-            logger.warn("cannot open lucene, rebuilding index", e);
-            loadToLucene();
+            logger.warn("cannot open lucene, rebuilding index out of process", e);
+            closeDirectoryQuietly();
+            rebuildIndexOutOfProcess();
+            directory = FSDirectory.open(Paths.get(dir.getAbsolutePath()));
             openForRead();
         }
+    }
+
+    private boolean indexExistsOnDisk() throws IOException {
+        if (!dir.exists()) {
+            return false;
+        }
+        try (Directory probe = FSDirectory.open(dir.toPath())) {
+            return DirectoryReader.indexExists(probe);
+        }
+    }
+
+    private void rebuildIndexOutOfProcess() throws IOException {
+        Path javaBin = resolveJavaBinary();
+        Path jar = resolveApplicationJar();
+        String configDir = config != null ? config.getConfigDir() : System.getProperty("CONFIG_DIR", ".");
+
+        ProcessBuilder pb = new ProcessBuilder(
+                javaBin.toString(),
+                INDEXER_HEAP,
+                "-DCONFIG_DIR=" + configDir,
+                "-jar",
+                jar.toString(),
+                LuceneIndexBuilder.REBUILD_ARG);
+        pb.environment().put("CONFIG_DIR", configDir);
+        pb.redirectErrorStream(true);
+        logger.info("Starting Lucene indexer: {} {} -jar {} {}", javaBin, INDEXER_HEAP, jar, LuceneIndexBuilder.REBUILD_ARG);
+
+        Process process = pb.start();
+        StringBuilder output = new StringBuilder();
+        try {
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    logger.info("[lucene-indexer] {}", line);
+                    if (output.length() < INDEXER_OUTPUT_CAP) {
+                        output.append(line).append('\n');
+                    }
+                }
+            }
+            boolean finished = process.waitFor(INDEXER_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new IOException("Lucene indexer timed out after " + INDEXER_TIMEOUT_MINUTES + " minutes");
+            }
+            int exit = process.exitValue();
+            if (exit != 0) {
+                throw new IOException("Lucene indexer failed with exit " + exit + ":\n" + output);
+            }
+        } catch (InterruptedException e) {
+            process.destroyForcibly();
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for Lucene indexer", e);
+        }
+    }
+
+    static Path resolveJavaBinary() {
+        String javaHome = System.getProperty("java.home");
+        Path bin = Path.of(javaHome, "bin", isWindows() ? "java.exe" : "java");
+        if (Files.isExecutable(bin) || Files.exists(bin)) {
+            return bin;
+        }
+        return Path.of("java");
+    }
+
+    static Path resolveApplicationJar() throws IOException {
+        URL location = LuceneDb.class.getProtectionDomain().getCodeSource().getLocation();
+        if (location != null) {
+            try {
+                URI uri = location.toURI();
+                Path path = Paths.get(uri);
+                if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(".jar")) {
+                    return path.toAbsolutePath().normalize();
+                }
+            } catch (URISyntaxException | IllegalArgumentException e) {
+                loggerFallback(e);
+            }
+        }
+        Path fallback = Path.of("/app/app.jar");
+        if (Files.isRegularFile(fallback)) {
+            return fallback;
+        }
+        throw new IOException("Cannot locate application jar for Lucene indexer (looked at code source and /app/app.jar)");
+    }
+
+    private static void loggerFallback(Exception e) {
+        LoggerFactory.getLogger(LuceneDb.class).debug("Cannot resolve jar from code source", e);
+    }
+
+    private static boolean isWindows() {
+        String os = System.getProperty("os.name", "");
+        return os.toLowerCase().contains("win");
     }
 
     private void openForRead() throws IOException {
         DirectoryReader reader = DirectoryReader.open(directory);
         searcher = new IndexSearcher(reader);
-        analyzer = createAnalyzer();
+        analyzer = LuceneIndexBuilder.createAnalyzer();
+    }
+
+    private void closeDirectoryQuietly() {
+        if (directory != null) {
+            try {
+                directory.close();
+            } catch (IOException ignored) {
+                // best effort before rebuild
+            }
+            directory = null;
+        }
     }
 
     public void close() throws IOException {
@@ -288,6 +258,7 @@ public class LuceneDb {
             analyzer.close();
             analyzer = null;
         }
+        closeDirectoryQuietly();
     }
 
     public synchronized List<Club> searchClub(String query, int nb) throws ParseException, IOException {
@@ -602,13 +573,5 @@ public class LuceneDb {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String defaultString(String value) {
-        return value == null ? "" : value;
-    }
-
-    private String defaultString(String value, String fallback) {
-        return value == null ? fallback : value;
     }
 }

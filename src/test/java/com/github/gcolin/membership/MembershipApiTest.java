@@ -1,42 +1,36 @@
 package com.github.gcolin.membership;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.doAnswer;
-import static org.junit.jupiter.api.Assertions.assertSame;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.gcolin.club.ClubSeasonDao;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 import com.github.gcolin.platform.Caches;
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.gcolin.platform.MustacheHtml;
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.player.Find;
 import com.github.gcolin.player.IPlayer;
-import com.github.gcolin.membership.MembershipOption;
-import com.github.gcolin.membership.MembershipOptionSubscription;
-import com.github.gcolin.membership.MembershipStatus;
-import com.github.gcolin.membership.MembershipDao;
-import com.github.gcolin.membership.MembershipOptionDao;
-import com.github.gcolin.membership.MembershipOptionSubscriptionDao;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import com.github.gcolin.platform.MustacheHtml;
 
 class MembershipApiTest {
 
@@ -58,20 +52,22 @@ class MembershipApiTest {
         when(membershipDao.all(any(SeasonScope.class))).thenReturn(new ArrayList<>(List.of(m1, m2)));
         when(subscriptionDao.findByMembershipIds(any())).thenReturn(List.of());
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "membershipOptionDao", membershipOptionDao);
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setMembershipOptionDao(membershipOptionDao);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            MustacheHtml html = api.list(null);
+            Map<String, Object> model = html.getModel();
 
-        MustacheHtml html = api.list(null);
-        Map<String, Object> model = html.getModel();
-
-        assertEquals("membership/membership.mustache", html.getTemplate());
-        @SuppressWarnings("unchecked")
-        List<Membership> memberships = (List<Membership>) model.get("memberships");
-        // sorted descending by id: 5, 1
-        assertEquals(5, memberships.get(0).getId());
-        assertEquals(1, memberships.get(1).getId());
+            assertEquals("membership/membership.mustache", html.getTemplate());
+            @SuppressWarnings("unchecked")
+            List<Membership> memberships = (List<Membership>) model.get("memberships");
+            // sorted descending by id: 5, 1
+            assertEquals(5, memberships.get(0).getId());
+            assertEquals(1, memberships.get(1).getId());
+        }
     }
 
     @Test
@@ -91,18 +87,20 @@ class MembershipApiTest {
         when(membershipDao.all(any(SeasonScope.class))).thenReturn(new ArrayList<>(List.of(m)));
         when(subscriptionDao.findByMembershipIds(any())).thenReturn(List.of(sub));
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "membershipOptionDao", membershipOptionDao);
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setMembershipOptionDao(membershipOptionDao);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            MustacheHtml html = api.list(null);
+            @SuppressWarnings("unchecked")
+            Map<String, List<MembershipOptionSubscription>> subscriptionsByMembership =
+                    (Map<String, List<MembershipOptionSubscription>>) html.getModel().get("membershipSubscriptions");
 
-        MustacheHtml html = api.list(null);
-        @SuppressWarnings("unchecked")
-        Map<String, List<MembershipOptionSubscription>> subscriptionsByMembership =
-                (Map<String, List<MembershipOptionSubscription>>) html.getModel().get("membershipSubscriptions");
-
-        assertTrue(subscriptionsByMembership.containsKey("3"));
-        assertEquals(1, subscriptionsByMembership.get("3").size());
+            assertTrue(subscriptionsByMembership.containsKey("3"));
+            assertEquals(1, subscriptionsByMembership.get("3").size());
+        }
     }
 
     // --- createPage ---
@@ -111,21 +109,24 @@ class MembershipApiTest {
     void createPageShouldReturnEmptyMembershipWithStatuses() throws Exception {
         MembershipApi api = new MembershipApi();
 
-        inject(api, "membershipDao", mock(MembershipDao.class));
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
         LicenseDao licenseDao = mock(LicenseDao.class);
         when(licenseDao.all()).thenReturn(List.of());
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
 
-        MustacheHtml html = api.createPage(null);
-        Map<String, Object> model = html.getModel();
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(mock(MembershipDao.class));
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            MustacheHtml html = api.createPage(null);
+            Map<String, Object> model = html.getModel();
 
-        assertEquals("membership/membershipNew.mustache", html.getTemplate());
-        assertTrue(model.get("membership") instanceof Membership);
-        MembershipStatus[] statuses = (MembershipStatus[]) model.get("statuses");
-        assertEquals(MembershipStatus.values().length, statuses.length);
+            assertEquals("membership/membershipNew.mustache", html.getTemplate());
+            assertTrue(model.get("membership") instanceof Membership);
+            MembershipStatus[] statuses = (MembershipStatus[]) model.get("statuses");
+            assertEquals(MembershipStatus.values().length, statuses.length);
+        }
     }
 
     // --- create ---
@@ -136,17 +137,19 @@ class MembershipApiTest {
 
         MembershipDao membershipDao = mock(MembershipDao.class);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/membership")));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+            ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/membership")));
+        })) {
+            Response response = api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", "APPROVED", 1500, null, null);
 
-        Response response = api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", "APPROVED", 1500, null, null);
-
-        assertEquals(303, response.getStatus());
-        verify(membershipDao).persist(any(Membership.class));
+            assertEquals(303, response.getStatus());
+            verify(membershipDao).persist(any(Membership.class));
+        }
     }
 
     @Test
@@ -160,18 +163,20 @@ class MembershipApiTest {
             return null;
         }).when(membershipDao).persist(any(Membership.class));
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/membership")));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+            ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/membership")));
+        })) {
+            api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", null, null, null, null);
 
-        api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", null, null, null, null);
-
-        assertEquals(1, captured.size());
-        assertEquals(0, captured.get(0).getAmountCents());
-        assertEquals(MembershipStatus.PENDING_APPROVAL, captured.get(0).getStatus());
+            assertEquals(1, captured.size());
+            assertEquals(0, captured.get(0).getAmountCents());
+            assertEquals(MembershipStatus.PENDING_APPROVAL, captured.get(0).getStatus());
+        }
     }
 
     @Test
@@ -185,17 +190,19 @@ class MembershipApiTest {
             return null;
         }).when(membershipDao).persist(any(Membership.class));
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/membership")));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+            ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/membership")));
+        })) {
+            api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", "APPROVED", 1500, "a", null);
 
-        api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", "APPROVED", 1500, "a", null);
-
-        assertEquals(1, captured.size());
-        assertEquals("A", captured.get(0).getLicenseType());
+            assertEquals(1, captured.size());
+            assertEquals("A", captured.get(0).getLicenseType());
+        }
     }
 
     @Test
@@ -209,17 +216,19 @@ class MembershipApiTest {
             return null;
         }).when(membershipDao).persist(any(Membership.class));
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/membership")));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+            ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/membership")));
+        })) {
+            api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", "APPROVED", 1500, "", null);
 
-        api.create("user@test.com", "A12345", "Doe", "John", "2000-01-01", "APPROVED", 1500, "", null);
-
-        assertEquals(1, captured.size());
-        assertEquals("A", captured.get(0).getLicenseType());
+            assertEquals(1, captured.size());
+            assertEquals("A", captured.get(0).getLicenseType());
+        }
     }
 
     // --- editPage ---
@@ -241,18 +250,20 @@ class MembershipApiTest {
         when(membershipOptionDao.all(any(SeasonScope.class))).thenReturn(List.of());
         when(licenseDao.all()).thenReturn(List.of());
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "membershipOptionDao", membershipOptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setMembershipOptionDao(membershipOptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            MustacheHtml html = api.editPage(10);
+            Map<String, Object> model = html.getModel();
 
-        MustacheHtml html = api.editPage(10);
-        Map<String, Object> model = html.getModel();
-
-        assertEquals("membership/membershipEdit.mustache", html.getTemplate());
-        assertEquals(m, model.get("membership"));
+            assertEquals("membership/membershipEdit.mustache", html.getTemplate());
+            assertEquals(m, model.get("membership"));
+        }
     }
 
     @Test
@@ -262,11 +273,13 @@ class MembershipApiTest {
         MembershipDao membershipDao = mock(MembershipDao.class);
         when(membershipDao.find(99)).thenReturn(null);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-
-        assertThrows(NotFoundException.class, () -> api.editPage(99));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+        })) {
+            assertThrows(NotFoundException.class, () -> api.editPage(99));
+        }
     }
 
     // --- update ---
@@ -280,19 +293,22 @@ class MembershipApiTest {
         m.setId(5);
         when(membershipDao.find(5)).thenReturn(m);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "licensePriceService", mockLicensePriceService());
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(api, "caches", mockCaches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/membership")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setLicensePriceService(mockLicensePriceService());
+            app.setCaches(mockCaches());
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+            ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/membership")));
+        })) {
+            Response response = api.update(5, "user@test.com", "B99", "Smith", "Jane", "1990-05-05", "PAID", 2000, "B", null);
 
-        Response response = api.update(5, "user@test.com", "B99", "Smith", "Jane", "1990-05-05", "PAID", 2000, "B", null);
-
-        assertEquals(303, response.getStatus());
-        verify(membershipDao).merge(m);
+            assertEquals(303, response.getStatus());
+            verify(membershipDao).merge(m);
+        }
     }
 
     @Test
@@ -306,21 +322,24 @@ class MembershipApiTest {
         m.setStatus(MembershipStatus.PAID);
         when(membershipDao.find(55)).thenReturn(m);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "licensePriceService", mockLicensePriceService());
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(api, "caches", mockCaches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/membership")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setLicensePriceService(mockLicensePriceService());
+            app.setCaches(mockCaches());
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+            ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/membership")));
+        })) {
+            Response response = api.update(55, "user@test.com", "Y69643", "LARGE", "Gary", "2016-06-03", "FREE", 17300, "A", null);
 
-        Response response = api.update(55, "user@test.com", "Y69643", "LARGE", "Gary", "2016-06-03", "FREE", 17300, "A", null);
-
-        assertEquals(303, response.getStatus());
-        assertEquals(MembershipStatus.FREE, m.getStatus());
-        assertEquals(0, m.getAmountCents());
-        verify(membershipDao).merge(m);
+            assertEquals(303, response.getStatus());
+            assertEquals(MembershipStatus.FREE, m.getStatus());
+            assertEquals(0, m.getAmountCents());
+            verify(membershipDao).merge(m);
+        }
     }
 
     @Test
@@ -343,20 +362,23 @@ class MembershipApiTest {
         Find find = mock(Find.class);
         when(find.player("X67015", null)).thenReturn(player);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "licensePriceService", licensePriceService);
-        inject(api, "find", find);
-        inject(api, "clubSeasonDao", mockClubSeasonDao());
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
-        inject(api, "caches", mockCaches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/membership/47/edit")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setLicensePriceService(licensePriceService);
+            app.setCaches(mockCaches());
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setFind(find);
+            ctx.setClubSeasonDao(mockClubSeasonDao());
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+            ctx.setUriInfo(mockUriInfo(URI.create("http://localhost:8080/membership/47/edit")));
+        })) {
+            api.update(47, "daniel.guillemand@gmail.com", "X67015", "GUILLEMAND", "Daniel", "", "APPROVED", 4000, "A", null);
 
-        api.update(47, "daniel.guillemand@gmail.com", "X67015", "GUILLEMAND", "Daniel", "", "APPROVED", 4000, "A", null);
-
-        assertEquals(8200, m.getAmountCents());
-        verify(membershipDao).merge(m);
+            assertEquals(8200, m.getAmountCents());
+            verify(membershipDao).merge(m);
+        }
     }
 
     @Test
@@ -366,12 +388,14 @@ class MembershipApiTest {
         MembershipDao membershipDao = mock(MembershipDao.class);
         when(membershipDao.find(77)).thenReturn(null);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-
-        assertThrows(NotFoundException.class,
-                () -> api.update(77, "u", "n", "l", "f", "d", "APPROVED", 100, null, null));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+        })) {
+            assertThrows(NotFoundException.class,
+                    () -> api.update(77, "u", "n", "l", "f", "d", "APPROVED", 100, null, null));
+        }
     }
 
     // --- addOption ---
@@ -392,16 +416,22 @@ class MembershipApiTest {
 
         when(membershipDao.find(3)).thenReturn(m);
         when(optionDao.find(7)).thenReturn(opt);
+        when(subscriptionDao.findByMembershipIds(any())).thenReturn(List.of());
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionDao", optionDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "uriInfo", mockUriInfoMultiPath(URI.create("http://localhost:8080/membership/3/edit")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setLicensePriceService(mockLicensePriceService());
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionDao(optionDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setFind(mock(Find.class));
+            ctx.setUriInfo(mockUriInfoMultiPath(URI.create("http://localhost:8080/membership/3/edit")));
+        })) {
+            Response response = api.addOption(3, 7);
 
-        Response response = api.addOption(3, 7);
-
-        assertEquals(303, response.getStatus());
-        verify(subscriptionDao).persist(any(MembershipOptionSubscription.class));
+            assertEquals(303, response.getStatus());
+            verify(subscriptionDao).persist(any(MembershipOptionSubscription.class));
+        }
     }
 
     @Test
@@ -411,11 +441,13 @@ class MembershipApiTest {
         MembershipDao membershipDao = mock(MembershipDao.class);
         when(membershipDao.find(1)).thenReturn(null);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-
-        assertThrows(NotFoundException.class, () -> api.addOption(1, 2));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+        })) {
+            assertThrows(NotFoundException.class, () -> api.addOption(1, 2));
+        }
     }
 
     @Test
@@ -430,11 +462,13 @@ class MembershipApiTest {
         when(membershipDao.find(1)).thenReturn(m);
         when(optionDao.find(99)).thenReturn(null);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionDao", optionDao);
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-
-        assertThrows(NotFoundException.class, () -> api.addOption(1, 99));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionDao(optionDao);
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+        })) {
+            assertThrows(NotFoundException.class, () -> api.addOption(1, 99));
+        }
     }
 
     // --- removeOption ---
@@ -455,15 +489,17 @@ class MembershipApiTest {
 
         when(subscriptionDao.find(8)).thenReturn(sub);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "uriInfo", mockUriInfoMultiPath(URI.create("http://localhost:8080/membership/4/edit")));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setUriInfo(mockUriInfoMultiPath(URI.create("http://localhost:8080/membership/4/edit")));
+        })) {
+            Response response = api.removeOption(4, 8);
 
-        Response response = api.removeOption(4, 8);
-
-        assertEquals(303, response.getStatus());
-        verify(subscriptionDao).remove(8);
+            assertEquals(303, response.getStatus());
+            verify(subscriptionDao).remove(8);
+        }
     }
 
     @Test
@@ -473,11 +509,13 @@ class MembershipApiTest {
         MembershipOptionSubscriptionDao subscriptionDao = mock(MembershipOptionSubscriptionDao.class);
         when(subscriptionDao.find(55)).thenReturn(null);
 
-        inject(api, "membershipDao", mock(MembershipDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-
-        assertThrows(NotFoundException.class, () -> api.removeOption(1, 55));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(mock(MembershipDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+        })) {
+            assertThrows(NotFoundException.class, () -> api.removeOption(1, 55));
+        }
     }
 
     @Test
@@ -495,11 +533,13 @@ class MembershipApiTest {
 
         when(subscriptionDao.find(10)).thenReturn(sub);
 
-        inject(api, "membershipDao", mock(MembershipDao.class));
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-
-        assertThrows(BadRequestException.class, () -> api.removeOption(1, 10));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(mock(MembershipDao.class));
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+        })) {
+            assertThrows(BadRequestException.class, () -> api.removeOption(1, 10));
+        }
     }
 
     // --- delete ---
@@ -521,17 +561,19 @@ class MembershipApiTest {
         when(membershipDao.find(4)).thenReturn(membership);
         when(subscriptionDao.findByMembershipIds(List.of(4))).thenReturn(List.of(sub));
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "uriInfo", mockUriInfoMultiPath(URI.create("http://localhost:8080/membership?seasonId=2")));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setUriInfo(mockUriInfoMultiPath(URI.create("http://localhost:8080/membership?seasonId=2")));
+        })) {
+            Response response = api.delete(4, 2);
 
-        Response response = api.delete(4, 2);
-
-        assertEquals(303, response.getStatus());
-        verify(subscriptionDao).remove(8);
-        verify(membershipDao).remove(4);
-        assertEquals(URI.create("http://localhost:8080/membership?seasonId=2"), response.getLocation());
+            assertEquals(303, response.getStatus());
+            verify(subscriptionDao).remove(8);
+            verify(membershipDao).remove(4);
+            assertEquals(URI.create("http://localhost:8080/membership?seasonId=2"), response.getLocation());
+        }
     }
 
     @Test
@@ -541,11 +583,13 @@ class MembershipApiTest {
         MembershipDao membershipDao = mock(MembershipDao.class);
         when(membershipDao.find(99)).thenReturn(null);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionDao", mock(MembershipOptionDao.class));
-        inject(api, "membershipOptionSubscriptionDao", mock(MembershipOptionSubscriptionDao.class));
-
-        assertThrows(NotFoundException.class, () -> api.delete(99, null));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionDao(mock(MembershipOptionDao.class));
+            ctx.setMembershipOptionSubscriptionDao(mock(MembershipOptionSubscriptionDao.class));
+        })) {
+            assertThrows(NotFoundException.class, () -> api.delete(99, null));
+        }
     }
 
     @Test
@@ -576,16 +620,18 @@ class MembershipApiTest {
         when(membershipDao.all(any(SeasonScope.class))).thenReturn(List.of(membership));
         when(subscriptionDao.findByMembershipIds(any())).thenReturn(List.of(subscription));
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "clubSeasonFilter", mockClubSeasonFilter());
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setClubSeasonFilter(mockClubSeasonFilter());
+        })) {
+            Response response = api.exportCsv(null);
+            String csv = (String) response.getEntity();
 
-        Response response = api.exportCsv(null);
-        String csv = (String) response.getEntity();
-
-        assertEquals("attachment; filename=memberships.csv", response.getHeaderString("Content-Disposition"));
-        assertTrue(csv.startsWith("id;User;Nr FFE;Nom;Prénom;Date de naissance;Status;Options;Created;Updated\n"));
-        assertTrue(csv.contains("42;\"user@test.com\";\"A12345\";\"Dupont\";\"Jean\";\"2000-01-01\";\"PAID\";\"Licence adulte\";"));
+            assertEquals("attachment; filename=memberships.csv", response.getHeaderString("Content-Disposition"));
+            assertTrue(csv.startsWith("id;User;Nr FFE;Nom;Prénom;Date de naissance;Status;Options;Created;Updated\n"));
+            assertTrue(csv.contains("42;\"user@test.com\";\"A12345\";\"Dupont\";\"Jean\";\"2000-01-01\";\"PAID\";\"Licence adulte\";"));
+        }
     }
 
     @Test
@@ -605,20 +651,23 @@ class MembershipApiTest {
         when(licenseDao.all()).thenReturn(List.of());
         when(reportService.generate(List.of(), Map.of(), List.of(), scope)).thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", mock(LicensePriceService.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(mock(LicensePriceService.class));
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            Response response = api.exportPdf(3);
 
-        Response response = api.exportPdf(3);
-
-        assertEquals(200, response.getStatus());
-        assertSame(pdf, response.getEntity());
-        assertTrue(response.getHeaderString("Content-Disposition").startsWith("attachment; filename=adhesions-"));
-        verify(membershipDao).all(scope);
-        verify(reportService).generate(List.of(), Map.of(), List.of(), scope);
+            assertEquals(200, response.getStatus());
+            assertSame(pdf, response.getEntity());
+            assertTrue(response.getHeaderString("Content-Disposition").startsWith("attachment; filename=adhesions-"));
+            verify(membershipDao).all(scope);
+            verify(reportService).generate(List.of(), Map.of(), List.of(), scope);
+        }
     }
 
     @Test
@@ -650,28 +699,31 @@ class MembershipApiTest {
                         eq(scope)))
                 .thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", mock(LicensePriceService.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(mock(LicensePriceService.class));
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            Response response = api.exportPdf(null);
 
-        Response response = api.exportPdf(null);
-
-        assertEquals(200, response.getStatus());
-        org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(reportService)
-                .generate(
-                        eq(List.of(membership)),
-                        eq(Map.of()),
-                        summaryCaptor.capture(),
-                        eq(scope));
-        assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").count());
-        assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").approvedCount());
-        assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").amountCents());
-        assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
+            assertEquals(200, response.getStatus());
+            org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            verify(reportService)
+                    .generate(
+                            eq(List.of(membership)),
+                            eq(Map.of()),
+                            summaryCaptor.capture(),
+                            eq(scope));
+            assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").count());
+            assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").approvedCount());
+            assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").amountCents());
+            assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
+        }
     }
 
     @Test
@@ -703,27 +755,30 @@ class MembershipApiTest {
                         eq(scope)))
                 .thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", mock(LicensePriceService.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(mock(LicensePriceService.class));
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            api.exportPdf(null);
 
-        api.exportPdf(null);
-
-        org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(reportService)
-                .generate(
-                        eq(List.of(membership)),
-                        eq(Map.of()),
-                        summaryCaptor.capture(),
-                        eq(scope));
-        assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence B").count());
-        assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence B").approvedCount());
-        assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").amountCents());
-        assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").approvedAmountCents());
+            org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            verify(reportService)
+                    .generate(
+                            eq(List.of(membership)),
+                            eq(Map.of()),
+                            summaryCaptor.capture(),
+                            eq(scope));
+            assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence B").count());
+            assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence B").approvedCount());
+            assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").amountCents());
+            assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").approvedAmountCents());
+        }
     }
 
     @Test
@@ -756,24 +811,27 @@ class MembershipApiTest {
                         eq(scope)))
                 .thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", licensePriceService);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(licensePriceService);
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            api.exportPdf(null);
 
-        api.exportPdf(null);
-
-        org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(reportService)
-                .generate(
-                        eq(List.of(membership)),
-                        eq(Map.of()),
-                        summaryCaptor.capture(),
-                        eq(scope));
-        assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence B").count());
+            org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            verify(reportService)
+                    .generate(
+                            eq(List.of(membership)),
+                            eq(Map.of()),
+                            summaryCaptor.capture(),
+                            eq(scope));
+            assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence B").count());
+        }
     }
 
     @Test
@@ -804,26 +862,29 @@ class MembershipApiTest {
                         eq(scope)))
                 .thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", licensePriceService);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(licensePriceService);
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            api.exportPdf(null);
 
-        api.exportPdf(null);
-
-        org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(reportService)
-                .generate(
-                        eq(List.of(membership)),
-                        eq(Map.of()),
-                        summaryCaptor.capture(),
-                        eq(scope));
-        assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").count());
-        assertEquals(16400, licenseLine(summaryCaptor.getValue(), "Licence A").amountCents());
-        assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
+            org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            verify(reportService)
+                    .generate(
+                            eq(List.of(membership)),
+                            eq(Map.of()),
+                            summaryCaptor.capture(),
+                            eq(scope));
+            assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").count());
+            assertEquals(16400, licenseLine(summaryCaptor.getValue(), "Licence A").amountCents());
+            assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
+        }
     }
 
     @Test
@@ -862,30 +923,33 @@ class MembershipApiTest {
                         eq(scope)))
                 .thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", mock(LicensePriceService.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(mock(LicensePriceService.class));
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            api.exportPdf(null);
 
-        api.exportPdf(null);
-
-        org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(reportService)
-                .generate(
-                        eq(List.of(approved, pending)),
-                        eq(Map.of()),
-                        summaryCaptor.capture(),
-                        eq(scope));
-        assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
-        assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence A").paidAmountCents());
-        assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").approvedCount());
-        assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").amountCents());
-        assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").approvedAmountCents());
-        assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").approvedCount());
-        assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").paidAmountCents());
+            org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            verify(reportService)
+                    .generate(
+                            eq(List.of(approved, pending)),
+                            eq(Map.of()),
+                            summaryCaptor.capture(),
+                            eq(scope));
+            assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
+            assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence A").paidAmountCents());
+            assertEquals(1, licenseLine(summaryCaptor.getValue(), "Licence A").approvedCount());
+            assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").amountCents());
+            assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").approvedAmountCents());
+            assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").approvedCount());
+            assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").paidAmountCents());
+        }
     }
 
     @Test
@@ -924,27 +988,30 @@ class MembershipApiTest {
                         eq(scope)))
                 .thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", mock(LicensePriceService.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(mock(LicensePriceService.class));
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            api.exportPdf(null);
 
-        api.exportPdf(null);
-
-        org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(reportService)
-                .generate(
-                        eq(List.of(paid, approved)),
-                        eq(Map.of()),
-                        summaryCaptor.capture(),
-                        eq(scope));
-        assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").paidAmountCents());
-        assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
-        assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").approvedAmountCents());
-        assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").paidAmountCents());
+            org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            verify(reportService)
+                    .generate(
+                            eq(List.of(paid, approved)),
+                            eq(Map.of()),
+                            summaryCaptor.capture(),
+                            eq(scope));
+            assertEquals(4000, licenseLine(summaryCaptor.getValue(), "Licence A").paidAmountCents());
+            assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence A").approvedAmountCents());
+            assertEquals(2500, licenseLine(summaryCaptor.getValue(), "Licence B").approvedAmountCents());
+            assertEquals(0, licenseLine(summaryCaptor.getValue(), "Licence B").paidAmountCents());
+        }
     }
 
     @Test
@@ -983,28 +1050,31 @@ class MembershipApiTest {
                         eq(scope)))
                 .thenReturn(pdf);
 
-        inject(api, "membershipDao", membershipDao);
-        inject(api, "membershipOptionSubscriptionDao", subscriptionDao);
-        inject(api, "licenseDao", licenseDao);
-        inject(api, "clubSeasonFilter", seasonFilter);
-        inject(api, "membershipReportService", reportService);
-        inject(api, "licensePriceService", mock(LicensePriceService.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setMembershipReportService(reportService);
+            app.setLicensePriceService(mock(LicensePriceService.class));
+        }, ctx -> {
+            ctx.setMembershipDao(membershipDao);
+            ctx.setMembershipOptionSubscriptionDao(subscriptionDao);
+            ctx.setLicenseDao(licenseDao);
+            ctx.setClubSeasonFilter(seasonFilter);
+        })) {
+            api.exportPdf(null);
 
-        api.exportPdf(null);
-
-        org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(reportService)
-                .generate(
-                        eq(List.of(free, paid)),
-                        eq(Map.of()),
-                        summaryCaptor.capture(),
-                        eq(scope));
-        MembershipSummaryLine licenceA = licenseLine(summaryCaptor.getValue(), "Licence A");
-        assertEquals(2, licenceA.count());
-        assertEquals(4000, licenceA.amountCents());
-        assertEquals(0, licenceA.approvedAmountCents());
-        assertEquals(4000, licenceA.paidAmountCents());
+            org.mockito.ArgumentCaptor<List<MembershipSummarySection>> summaryCaptor =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            verify(reportService)
+                    .generate(
+                            eq(List.of(free, paid)),
+                            eq(Map.of()),
+                            summaryCaptor.capture(),
+                            eq(scope));
+            MembershipSummaryLine licenceA = licenseLine(summaryCaptor.getValue(), "Licence A");
+            assertEquals(2, licenceA.count());
+            assertEquals(4000, licenceA.amountCents());
+            assertEquals(0, licenceA.approvedAmountCents());
+            assertEquals(4000, licenceA.paidAmountCents());
+        }
     }
 
     // --- helpers ---
@@ -1067,20 +1137,5 @@ class MembershipApiTest {
         when(uriBuilder.path(any(String.class))).thenReturn(uriBuilder);
         when(uriBuilder.build()).thenReturn(target);
         return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Class<?> clazz = target.getClass();
-        while (clazz != null) {
-            try {
-                Field field = clazz.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                field.set(target, value);
-                return;
-            } catch (NoSuchFieldException e) {
-                clazz = clazz.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(fieldName + " not found in " + target.getClass().getName());
     }
 }

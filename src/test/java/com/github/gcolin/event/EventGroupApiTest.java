@@ -1,5 +1,8 @@
 package com.github.gcolin.event;
 
+import com.github.gcolin.platform.ApiTestBase;
+
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
@@ -7,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.event.EventGroup;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.event.EventGroupDao;
@@ -20,7 +24,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.github.gcolin.platform.MustacheHtml;
 
-class EventGroupApiTest {
+class EventGroupApiTest extends ApiTestBase {
 
     @Test
     void listShouldReturnAllEventGroupsSorted() throws Exception {
@@ -35,16 +39,19 @@ class EventGroupApiTest {
         java.util.ArrayList<EventGroup> list = new java.util.ArrayList<>(List.of(eg2, eg1));
         when(dao.all()).thenReturn(list);
 
-        inject(api, "eventGroupService", dao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventGroupDao(dao);
+        })) {
 
-        MustacheHtml html = api.list();
+            MustacheHtml html = api.list();
 
-        assertEquals("event/eventgroup.mustache", html.getTemplate());
-        @SuppressWarnings("unchecked")
-        List<EventGroup> groups = (List<EventGroup>) html.getModel().get("eventGroups");
-        assertEquals(2, groups.size());
-        assertEquals("Blitz", groups.get(0).getName());
-        assertEquals("Open", groups.get(1).getName());
+            assertEquals("event/eventgroup.mustache", html.getTemplate());
+            @SuppressWarnings("unchecked")
+            List<EventGroup> groups = (List<EventGroup>) html.getModel().get("eventGroups");
+            assertEquals(2, groups.size());
+            assertEquals("Blitz", groups.get(0).getName());
+            assertEquals("Open", groups.get(1).getName());
+        }
     }
 
     @Test
@@ -54,12 +61,15 @@ class EventGroupApiTest {
 
         when(dao.all()).thenReturn(new java.util.ArrayList<>());
 
-        inject(api, "eventGroupService", dao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventGroupDao(dao);
+        })) {
 
-        MustacheHtml html = api.newEventGroup();
+            MustacheHtml html = api.newEventGroup();
 
-        assertEquals("event/eventgroupEdit.mustache", html.getTemplate());
-        assertTrue(html.getModel().get("eventGroup") instanceof EventGroup);
+            assertEquals("event/eventgroupEdit.mustache", html.getTemplate());
+            assertTrue(html.getModel().get("eventGroup") instanceof EventGroup);
+        }
     }
 
     @Test
@@ -73,14 +83,17 @@ class EventGroupApiTest {
 
         when(dao.findDetachedForEdit(1)).thenReturn(eg);
 
-        inject(api, "eventGroupService", dao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventGroupDao(dao);
+        })) {
 
-        MustacheHtml html = api.edit(1);
+            MustacheHtml html = api.edit(1);
 
-        assertEquals("event/eventgroupEdit.mustache", html.getTemplate());
-        Map<String, Object> model = html.getModel();
-        assertEquals(eg, model.get("eventGroup"));
-        assertTrue(((List<?>) model.get("events")).isEmpty());
+            assertEquals("event/eventgroupEdit.mustache", html.getTemplate());
+            Map<String, Object> model = html.getModel();
+            assertEquals(eg, model.get("eventGroup"));
+            assertTrue(((List<?>) model.get("events")).isEmpty());
+        }
     }
 
     @Test
@@ -99,14 +112,18 @@ class EventGroupApiTest {
                 .when(dao)
                 .persist(org.mockito.ArgumentMatchers.any(EventGroup.class));
 
-        inject(api, "eventGroupService", dao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventgroup/10")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventGroupDao(dao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/eventgroup/10")));
 
-        Response response = api.save(null, null, "rapid", "Rapid");
+            Response response = api.save(null, null, "rapid", "Rapid");
 
-        assertEquals(303, response.getStatus());
-        verify(dao).persist(org.mockito.ArgumentMatchers.any(EventGroup.class));
+            assertEquals(303, response.getStatus());
+            verify(dao).persist(org.mockito.ArgumentMatchers.any(EventGroup.class));
+        }
     }
 
     @Test
@@ -117,14 +134,18 @@ class EventGroupApiTest {
         EventGroup eg = new EventGroup("Blitz Updated");
         eg.setId(5);
 
-        inject(api, "eventGroupService", dao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventgroup/5")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventGroupDao(dao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/eventgroup/5")));
 
-        Response response = api.save(null, 5, "blitz", "Blitz Updated");
+            Response response = api.save(null, 5, "blitz", "Blitz Updated");
 
-        assertEquals(303, response.getStatus());
-        verify(dao).merge(org.mockito.ArgumentMatchers.any(EventGroup.class));
+            assertEquals(303, response.getStatus());
+            verify(dao).merge(org.mockito.ArgumentMatchers.any(EventGroup.class));
+        }
     }
 
     @Test
@@ -136,30 +157,19 @@ class EventGroupApiTest {
         eg.setId(9);
         when(dao.find(9)).thenReturn(eg);
 
-        inject(api, "eventGroupService", dao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/events")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventGroupDao(dao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/admin/events")));
 
-        Response response = api.save("remove", 9, null, null);
+            Response response = api.save("remove", 9, null, null);
 
-        assertEquals(303, response.getStatus());
-        verify(dao).remove(eg);
+            assertEquals(303, response.getStatus());
+            verify(dao).remove(eg);
+        }
     }
 
-    private static UriInfo mockUriInfo(URI target) {
-        UriInfo uriInfo = mock(UriInfo.class);
-        UriBuilder uriBuilder = mock(UriBuilder.class);
 
-        when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
-        when(uriBuilder.path(org.mockito.ArgumentMatchers.anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.build()).thenReturn(target);
-
-        return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

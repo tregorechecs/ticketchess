@@ -1,0 +1,7 @@
+com.github.gcolin.platform.EmailFeatureModule
+com.github.gcolin.player.PlayerIndexFeatureModule
+com.github.gcolin.player.CustomPlayerFeatureModule
+com.github.gcolin.event.EventsFeatureModule
+com.github.gcolin.membership.MembershipFeatureModule
+com.github.gcolin.payment.PaymentsFeatureModule
+com.github.gcolin.desk.DeskFeatureModule

@@ -89,6 +89,32 @@ public final class MembershipMustacheView {
         model.put("titleKey", license != null && license.getId() != null ? "page.licenseEdit" : "page.licenseNew");
     }
 
+    public static void enrichLicensePriceListPage(
+            Map<String, Object> model, License license, List<LicensePrice> prices) {
+        String licenseName = license != null && license.getName() != null ? license.getName() : "";
+        Integer licenseId = license != null ? license.getId() : null;
+        // Resolved with request locale in MustacheMessageBodyWriter (avoid Locale.getDefault encoding).
+        model.put("headingKey", "heading.licensePrices");
+        model.put("headingParam", licenseName);
+        model.put("titleKey", "page.licensePrices");
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (prices != null) {
+            for (LicensePrice price : prices) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", price.getId());
+                row.put("category", price.getCategory() != null ? price.getCategory() : "");
+                row.put("priceEuros", formatEuros(price.getPriceCents()));
+                row.put(
+                        "licenseId",
+                        price.getLicense() != null && price.getLicense().getId() != null
+                                ? price.getLicense().getId()
+                                : licenseId);
+                rows.add(row);
+            }
+        }
+        model.put("priceRows", rows);
+    }
+
     public static void enrichLicensePriceEditPage(Map<String, Object> model, License license, LicensePrice price) {
         model.put("priceIsEdit", price != null && price.getId() != null);
         model.put(

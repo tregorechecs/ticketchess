@@ -4,6 +4,7 @@ import com.github.gcolin.player.Find;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.Connection;
+import java.util.function.Consumer;
 
 public final class TestContext implements AutoCloseable {
 
@@ -43,6 +44,30 @@ public final class TestContext implements AutoCloseable {
     public static TestContext open(HttpServletRequest request, Connection connection) {
         RequestContext.openForTest(request, connection);
         return new TestContext();
+    }
+
+    public static TestContext openApp(Consumer<AppContext> setup) {
+        AppContext app = AppContext.initForTest();
+        setup.accept(app);
+        TestContext t = new TestContext();
+        t.clearAppContext = true;
+        return t;
+    }
+
+    public static TestContext openRequest(Consumer<RequestContext> setup) {
+        RequestContext ctx = RequestContext.openForTest();
+        setup.accept(ctx);
+        return new TestContext();
+    }
+
+    public static TestContext open(Consumer<AppContext> appSetup, Consumer<RequestContext> reqSetup) {
+        AppContext app = AppContext.initForTest();
+        appSetup.accept(app);
+        RequestContext ctx = RequestContext.openForTest();
+        reqSetup.accept(ctx);
+        TestContext t = new TestContext();
+        t.clearAppContext = true;
+        return t;
     }
 
     public RequestContext ctx() {

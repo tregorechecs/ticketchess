@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import jakarta.ws.rs.core.Response;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -22,11 +22,14 @@ class RibApiTest {
         RibApi api = new RibApi();
         RibService ribService = mock(RibService.class);
         when(ribService.exists()).thenReturn(false);
-        inject(api, "ribService", ribService);
+        try (TestContext tc = TestContext.openApp(app -> {
+            app.setRibService(ribService);
+        })) {
 
-        Response response = api.download();
+            Response response = api.download();
 
-        assertEquals(404, response.getStatus());
+            assertEquals(404, response.getStatus());
+        }
     }
 
     @Test
@@ -38,19 +41,16 @@ class RibApiTest {
         RibService ribService = mock(RibService.class);
         when(ribService.exists()).thenReturn(true);
         when(ribService.getRibFile()).thenReturn(ribFile);
-        inject(api, "ribService", ribService);
+        try (TestContext tc = TestContext.openApp(app -> {
+            app.setRibService(ribService);
+        })) {
 
-        Response response = api.download();
+            Response response = api.download();
 
-        assertEquals(200, response.getStatus());
-        assertEquals("application/pdf", response.getMediaType().toString());
-        assertNotNull(response.getHeaderString("Content-Disposition"));
-        assertEquals("inline; filename=\"rib.pdf\"", response.getHeaderString("Content-Disposition"));
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
+            assertEquals(200, response.getStatus());
+            assertEquals("application/pdf", response.getMediaType().toString());
+            assertNotNull(response.getHeaderString("Content-Disposition"));
+            assertEquals("inline; filename=\"rib.pdf\"", response.getHeaderString("Content-Disposition"));
+        }
     }
 }

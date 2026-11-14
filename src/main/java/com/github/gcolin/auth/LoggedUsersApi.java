@@ -1,10 +1,10 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.auth.ActiveLoggedUsers;
 import com.github.gcolin.auth.ActiveSession;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import java.time.Instant;
@@ -23,13 +23,10 @@ public class LoggedUsersApi {
     private static final DateTimeFormatter LAST_SEEN_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
-    @Inject
-    private ActiveLoggedUsers activeLoggedUsers;
-
     @GET
     public MustacheHtml page() {
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (ActiveSession session : activeLoggedUsers.listActive()) {
+        for (ActiveSession session : AppContext.get().activeLoggedUsers().listActive()) {
             Map<String, Object> row = new HashMap<>();
             row.put("email", session.getEmail());
             row.put("username", session.getUsername());

@@ -3,6 +3,7 @@ package com.github.gcolin.organisation;
 import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.platform.Page;
+import com.github.gcolin.platform.plugin.PluginRegistry;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,6 +12,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Set;
 
 /**
  * Blocks HTTP access to feature modules disabled for the current organisation.
@@ -34,7 +36,7 @@ public class OrgFeatureFilter implements Filter {
         Config config = app.config();
         Page page = config.pageForRequest();
         String path = relativePath(httpRequest);
-        if (isBlocked(path, page)) {
+        if (isBlocked(path, page, app.pluginRegistry(), config.enabledPlugins())) {
             httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
@@ -54,6 +56,22 @@ public class OrgFeatureFilter implements Filter {
             return "/";
         }
         return uri.startsWith("/") ? uri : "/" + uri;
+    }
+
+    /** Plugin ownership of the path when a registry is available, else the page feature flags. */
+    static boolean isBlocked(String path, Page page, PluginRegistry registry, Set<String> enabledPlugins) {
+        if (registry == null) {
+            return isBlocked(path, page);
+        }
+        return !registry.isPathAllowed(path, enabledPlugins) || isStatisticsBlocked(path, page);
+    }
+
+    private static boolean isStatisticsBlocked(String path, Page page) {
+        return page != null
+                && path != null
+                && !page.isEventsEnabled()
+                && !page.isPaymentsEnabled()
+                && matchesAny(path, "/statistics");
     }
 
     static boolean isBlocked(String path, Page page) {
@@ -86,10 +104,7 @@ public class OrgFeatureFilter implements Filter {
         if (!page.isPaymentsEnabled() && matchesAny(path, "/payment")) {
             return true;
         }
-        if (!page.isEventsEnabled() && !page.isPaymentsEnabled() && matchesAny(path, "/statistics")) {
-            return true;
-        }
-        return false;
+        return isStatisticsBlocked(path, page);
     }
 
     private static boolean matchesAny(String path, String... prefixes) {

@@ -6,9 +6,9 @@ import static org.mockito.Mockito.*;
 
 import io.jsonwebtoken.security.Keys;
 import jakarta.ws.rs.core.Response;
-import java.lang.reflect.Field;
 import java.util.List;
 import javax.crypto.SecretKey;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +16,7 @@ class AdminMailApiTest {
     private AdminMailApi api;
     private SendMail sendMail;
     private Config config;
+    private TestContext tc;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -27,14 +28,15 @@ class AdminMailApiTest {
         when(config.getKeys()).thenReturn(key);
         when(config.getPublicBaseUrl()).thenReturn("http://localhost:8080");
         doNothing().when(config).applyOrg(any());
-        inject(api, "sendMail", sendMail);
-        inject(api, "config", config);
+        tc = TestContext.openApp(app -> {
+            app.setSendMail(sendMail);
+            app.setConfig(config);
+        });
     }
 
-    private static void inject(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
+    @AfterEach
+    void tearDown() {
+        tc.close();
     }
 
     private static Object[] args(String template) {

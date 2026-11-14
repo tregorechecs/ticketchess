@@ -1,10 +1,12 @@
 package com.github.gcolin.auth;
 
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.platform.Config;
 import io.jsonwebtoken.Jwts;
@@ -48,21 +50,20 @@ class LoginApiTest {
         when(uriInfo.getBaseUri()).thenReturn(URI.create("http://localhost:8080/"));
         when(uriInfo.getBaseUriBuilder()).thenReturn(UriBuilder.fromUri("http://localhost:8080/"));
 
-        inject(api, "config", config);
-        inject(api, "loggedUser", loggedUser);
-        inject(api, "caches", caches);
-        inject(api, "request", request);
-        inject(api, "uriInfo", uriInfo);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(config);
+            app.setCaches(caches);
+        }, ctx -> {
+            ctx.setLoggedUser(loggedUser);
+        })) {
+            RequestContext.require().setRequest(request);
+            RequestContext.require().setUriInfo(uriInfo);
 
-        Response response = api.loginByMail(jwt, "https://evil.example/phish");
+            Response response = api.loginByMail(jwt, "https://evil.example/phish");
 
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/"), response.getLocation());
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/"), response.getLocation());
+        }
     }
 
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

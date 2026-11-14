@@ -1,0 +1,139 @@
+package com.github.gcolin.platform;
+
+import com.github.gcolin.organisation.OrganisationFiles;
+
+import jakarta.ws.rs.WebApplicationException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Locale;
+
+public abstract class AbstractOrgImageFileService {
+
+    protected final int maxSizeBytes;
+    private final String baseName;
+    private final String defaultFileName;
+    private final String[] names;
+    private final String label;
+
+    protected Config config;
+
+    protected AbstractOrgImageFileService(String baseName, String defaultExtension, int maxSizeBytes, String label) {
+        this.baseName = baseName;
+        this.maxSizeBytes = maxSizeBytes;
+        this.label = label;
+        defaultFileName = baseName + "." + defaultExtension;
+        names = new String[] {
+            baseName + ".png", baseName + ".jpg", baseName + ".jpeg", baseName + ".webp"
+        };
+    }
+
+    public void setConfig(Config config) {
+        this.config = config;
+    }
+
+    public Path getFile() {
+        Path dir = OrganisationFiles.currentDir(config);
+        for (String name : names) {
+            Path candidate = dir.resolve(name);
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+        return dir.resolve(defaultFileName);
+    }
+
+    public boolean exists() {
+        return Files.isRegularFile(getFile());
+    }
+
+    public String getContentType() {
+        Path file = getFile();
+        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (name.endsWith(".webp")) {
+            return "image/webp";
+        }
+        return "image/png";
+    }
+
+    public void save(InputStream input) throws IOException {
+        if (input == null) {
+            throw new WebApplicationException(label + " file is required", 400);
+        }
+        byte[] header = input.readNBytes(12);
+        String extension = extensionForHeader(header);
+        if (extension == null) {
+            throw new WebApplicationException(label + " file must be a PNG, JPEG or WebP image", 400);
+        }
+
+        Path dir = OrganisationFiles.currentDir(config);
+        Files.createDirectories(dir);
+        String fileName = baseName + "." + extension;
+        Path target = dir.resolve(fileName);
+        Path tmp = target.resolveSibling(fileName + ".tmp");
+        try {
+            try (OutputStream out = Files.newOutputStream(tmp)) {
+                out.write(header);
+                copyLimited(input, out, maxSizeBytes - header.length, label);
+            }
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+        for (String name : names) {
+            if (!name.equals(fileName)) {
+                Files.deleteIfExists(dir.resolve(name));
+            }
+        }
+    }
+
+    public void delete() throws IOException {
+        Path dir = OrganisationFiles.currentDir(config);
+        for (String name : names) {
+            Files.deleteIfExists(dir.resolve(name));
+        }
+    }
+
+    protected static String extensionForHeader(byte[] header) {
+        if (header == null || header.length < 12) {
+            return null;
+        }
+        if (header[0] == (byte) 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47) {
+            return "png";
+        }
+        if (header[0] == (byte) 0xFF && header[1] == (byte) 0xD8 && header[2] == (byte) 0xFF) {
+            return "jpg";
+        }
+        if (header[0] == 'R'
+                && header[1] == 'I'
+                && header[2] == 'F'
+                && header[3] == 'F'
+                && header[8] == 'W'
+                && header[9] == 'E'
+                && header[10] == 'B'
+                && header[11] == 'P') {
+            return "webp";
+        }
+        return null;
+    }
+
+    protected static void copyLimited(InputStream input, OutputStream out, int maxRemaining, String label)
+            throws IOException {
+        byte[] buffer = new byte[8192];
+        long copied = 0;
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            copied += read;
+            if (copied > maxRemaining) {
+                throw new WebApplicationException(label + " file is too large", 400);
+            }
+            out.write(buffer, 0, read);
+        }
+    }
+}

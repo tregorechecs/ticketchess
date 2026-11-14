@@ -3,6 +3,11 @@ package com.github.gcolin.platform;
 import com.github.gcolin.auth.ActiveLoggedUsers;
 import com.github.gcolin.desk.EventDeskHub;
 import com.github.gcolin.desk.EventDeskService;
+import com.github.gcolin.platform.plugin.FeatureModule;
+import com.github.gcolin.platform.plugin.HookBus;
+import com.github.gcolin.platform.plugin.ModuleContext;
+import com.github.gcolin.platform.plugin.ModuleContextImpl;
+import com.github.gcolin.platform.plugin.PluginRegistry;
 import com.github.gcolin.event.EventPaymentsReportService;
 import com.github.gcolin.event.StatisticsReportService;
 import com.github.gcolin.membership.LicensePriceService;
@@ -11,13 +16,17 @@ import com.github.gcolin.membership.MembershipReportService;
 import com.github.gcolin.organisation.OrganisationBootstrap;
 import com.github.gcolin.organisation.OrganisationFiles;
 import com.github.gcolin.organisation.OrganisationResolver;
-import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.payment.PaymentReceiptPdfService;
 import com.github.gcolin.payment.RibService;
 import com.github.gcolin.payment.StripeCheckoutService;
 import com.github.gcolin.player.LuceneDb;
-import com.github.gcolin.player.LuceneDbRegistry;
 import jakarta.servlet.ServletContext;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +40,9 @@ public final class AppContext {
     private PersistenceService persistence;
     private MustacheConfig mustacheConfig;
     private SendMail sendMail;
-    private LuceneDbRegistry luceneDbRegistry;
+    private HookBus hookBus = new HookBus();
+    private PluginRegistry pluginRegistry;
+    private LuceneDb luceneDb;
     private OrganisationResolver organisationResolver;
     private ActiveLoggedUsers activeLoggedUsers;
     private EventDeskHub eventDeskHub;
@@ -68,6 +79,8 @@ public final class AppContext {
 
             // Club / invoice / stripe (+ mail) live on organisation; files under CONFIG_DIR/orgs/{id}.
             new OrganisationBootstrap(app.config, app.persistence).ensure();
+            // org_id backfill needs at least one organisation row (skipped earlier if the table was empty).
+            app.persistence.ensureOrgIdsAfterOrganisationBootstrap();
 
             DbInit dbInit = new DbInit(app.persistence);
             dbInit.initLicenses();
@@ -78,21 +91,22 @@ public final class AppContext {
             app.mustacheConfig = new MustacheConfig();
             app.mustacheConfig.init();
 
-            app.sendMail = new SendMail();
-            app.sendMail.setProperties(app.config.getProperties());
-            app.sendMail.setConfig(app.config);
-            app.sendMail.init();
+            app.hookBus = new HookBus();
+            app.pluginRegistry = PluginRegistry.load();
+            ModuleContext moduleContext = new ModuleContextImpl(app);
+            for (FeatureModule module : app.pluginRegistry.modules()) {
+                module.registerHooks(app.hookBus);
+            }
+            List<String> ddl = new ArrayList<>();
+            for (FeatureModule module : app.pluginRegistry.modules()) {
+                module.onStart(moduleContext);
+                module.contributeSchema(ddl::add);
+            }
+            app.applySchema(ddl);
 
-            app.luceneDbRegistry = new LuceneDbRegistry(app.config);
             app.organisationResolver = new OrganisationResolver();
 
             app.activeLoggedUsers = new ActiveLoggedUsers();
-            app.eventDeskHub = new EventDeskHub();
-
-            app.eventDeskService = new EventDeskService();
-            app.eventDeskService.setDataSource(app.persistence.getDataSource());
-            app.eventDeskService.setCaches(app.caches);
-            app.eventDeskService.setSendMail(app.sendMail);
 
             app.logoService = new LogoService();
             app.logoService.setConfig(app.config);
@@ -135,6 +149,23 @@ public final class AppContext {
         }
     }
 
+    private void applySchema(List<String> ddl) {
+        if (ddl.isEmpty()) {
+            return;
+        }
+        try (Connection connection = persistence.getDataSource().getConnection();
+                Statement statement = connection.createStatement()) {
+            for (String sql : ddl) {
+                statement.execute(sql);
+            }
+            if (!connection.getAutoCommit()) {
+                connection.commit();
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot apply plugin schema", e);
+        }
+    }
+
     public static void shutdown() {
         if (instance == null) {
             return;
@@ -147,8 +178,12 @@ public final class AppContext {
                 logger.warn("Interrupted while closing mail executor", e);
             }
         }
-        if (instance.luceneDbRegistry != null) {
-            instance.luceneDbRegistry.closeAll();
+        if (instance.luceneDb != null) {
+            try {
+                instance.luceneDb.close();
+            } catch (IOException e) {
+                logger.warn("Cannot close lucene index", e);
+            }
         }
         if (instance.persistence != null) {
             instance.persistence.shutdown();
@@ -169,8 +204,107 @@ public final class AppContext {
         instance = app;
     }
 
+    /** Install a blank AppContext for tests; caller sets fields via returned instance. */
+    static AppContext initForTest() {
+        AppContext app = new AppContext();
+        instance = app;
+        return app;
+    }
+
     static void clearTestInstance() {
         instance = null;
+    }
+
+    public void setConfig(Config config) {
+        this.config = config;
+    }
+
+    public void setCaches(Caches caches) {
+        this.caches = caches;
+    }
+
+    public void setPersistence(PersistenceService persistence) {
+        this.persistence = persistence;
+    }
+
+    public void setMustacheConfig(MustacheConfig mustacheConfig) {
+        this.mustacheConfig = mustacheConfig;
+    }
+
+    public void setSendMail(SendMail sendMail) {
+        this.sendMail = sendMail;
+    }
+
+    public void setHookBus(HookBus hookBus) {
+        this.hookBus = hookBus;
+    }
+
+    public void setPluginRegistry(PluginRegistry pluginRegistry) {
+        this.pluginRegistry = pluginRegistry;
+    }
+
+    public void setLuceneDb(LuceneDb luceneDb) {
+        this.luceneDb = luceneDb;
+    }
+
+    public void setOrganisationResolver(OrganisationResolver organisationResolver) {
+        this.organisationResolver = organisationResolver;
+    }
+
+    public void setActiveLoggedUsers(ActiveLoggedUsers activeLoggedUsers) {
+        this.activeLoggedUsers = activeLoggedUsers;
+    }
+
+    public void setEventDeskHub(EventDeskHub eventDeskHub) {
+        this.eventDeskHub = eventDeskHub;
+    }
+
+    public void setEventDeskService(EventDeskService eventDeskService) {
+        this.eventDeskService = eventDeskService;
+    }
+
+    public void setLogoService(LogoService logoService) {
+        this.logoService = logoService;
+    }
+
+    public void setSignatureService(SignatureService signatureService) {
+        this.signatureService = signatureService;
+    }
+
+    public void setRibService(RibService ribService) {
+        this.ribService = ribService;
+    }
+
+    public void setLicensePriceService(LicensePriceService licensePriceService) {
+        this.licensePriceService = licensePriceService;
+    }
+
+    public void setStatisticsReportService(StatisticsReportService statisticsReportService) {
+        this.statisticsReportService = statisticsReportService;
+    }
+
+    public void setEventPaymentsReportService(EventPaymentsReportService eventPaymentsReportService) {
+        this.eventPaymentsReportService = eventPaymentsReportService;
+    }
+
+    public void setPaymentReceiptPdfService(PaymentReceiptPdfService paymentReceiptPdfService) {
+        this.paymentReceiptPdfService = paymentReceiptPdfService;
+    }
+
+    public void setStripeCheckoutService(StripeCheckoutService stripeCheckoutService) {
+        this.stripeCheckoutService = stripeCheckoutService;
+    }
+
+    public void setMembershipReportService(MembershipReportService membershipReportService) {
+        this.membershipReportService = membershipReportService;
+    }
+
+    public void setMembershipOptionFileService(MembershipOptionFileService membershipOptionFileService) {
+        this.membershipOptionFileService = membershipOptionFileService;
+    }
+
+    public void setBackgroundService(BackgroundService backgroundService) {
+        this.backgroundService = backgroundService;
     }
 
     public Config config() {
@@ -193,13 +327,18 @@ public final class AppContext {
         return sendMail;
     }
 
-    /** Lucene index of the current organisation (default organisation outside a request). */
-    public LuceneDb luceneDb() {
-        return luceneDbRegistry == null ? null : luceneDbRegistry.get(OrgScope.currentOrgIdOrDefault());
+    public HookBus hookBus() {
+        return hookBus;
     }
 
-    public LuceneDbRegistry luceneDbRegistry() {
-        return luceneDbRegistry;
+    /** Null until the application started its plugins (and in most unit tests). */
+    public PluginRegistry pluginRegistry() {
+        return pluginRegistry;
+    }
+
+    /** Shared FFE/FIDE Lucene index for all organisations. */
+    public LuceneDb luceneDb() {
+        return luceneDb;
     }
 
     public OrganisationResolver organisationResolver() {

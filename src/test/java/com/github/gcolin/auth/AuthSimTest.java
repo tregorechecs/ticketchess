@@ -1,11 +1,13 @@
 package com.github.gcolin.auth;
 
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.auth.LoggedUser;
@@ -29,9 +31,12 @@ class AuthSimTest {
         Config config = mock(Config.class);
         when(config.isOauthEnabled()).thenReturn(true);
 
-        inject(api, "config", config);
+        try (TestContext tc = TestContext.openApp(app -> {
+            app.setConfig(config);
+        })) {
 
-        assertThrows(WebApplicationException.class, () -> api.doGet(null));
+            assertThrows(WebApplicationException.class, () -> api.doGet(null));
+        }
     }
 
     @Test
@@ -41,9 +46,12 @@ class AuthSimTest {
         when(config.isOauthEnabled()).thenReturn(false);
         when(config.isAuthSimEnabled()).thenReturn(false);
 
-        inject(api, "config", config);
+        try (TestContext tc = TestContext.openApp(app -> {
+            app.setConfig(config);
+        })) {
 
-        assertThrows(WebApplicationException.class, () -> api.doGet(null));
+            assertThrows(WebApplicationException.class, () -> api.doGet(null));
+        }
     }
 
     @Test
@@ -58,21 +66,22 @@ class AuthSimTest {
         when(config.isAuthSimEnabled()).thenReturn(true);
         when(config.getKeys()).thenReturn(Keys.hmacShaKeyFor("12345678901234567890123456789012".getBytes()));
 
-        inject(api, "properties", props);
-        inject(api, "config", config);
-        inject(api, "loggerUser", new LoggedUser());
-        inject(api, "caches", new Caches());
-        inject(
-                api,
-                "uriInfo",
-                uriInfoTarget(URI.create("http://localhost:8080/event/my"), URI.create("http://localhost:8080/")));
+        when(config.getProperties()).thenReturn(props);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setConfig(config);
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setLoggedUser(new LoggedUser());
+        })) {
+            RequestContext.require().setUriInfo(uriInfoTarget(URI.create("http://localhost:8080/event/my"), URI.create("http://localhost:8080/")));
 
-        String state = Base64.getUrlEncoder().encodeToString("event/my".getBytes(StandardCharsets.UTF_8));
-        Response response = api.doGet(state);
+            String state = Base64.getUrlEncoder().encodeToString("event/my".getBytes(StandardCharsets.UTF_8));
+            Response response = api.doGet(state);
 
-        assertEquals(303, response.getStatus());
-        assertEquals(URI.create("http://localhost:8080/event/my"), response.getLocation());
-        assertNotNull(response.getCookies().get("remember_me"));
+            assertEquals(303, response.getStatus());
+            assertEquals(URI.create("http://localhost:8080/event/my"), response.getLocation());
+            assertNotNull(response.getCookies().get("remember_me"));
+        }
     }
 
     private static UriInfo uriInfoTarget(URI target, URI base) {

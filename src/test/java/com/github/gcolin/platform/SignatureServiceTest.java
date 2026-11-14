@@ -53,7 +53,7 @@ class SignatureServiceTest {
         SignatureService service = new SignatureService();
         Config config = mock(Config.class);
         when(config.getConfigDir()).thenReturn(tempDir.toString());
-        Field field = SignatureService.class.getDeclaredField("config");
+        Field field = AbstractOrgImageFileService.class.getDeclaredField("config");
         field.setAccessible(true);
         field.set(service, config);
         return service;

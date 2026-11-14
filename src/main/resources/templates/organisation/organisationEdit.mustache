@@ -158,30 +158,17 @@
             <form method="post" action="{{contextPath}}/admin/organisations/{{organisation.id}}/config">
               <input type="hidden" name="tab" value="features">
               <p class="text-body-secondary small mb-3">{{#i18n}}help.adminFeatures{{/i18n}}</p>
+              <input type="hidden" name="pluginsForm" value="true">
+              {{#pluginOptions}}
               <div class="form-check mb-2">
-                {{#featureMemberships}}
-                <input class="form-check-input" type="checkbox" name="feature.memberships" value="true" id="feature.memberships" checked>
-                {{/featureMemberships}}{{^featureMemberships}}
-                <input class="form-check-input" type="checkbox" name="feature.memberships" value="true" id="feature.memberships">
-                {{/featureMemberships}}
-                <label class="form-check-label" for="feature.memberships">{{#i18n}}admin.features.memberships{{/i18n}}</label>
+                {{#checked}}
+                <input class="form-check-input" type="checkbox" name="plugin.{{id}}" value="true" id="plugin.{{id}}" checked>
+                {{/checked}}{{^checked}}
+                <input class="form-check-input" type="checkbox" name="plugin.{{id}}" value="true" id="plugin.{{id}}">
+                {{/checked}}
+                <label class="form-check-label" for="plugin.{{id}}">{{#i18n}}{{labelKey}}{{/i18n}}</label>
               </div>
-              <div class="form-check mb-2">
-                {{#featureEvents}}
-                <input class="form-check-input" type="checkbox" name="feature.events" value="true" id="feature.events" checked>
-                {{/featureEvents}}{{^featureEvents}}
-                <input class="form-check-input" type="checkbox" name="feature.events" value="true" id="feature.events">
-                {{/featureEvents}}
-                <label class="form-check-label" for="feature.events">{{#i18n}}admin.features.events{{/i18n}}</label>
-              </div>
-              <div class="form-check mb-3">
-                {{#featurePayments}}
-                <input class="form-check-input" type="checkbox" name="feature.payments" value="true" id="feature.payments" checked>
-                {{/featurePayments}}{{^featurePayments}}
-                <input class="form-check-input" type="checkbox" name="feature.payments" value="true" id="feature.payments">
-                {{/featurePayments}}
-                <label class="form-check-label" for="feature.payments">{{#i18n}}admin.features.payments{{/i18n}}</label>
-              </div>
+              {{/pluginOptions}}
               <div class="d-flex justify-content-end">
                 <button class="btn btn-primary" type="submit">{{#i18n}}action.save{{/i18n}}</button>
               </div>

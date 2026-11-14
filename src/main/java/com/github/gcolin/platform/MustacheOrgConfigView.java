@@ -1,7 +1,10 @@
 package com.github.gcolin.platform;
 
+import com.github.gcolin.organisation.OrgConfig;
+import com.github.gcolin.platform.plugin.PluginIds;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /** Precomputes Mustache-friendly flags and cfg field map for organisation admin settings tabs. */
 public final class MustacheOrgConfigView {
@@ -38,12 +41,13 @@ public final class MustacheOrgConfigView {
         model.put("mailPasswordConfigured", secretConfigured(secrets, "mail.PASSWORD"));
         model.put("dbPassConfigured", secretConfigured(secrets, "db.pass"));
 
-        boolean featureMemberships = cfgTriStateDefaultTrue(cfg, "feature.memberships");
-        boolean featureEvents = cfgTriStateDefaultTrue(cfg, "feature.events");
+        Set<String> plugins = OrgConfig.resolveEnabledPlugins(cfg::get);
+        boolean featureMemberships = plugins.contains(PluginIds.MEMBERSHIP);
+        boolean featureEvents = plugins.contains(PluginIds.EVENTS);
         model.put("stripeSimuled", cfgIsTrue(cfg, "stripe.simuled", false));
         model.put("featureMemberships", featureMemberships);
         model.put("featureEvents", featureEvents);
-        model.put("featurePayments", cfgTriStateDefaultTrue(cfg, "feature.payments"));
+        model.put("featurePayments", plugins.contains(PluginIds.PAYMENTS));
         model.put(
                 "stripeCardEvents",
                 featureEvents && cfgTriStateDefaultTrue(cfg, "stripe.card.events"));

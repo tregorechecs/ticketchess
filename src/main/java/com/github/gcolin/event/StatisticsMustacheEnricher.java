@@ -80,12 +80,36 @@ public final class StatisticsMustacheEnricher {
 
         @SuppressWarnings("unchecked")
         List<?> closest = (List<?>) model.get("closestEvents");
+        List<Map<String, Object>> closestRows = new ArrayList<>();
+        if (closest != null) {
+            for (Object item : closest) {
+                if (item instanceof Event event) {
+                    closestRows.add(eventSummary(event));
+                }
+            }
+        }
+        model.put("closestEvents", closestRows);
+
         @SuppressWarnings("unchecked")
         List<?> top = (List<?>) model.get("topEvents");
-        model.put("closestEventsCountText", messages.get("statistics.closestEventsCount", closest != null ? closest.size() : 0));
-        model.put("topEventsCountText", messages.get("statistics.topEventsCount", top != null ? top.size() : 0));
-        model.put("closestEventsEmpty", closest == null || closest.isEmpty());
-        model.put("topEventsEmpty", top == null || top.isEmpty());
+        List<Map<String, Object>> topRows = new ArrayList<>();
+        if (top != null) {
+            for (Object item : top) {
+                if (item instanceof Object[] pair && pair.length >= 2 && pair[0] instanceof Event event) {
+                    Map<String, Object> row = eventSummary(event);
+                    row.put("participantCount", pair[1] instanceof Number n ? n.longValue() : 0L);
+                    topRows.add(row);
+                } else if (item instanceof Event event) {
+                    topRows.add(eventSummary(event));
+                }
+            }
+        }
+        model.put("topEvents", topRows);
+
+        model.put("closestEventsCountText", messages.get("statistics.closestEventsCount", closestRows.size()));
+        model.put("topEventsCountText", messages.get("statistics.topEventsCount", topRows.size()));
+        model.put("closestEventsEmpty", closestRows.isEmpty());
+        model.put("topEventsEmpty", topRows.isEmpty());
     }
 
     @SuppressWarnings("unchecked")

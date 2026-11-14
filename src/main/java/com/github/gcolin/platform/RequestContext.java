@@ -34,6 +34,7 @@ import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
 import com.github.gcolin.registration.RegisterService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import jakarta.ws.rs.core.UriInfo;
 import java.sql.Connection;
 import java.sql.SQLException;
 import javax.sql.DataSource;
@@ -45,6 +46,7 @@ public final class RequestContext {
     private static final String LOGGED_USER_KEY = "loggedUser";
 
     private HttpServletRequest request;
+    private UriInfo uriInfo;
     private Connection connection;
     /** {@code true} when this context opened (and therefore must close) the connection. */
     private boolean ownsConnection;
@@ -203,6 +205,124 @@ public final class RequestContext {
         CURRENT.set(ctx);
     }
 
+    static RequestContext openForTest() {
+        RequestContext ctx = new RequestContext();
+        CURRENT.set(ctx);
+        return ctx;
+    }
+
+    public void setEventDao(EventDao eventDao) {
+        this.eventDao = eventDao;
+    }
+
+    public void setEventOptionDao(EventOptionDao eventOptionDao) {
+        this.eventOptionDao = eventOptionDao;
+    }
+
+    public void setEventGroupDao(EventGroupDao eventGroupDao) {
+        this.eventGroupDao = eventGroupDao;
+    }
+
+    public void setEventCollectionDao(EventCollectionDao eventCollectionDao) {
+        this.eventCollectionDao = eventCollectionDao;
+    }
+
+    public void setEventCollectionOptionDao(EventCollectionOptionDao eventCollectionOptionDao) {
+        this.eventCollectionOptionDao = eventCollectionOptionDao;
+    }
+
+    public void setPlayerSubscriptionDao(PlayerSubscriptionDao playerSubscriptionDao) {
+        this.playerSubscriptionDao = playerSubscriptionDao;
+    }
+
+    public void setPlayerSubscriptionOptionDao(PlayerSubscriptionOptionDao playerSubscriptionOptionDao) {
+        this.playerSubscriptionOptionDao = playerSubscriptionOptionDao;
+    }
+
+    public void setPlayerPendingSubscriptionDao(PlayerPendingSubscriptionDao playerPendingSubscriptionDao) {
+        this.playerPendingSubscriptionDao = playerPendingSubscriptionDao;
+    }
+
+    public void setCustomPlayerDao(CustomPlayerDao customPlayerDao) {
+        this.customPlayerDao = customPlayerDao;
+    }
+
+    public void setPaymentDao(PaymentDao paymentDao) {
+        this.paymentDao = paymentDao;
+    }
+
+    public void setMembershipDao(MembershipDao membershipDao) {
+        this.membershipDao = membershipDao;
+    }
+
+    public void setMembershipOptionDao(MembershipOptionDao membershipOptionDao) {
+        this.membershipOptionDao = membershipOptionDao;
+    }
+
+    public void setMembershipOptionFileDao(MembershipOptionFileDao membershipOptionFileDao) {
+        this.membershipOptionFileDao = membershipOptionFileDao;
+    }
+
+    public void setMembershipOptionSubscriptionDao(MembershipOptionSubscriptionDao membershipOptionSubscriptionDao) {
+        this.membershipOptionSubscriptionDao = membershipOptionSubscriptionDao;
+    }
+
+    public void setLicenseDao(LicenseDao licenseDao) {
+        this.licenseDao = licenseDao;
+    }
+
+    public void setLicensePriceDao(LicensePriceDao licensePriceDao) {
+        this.licensePriceDao = licensePriceDao;
+    }
+
+    public void setClubSeasonDao(ClubSeasonDao clubSeasonDao) {
+        this.clubSeasonDao = clubSeasonDao;
+    }
+
+    public void setClubSeasonFilter(ClubSeasonFilter clubSeasonFilter) {
+        this.clubSeasonFilter = clubSeasonFilter;
+    }
+
+    public void setUserAuthorizationDao(UserAuthorizationDao userAuthorizationDao) {
+        this.userAuthorizationDao = userAuthorizationDao;
+    }
+
+    public void setOrganisationDao(OrganisationDao organisationDao) {
+        this.organisationDao = organisationDao;
+    }
+
+    public void setFind(Find find) {
+        this.find = find;
+    }
+
+    public void setLoggedUser(LoggedUser loggedUser) {
+        this.loggedUserOverride = loggedUser;
+    }
+
+    public void setDebtService(DebtService debtService) {
+        this.debtService = debtService;
+    }
+
+    public void setRegisterService(RegisterService registerService) {
+        this.registerService = registerService;
+    }
+
+    public void setStateService(StateService stateService) {
+        this.stateService = stateService;
+    }
+
+    public void setEventGroupFilter(EventGroupFilter eventGroupFilter) {
+        this.eventGroupFilter = eventGroupFilter;
+    }
+
+    public void setPapiService(PapiService papiService) {
+        this.papiService = papiService;
+    }
+
+    public void setPapiUlploadService(PapiUlploadService papiUlploadService) {
+        this.papiUlploadService = papiUlploadService;
+    }
+
     public static void commit() {
         RequestContext ctx = CURRENT.get();
         if (ctx != null) {
@@ -295,6 +415,7 @@ public final class RequestContext {
         if (previous != null) {
             // Nested run (e.g. desk service called while serving a request): keep the tenant / request.
             ctx.request = previous.request;
+            ctx.uriInfo = previous.uriInfo;
             ctx.organisation = previous.organisation;
             ctx.loggedUserOverride = previous.loggedUserOverride;
             ctx.find = previous.find;
@@ -336,6 +457,19 @@ public final class RequestContext {
 
     public HttpServletRequest request() {
         return request;
+    }
+
+    public void setRequest(HttpServletRequest request) {
+        this.request = request;
+    }
+
+    /** The JAX-RS {@link UriInfo} of the current request (captured by {@link UriInfoCaptureFilter}). */
+    public UriInfo uriInfo() {
+        return uriInfo;
+    }
+
+    public void setUriInfo(UriInfo uriInfo) {
+        this.uriInfo = uriInfo;
     }
 
     public LoggedUser loggedUser() {
@@ -529,7 +663,6 @@ public final class RequestContext {
             debtService.setPlayerSubscriptionDao(playerSubscriptionDao());
             debtService.setPlayerSubscriptionOptionDao(playerSubscriptionOptionDao());
             debtService.setFind(find());
-            debtService.setSendMail(AppContext.get().sendMail());
             debtService.setCaches(AppContext.get().caches());
             debtService.setPaymentDao(paymentDao());
             debtService.setMembershipDao(membershipDao());
@@ -540,7 +673,6 @@ public final class RequestContext {
     public RegisterService registerService() {
         if (registerService == null) {
             registerService = new RegisterService();
-            registerService.setSendMail(AppContext.get().sendMail());
             registerService.setProperties(AppContext.get().config().getProperties());
             registerService.setPlayerSubscriptionDao(playerSubscriptionDao());
             registerService.setPlayerPendingSubscriptionDao(playerPendingSubscriptionDao());

@@ -1,11 +1,12 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.event.EventGroup;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.event.EventGroupDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.FormParam;
@@ -14,7 +15,6 @@ import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -29,18 +29,9 @@ import com.github.gcolin.platform.MustacheHtml;
 @Path("eventgroup")
 public class EventGroupApi {
 
-    @Inject
-    private EventGroupDao eventGroupService;
-
-    @Context
-    UriInfo uriInfo;
-
-    @Inject
-    private Caches caches;
-
     @GET
     public MustacheHtml list() {
-        List<EventGroup> eventGroups = eventGroupService.all();
+        List<EventGroup> eventGroups = RequestContext.require().eventGroupDao().all();
         eventGroups.sort((p1, p2) -> {
             return p1.getName().compareTo(p2.getName());
         });
@@ -50,7 +41,7 @@ public class EventGroupApi {
     @GET
     @Path("new")
     public MustacheHtml newEventGroup() {
-        List<EventGroup> eventGroups = eventGroupService.all();
+        List<EventGroup> eventGroups = RequestContext.require().eventGroupDao().all();
         eventGroups.sort((p1, p2) -> {
             return p1.getName().compareTo(p2.getName());
         });
@@ -62,7 +53,7 @@ public class EventGroupApi {
     public MustacheHtml edit(@PathParam("id") Integer id) {
         Map<String, Object> model = new HashMap<String, Object>();
 
-        EventGroup eventGroup = eventGroupService.findDetachedForEdit(id);
+        EventGroup eventGroup = RequestContext.require().eventGroupDao().findDetachedForEdit(id);
         model.put("events", eventGroup.getEvents());
         model.put("eventGroup", eventGroup);
 
@@ -87,16 +78,16 @@ public class EventGroupApi {
         eventGroup.setName(name);
         eventGroup.setShortname(shortname);
         if (eventGroup.getId() == null) {
-            eventGroupService.persist(eventGroup);
+            RequestContext.require().eventGroupDao().persist(eventGroup);
         } else {
-            eventGroupService.merge(eventGroup);
+            RequestContext.require().eventGroupDao().merge(eventGroup);
         }
 
-        caches.getEvent().invalidateAll();
-        caches.getAllEvents().invalidateAll();
-        caches.getEventGroups().invalidateAll();
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getAllEvents().invalidateAll();
+        AppContext.get().caches().getEventGroups().invalidateAll();
 
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("eventgroup")
                 .path(eventGroup.getId().toString())
                 .build();
@@ -107,29 +98,29 @@ public class EventGroupApi {
     @DELETE
     @Path("{id:\\d+}")
     public Response removeById(@PathParam("id") Integer id) {
-        EventGroup eventGroup = eventGroupService.find(id);
+        EventGroup eventGroup = RequestContext.require().eventGroupDao().find(id);
         if (eventGroup == null) {
             throw new NotFoundException();
         }
         // Do NOT cascade remove - manually delete without affecting related entities
-        eventGroupService.remove(eventGroup);
-        caches.getEvent().invalidateAll();
-        caches.getAllEvents().invalidateAll();
-        caches.getEventGroups().invalidateAll();
+        RequestContext.require().eventGroupDao().remove(eventGroup);
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getAllEvents().invalidateAll();
+        AppContext.get().caches().getEventGroups().invalidateAll();
         return Response.ok().build();
     }
 
     private Response remove(Integer id) {
-        EventGroup eventGroup = eventGroupService.find(id);
+        EventGroup eventGroup = RequestContext.require().eventGroupDao().find(id);
         if (eventGroup == null) {
             throw new NotFoundException();
         }
         // Do NOT cascade remove - manually delete without affecting related entities
-        eventGroupService.remove(eventGroup);
-        caches.getEvent().invalidateAll();
-        caches.getAllEvents().invalidateAll();
-        caches.getEventGroups().invalidateAll();
-        return Response.seeOther(uriInfo.getBaseUriBuilder().path("admin/events").build())
+        RequestContext.require().eventGroupDao().remove(eventGroup);
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getAllEvents().invalidateAll();
+        AppContext.get().caches().getEventGroups().invalidateAll();
+        return Response.seeOther(RequestContext.require().uriInfo().getBaseUriBuilder().path("admin/events").build())
                 .build();
     }
 }

@@ -29,6 +29,8 @@ public class SecondOrganisationTournamentPointageTest extends PlaywrightBaseTest
         assertThat(page.locator("table.table")).containsText("Club Two");
         assertThat(page.locator("table.table")).containsText(orgBase);
 
+        // remember_me cookie is host-scoped; re-auth on the second organisation host
+        login(page, orgBase);
         page.navigate(orgBase + "/event/new");
 
         Locator name = page.locator("#event_name");

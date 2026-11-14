@@ -1,6 +1,8 @@
 package com.github.gcolin.player;
 
 import com.github.gcolin.auth.LoggedOnly;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.player.CustomPlayer;
 import com.github.gcolin.auth.RoleCode;
@@ -13,7 +15,6 @@ import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.registration.RegisterService;
 import com.github.gcolin.player.CustomPlayerDao;
 import com.github.gcolin.event.EventDao;
-import jakarta.inject.Inject;
 import jakarta.servlet.ServletException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
@@ -24,7 +25,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -36,27 +36,6 @@ import com.github.gcolin.platform.MustacheHtml;
 
 @Path("customplayer")
 public class CustomPlayerApi {
-
-    @Inject
-    private CustomPlayerDao customPlayerService;
-
-    @Inject
-    private Caches caches;
-
-    @Inject
-    private LoggedUser loggerUser;
-
-    @Inject
-    private RegisterService registerService;
-
-    @Inject
-    private EventDao eventService;
-
-    @Inject
-    private Find find;
-
-    @Context
-    UriInfo uriInfo;
 
     @GET
     @RequireRole(RoleCode.ARBITRE)
@@ -71,13 +50,13 @@ public class CustomPlayerApi {
         }
         int start = (page - 1) * size;
 
-        PagedList<CustomPlayer> paged = customPlayerService.pageSorted(start, size);
+        PagedList<CustomPlayer> paged = RequestContext.require().customPlayerDao().pageSorted(start, size);
         long totalItems = paged.getTotal();
         int totalPages = (int) Math.max(1, (totalItems + size - 1) / size);
         if (page > totalPages) {
             page = totalPages;
             start = (page - 1) * size;
-            paged = customPlayerService.pageSorted(start, size);
+            paged = RequestContext.require().customPlayerDao().pageSorted(start, size);
         }
 
         Map<String, Object> model = new HashMap<>();
@@ -116,7 +95,7 @@ public class CustomPlayerApi {
 
         CustomPlayer player;
         if (id != null) {
-            player = customPlayerService.find(id);
+            player = RequestContext.require().customPlayerDao().find(id);
         } else {
             player = new CustomPlayer();
             player.setLicence("");
@@ -130,7 +109,7 @@ public class CustomPlayerApi {
         model.put("playerIdValue", player.getId() != null ? String.valueOf(player.getId()) : "");
         model.put("genderMaleSelected", Boolean.TRUE.equals(player.getGender()));
         model.put("genderFemaleSelected", Boolean.FALSE.equals(player.getGender()));
-        model.put("canManageEvents", loggerUser != null && loggerUser.canManageEvents());
+        model.put("canManageEvents", RequestContext.require().loggedUser() != null && RequestContext.require().loggedUser().canManageEvents());
         return new MustacheHtml(model, "player/customplayer.mustache");
     }
 
@@ -150,10 +129,10 @@ public class CustomPlayerApi {
         if (id == null && eventId != null) {
             String trimmedLicence = trim(licence);
             if (trimmedLicence != null) {
-                var existingPlayer = find.player(trimmedLicence, null);
+                var existingPlayer = RequestContext.require().find().player(trimmedLicence, null);
                 if (existingPlayer != null && !existingPlayer.isEditable()) {
-                    PlayerSubscription sub = registerService.registerPlayerToEvent(
-                            eventService.find(eventId), existingPlayer, loggerUser.getEmail());
+                    PlayerSubscription sub = RequestContext.require().registerService().registerPlayerToEvent(
+                            RequestContext.require().eventDao().find(eventId), existingPlayer, RequestContext.require().loggedUser().getEmail());
                     return redirectAfterRegister(eventId, sub);
                 }
             }
@@ -169,27 +148,27 @@ public class CustomPlayerApi {
 
         if (id != null) {
             player.setId(id);
-            if (loggerUser.hasRole(RoleCode.ARBITRE)) {
-                player.setCreationUser(loggerUser.getEmail());
+            if (RequestContext.require().loggedUser().hasRole(RoleCode.ARBITRE)) {
+                player.setCreationUser(RequestContext.require().loggedUser().getEmail());
             }
         } else {
-            player.setCreationUser(loggerUser.getEmail());
+            player.setCreationUser(RequestContext.require().loggedUser().getEmail());
         }
-        caches.getDebtCache().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
         if (id == null) {
-            customPlayerService.persist(player);
-            customPlayerService.flush();
+            RequestContext.require().customPlayerDao().persist(player);
+            RequestContext.require().customPlayerDao().flush();
         } else {
-            customPlayerService.merge(player);
+            RequestContext.require().customPlayerDao().merge(player);
         }
 
         if (eventId != null) {
             PlayerSubscription sub =
-                    registerService.registerPlayerToEvent(eventService.find(eventId), player, loggerUser.getEmail());
+                    RequestContext.require().registerService().registerPlayerToEvent(RequestContext.require().eventDao().find(eventId), player, RequestContext.require().loggedUser().getEmail());
             return redirectAfterRegister(eventId, sub);
         }
 
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path("my")
                 .queryParam("success", "register")
@@ -199,7 +178,7 @@ public class CustomPlayerApi {
 
     private Response redirectAfterRegister(Integer eventId, PlayerSubscription sub) {
         if (sub == null) {
-            URI uri = uriInfo.getBaseUriBuilder()
+            URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                     .path("event")
                     .path("my")
                     .queryParam("success", "pending")
@@ -207,14 +186,14 @@ public class CustomPlayerApi {
             return Response.seeOther(uri).build();
         }
         if (sub.getStatus() == PlayerSubscriptionStatus.PAID) {
-            URI uri = uriInfo.getBaseUriBuilder()
+            URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                     .path("event")
                     .path(eventId.toString())
                     .queryParam("success", "register")
                     .build();
             return Response.seeOther(uri).build();
         }
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path("my")
                 .queryParam("success", "register")

@@ -9,7 +9,6 @@ import com.github.mustachejava.MustacheFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.ext.MessageBodyWriter;
@@ -32,9 +31,6 @@ public class MustacheMessageBodyWriter implements MessageBodyWriter<MustacheHtml
 
     private static final Logger logger = LoggerFactory.getLogger(MustacheMessageBodyWriter.class);
 
-    @Context
-    HttpServletRequest request;
-
     @Override
     public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
         return type == MustacheHtml.class;
@@ -51,6 +47,7 @@ public class MustacheMessageBodyWriter implements MessageBodyWriter<MustacheHtml
             OutputStream entityStream)
             throws IOException, WebApplicationException {
         RequestContext ctx = RequestContext.require();
+        HttpServletRequest request = ctx.request();
         LoggedUser user = ctx.loggedUser();
         StateService state = ctx.stateService();
         Config config = AppContext.get().config();
@@ -192,6 +189,13 @@ public class MustacheMessageBodyWriter implements MessageBodyWriter<MustacheHtml
         if (clubRegisterTitleKey instanceof String key && !key.isBlank()) {
             String seasonName = model.get("clubSeasonName") instanceof String s ? s : "";
             model.put("clubRegisterTitleText", messages.get(key, seasonName));
+        }
+        Object headingKey = model.get("headingKey");
+        if (headingKey instanceof String key && !key.isBlank() && !model.containsKey("headingText")) {
+            Object headingParam = model.get("headingParam");
+            model.put(
+                    "headingText",
+                    headingParam != null ? messages.get(key, headingParam) : messages.get(key));
         }
         Object clubRegisterDescriptionKey = model.get("clubRegisterDescriptionKey");
         if (clubRegisterDescriptionKey instanceof String key && !key.isBlank()) {

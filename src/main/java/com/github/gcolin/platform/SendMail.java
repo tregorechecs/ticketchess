@@ -28,8 +28,6 @@ public class SendMail {
     public static final int BATCH_SIZE = 30;
     public static final long BATCH_INTERVAL_MINUTES = 15;
 
-    private String username;
-    private String password;
     private ScheduledExecutorService executor;
     private Logger logger = LoggerFactory.getLogger(this.getClass().getName());
     private MailTemplate tmpl = new MailTemplate();
@@ -47,13 +45,16 @@ public class SendMail {
     }
 
     public void init() {
-        reloadCredentials();
         executor = Executors.newSingleThreadScheduledExecutor();
     }
 
+    /**
+     * No-op: credentials are resolved per send from {@link #properties} (org-scoped via
+     * OrgProperties when a request organisation is in scope). Kept for callers that still
+     * invoke it after saving mail settings.
+     */
     public void reloadCredentials() {
-        this.username = properties.getProperty("mail.USER_NAME");
-        this.password = properties.getProperty("mail.PASSWORD");
+        // credentials resolved at send time
     }
 
     public void close() throws InterruptedException {
@@ -70,6 +71,19 @@ public class SendMail {
         return props;
     }
 
+    /** Resolves current-org mail credentials (must run on the request thread). */
+    private record MailCredentials(String username, String password) {
+        boolean smtpConfigured() {
+            return password != null && !password.isEmpty();
+        }
+    }
+
+    private MailCredentials resolveCredentials() {
+        String username = properties == null ? null : properties.getProperty("mail.USER_NAME");
+        String password = properties == null ? null : properties.getProperty("mail.PASSWORD");
+        return new MailCredentials(username, password);
+    }
+
     public void send(AbstractMail amail, String to, String subject) throws Exception {
         send(amail, to, subject, List.of());
     }
@@ -83,14 +97,30 @@ public class SendMail {
         if (config != null) {
             config.applyOrg(amail);
         }
-        String content = tmpl.render(amail.getTemplate(), amail);
+        deliver(tmpl.render(amail.getTemplate(), amail), to, subject, attachments);
+    }
+
+    /** Sends an already rendered HTML body (no template). */
+    public void sendHtml(String to, String subject, String html) throws Exception {
+        deliver(html, to, subject, List.of());
+    }
+
+    private void deliver(String content, String to, String subject, List<MailAttachment> attachments)
+            throws Exception {
         List<MailAttachment> safeAttachments = attachments == null ? List.of() : attachments;
-        if (password == null || password.isEmpty()) {
+        MailCredentials credentials = resolveCredentials();
+        final String username = credentials.username();
+        final String password = credentials.password();
+        if (!credentials.smtpConfigured()) {
             File mailDir = new File("emails");
             mailDir.mkdirs();
             int index = mailDir.list() == null ? 0 : mailDir.list().length;
             File mailFile = new File(mailDir, index + ".html");
-            logger.info("write into {}", mailFile.getAbsolutePath());
+            logger.warn(
+                    "mail.PASSWORD empty — writing to {} instead of SMTP (to={}, subject={})",
+                    mailFile.getAbsolutePath(),
+                    to,
+                    subject);
             content = content.replace("<head>", "<head><title>" + to + " - " + subject + "</title>");
             Files.writeString(mailFile.toPath(), content, StandardCharsets.UTF_8, StandardOpenOption.CREATE);
             for (MailAttachment attachment : safeAttachments) {
@@ -127,14 +157,11 @@ public class SendMail {
                 message.setContent(multipart);
             }
 
-            executor.submit(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        Transport.send(message);
-                    } catch (Exception e) {
-                        logger.error(e.toString());
-                    }
+            executor.submit(() -> {
+                try {
+                    Transport.send(message);
+                } catch (Exception e) {
+                    logger.error(e.toString());
                 }
             });
         }
@@ -168,11 +195,19 @@ public class SendMail {
             config.applyOrg(amail);
         }
         String content = tmpl.render(amail.getTemplate(), amail);
-        if (password == null || password.isEmpty()) {
+        MailCredentials credentials = resolveCredentials();
+        final String username = credentials.username();
+        final String password = credentials.password();
+        if (!credentials.smtpConfigured()) {
             File mailDir = new File("emails");
             mailDir.mkdirs();
             File mailFile = new File(mailDir, mailDir.list().length + ".html");
-            logger.info("write bcc into {} (delay {} {})", mailFile.getAbsolutePath(), delay, unit);
+            logger.warn(
+                    "mail.PASSWORD empty — writing BCC to {} instead of SMTP (delay {} {}, subject={})",
+                    mailFile.getAbsolutePath(),
+                    delay,
+                    unit,
+                    subject);
             content = content.replace("<head>", "<head><title>BCC - " + subject + "</title>");
             String allAddresses = String.join("</li><li>", bccAddresses);
             content = content.replace(

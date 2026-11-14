@@ -7,7 +7,6 @@ import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.organisation.Organisation;
 import com.github.gcolin.organisation.OrgScope;
 import com.github.gcolin.payment.RibService;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
@@ -16,7 +15,6 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -88,39 +86,12 @@ public class AdminApi {
                     "db.pass",
                     "db.type"));
 
-    @Inject
-    private LoggedUser user;
-
-    @Inject
-    private Caches caches;
-
-    @Inject
-    private RibService ribService;
-
-    @Inject
-    private LogoService logoService;
-
-    @Inject
-    private SignatureService signatureService;
-
-    @Inject
-    private BackgroundService backgroundService;
-
-    @Inject
-    private Config config;
-
-    @Inject
-    private SendMail sendMail;
-
-    @Context
-    private UriInfo uriInfo;
-
     @GET
     public Response page(@QueryParam("success") @DefaultValue("") String success) {
-        if (!user.canSeeAdminMenu()) {
+        if (!RequestContext.require().loggedUser().canSeeAdminMenu()) {
             return Response.status(Response.Status.FORBIDDEN).build();
         }
-        Page page = config.pageForRequest();
+        Page page = AppContext.get().config().pageForRequest();
         boolean eventsOn = page.isEventsEnabled();
         boolean membershipsOn = page.isMembershipsEnabled();
         boolean paymentsOn = page.isPaymentsEnabled();
@@ -129,12 +100,12 @@ public class AdminApi {
         model.put(
                 "adminSectionEvent",
                 (eventsOn || paymentsOn)
-                        && (user.canManageEvents() || user.isAdmin() || user.canManagePayments()));
-        model.put("adminSectionMembership", membershipsOn && user.canManageMemberships());
-        model.put("adminSectionUsers", user.canManageEvents() || user.isAdmin());
+                        && (RequestContext.require().loggedUser().canManageEvents() || RequestContext.require().loggedUser().isAdmin() || RequestContext.require().loggedUser().canManagePayments()));
+        model.put("adminSectionMembership", membershipsOn && RequestContext.require().loggedUser().canManageMemberships());
+        model.put("adminSectionUsers", RequestContext.require().loggedUser().canManageEvents() || RequestContext.require().loggedUser().isAdmin());
         model.put(
                 "userCanViewStatistics",
-                (eventsOn || paymentsOn) && (user.canManagePayments() || user.canManageEvents()));
+                (eventsOn || paymentsOn) && (RequestContext.require().loggedUser().canManagePayments() || RequestContext.require().loggedUser().canManageEvents()));
         model.put("featureEvents", eventsOn);
         model.put("featureMemberships", membershipsOn);
         model.put("featurePayments", paymentsOn);
@@ -151,13 +122,13 @@ public class AdminApi {
     @Path("clear-cache")
     @RequireRole(RoleCode.ADMIN)
     public Response clearCache() {
-        caches.getDebtCache().invalidateAll();
-        caches.getRoleCache().invalidateAll();
-        caches.getAllEvents().invalidateAll();
-        caches.getEvent().invalidateAll();
-        caches.getEventGroups().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
+        AppContext.get().caches().getRoleCache().invalidateAll();
+        AppContext.get().caches().getAllEvents().invalidateAll();
+        AppContext.get().caches().getEvent().invalidateAll();
+        AppContext.get().caches().getEventGroups().invalidateAll();
 
-        URI redirect = Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+        URI redirect = Redirects.toSameOriginRelative(RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("admin")
                 .queryParam("success", "cacheCleared")
                 .build());
@@ -168,9 +139,9 @@ public class AdminApi {
     @Path("rib")
     @RequireRole(RoleCode.ADMIN)
     public Response ribRedirect() {
-        URI requestUri = uriInfo.getRequestUri();
+        URI requestUri = RequestContext.require().uriInfo().getRequestUri();
         String query = requestUri == null ? null : requestUri.getRawQuery();
-        URI redirect = Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+        URI redirect = Redirects.toSameOriginRelative(RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("admin")
                 .path("org")
                 .replaceQuery(query)
@@ -190,7 +161,7 @@ public class AdminApi {
             Organisation current = OrgScope.currentOrg();
             if (current != null && current.getId() != null) {
                 String orgTab = normalizeMovedOrgTab(effectiveTab);
-                var builder = uriInfo.getBaseUriBuilder()
+                var builder = RequestContext.require().uriInfo().getBaseUriBuilder()
                         .path("admin/organisations")
                         .path(String.valueOf(current.getId()))
                         .queryParam("tab", orgTab);
@@ -205,7 +176,7 @@ public class AdminApi {
             }
             effectiveTab = "oauth";
         }
-        if (user == null || !user.isPlatformAdmin()) {
+        if (RequestContext.require().loggedUser() == null || !RequestContext.require().loggedUser().isPlatformAdmin()) {
             return Response.status(Response.Status.FORBIDDEN).build();
         }
         if (!TAB_KEYS.containsKey(effectiveTab)) {
@@ -217,13 +188,13 @@ public class AdminApi {
         model.put("tab", effectiveTab);
         model.put("showSystemTab", true);
         model.put("titleKey", "page.adminOrg");
-        model.put("publicBaseUrl", config.getPublicBaseUrl());
+        model.put("publicBaseUrl", AppContext.get().config().getPublicBaseUrl());
         Organisation currentOrg = OrgScope.currentOrg();
         if (currentOrg != null) {
             model.put("currentOrgName", currentOrg.getName());
             model.put("currentOrgId", currentOrg.getId());
         }
-        Map<String, String> cfg = new LinkedHashMap<>(config.getOrgFormValues());
+        Map<String, String> cfg = new LinkedHashMap<>(AppContext.get().config().getOrgFormValues());
         for (Set<String> keys : TAB_KEYS.values()) {
             for (String key : keys) {
                 cfg.putIfAbsent(key, "");
@@ -231,16 +202,16 @@ public class AdminApi {
         }
         for (String key : TAB_KEYS.get("system")) {
             if ("baseurl".equals(key)) {
-                cfg.put(key, config.platformProperty("baseurl", ""));
+                cfg.put(key, AppContext.get().config().platformProperty("baseurl", ""));
             } else {
-                String platformValue = config.platformProperty(key);
+                String platformValue = AppContext.get().config().platformProperty(key);
                 cfg.put(key, platformValue == null ? "" : platformValue);
             }
         }
         model.put("cfg", cfg);
         Map<String, Boolean> secrets = new LinkedHashMap<>();
         for (String key : Config.SECRET_KEYS) {
-            secrets.put(key, config.isSecretConfigured(key));
+            secrets.put(key, AppContext.get().config().isSecretConfigured(key));
         }
         model.put("secretsConfigured", secrets);
         MustacheOrgConfigView.enrich(model);
@@ -252,7 +223,7 @@ public class AdminApi {
     @RequireRole(RoleCode.ADMIN)
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response saveConfig(MultivaluedMap<String, String> form) {
-        if (user == null || !user.isPlatformAdmin()) {
+        if (RequestContext.require().loggedUser() == null || !RequestContext.require().loggedUser().isPlatformAdmin()) {
             return Response.status(Response.Status.FORBIDDEN).build();
         }
         String tab = formValue(form, "tab");
@@ -265,9 +236,9 @@ public class AdminApi {
             updates.put(key, value == null ? "" : value.trim());
         }
         try {
-            config.updateProperties(updates);
-            if ("system".equals(tab) && sendMail != null) {
-                sendMail.reloadCredentials();
+            AppContext.get().config().updateProperties(updates);
+            if ("system".equals(tab) && AppContext.get().sendMail() != null) {
+                AppContext.get().sendMail().reloadCredentials();
             }
             return redirectToOrg("success", "configSaved", tab);
         } catch (IOException e) {
@@ -282,22 +253,7 @@ public class AdminApi {
     @Consumes({"application/pdf", "application/x-pdf", "application/octet-stream", "*/*"})
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadRib(InputStream file) {
-        try {
-            ribService.save(file);
-            return jsonRedirectToOrgFiles("success", "ribUploaded");
-        } catch (WebApplicationException e) {
-            String error = "ribUploadFailed";
-            String message = e.getMessage() == null ? "" : e.getMessage();
-            if (message.contains("PDF")) {
-                error = "invalidRib";
-            } else if (message.contains("too large")) {
-                error = "ribTooLarge";
-            }
-            return jsonRedirectToOrgFiles("error", error);
-        } catch (IOException e) {
-            logger.error("cannot save RIB file", e);
-            return jsonRedirectToOrgFiles("error", "ribUploadFailed");
-        }
+        return uploadOrgAsset(file, AppContext.get().ribService()::save, null, "rib", true);
     }
 
     @DELETE
@@ -305,17 +261,15 @@ public class AdminApi {
     @RequireRole(RoleCode.ADMIN)
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteRib() {
-        try {
-            ribService.delete();
-            Map<String, String> updates = new LinkedHashMap<>();
-            updates.put("payment.transfer.events", "false");
-            updates.put("payment.transfer.memberships", "false");
-            config.updateProperties(updates);
-            return jsonRedirectToOrgFiles("success", "ribDeleted");
-        } catch (IOException e) {
-            logger.error("cannot delete RIB file", e);
-            return jsonRedirectToOrgFiles("error", "ribDeleteFailed");
-        }
+        return deleteOrgAsset(
+                () -> {
+                    AppContext.get().ribService().delete();
+                    Map<String, String> updates = new LinkedHashMap<>();
+                    updates.put("payment.transfer.events", "false");
+                    updates.put("payment.transfer.memberships", "false");
+                    AppContext.get().config().updateProperties(updates);
+                },
+                "rib");
     }
 
     @POST
@@ -324,23 +278,8 @@ public class AdminApi {
     @Consumes({"image/png", "image/jpeg", "image/webp", "application/octet-stream"})
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadLogo(InputStream file) {
-        try {
-            logoService.save(file);
-            config.applyRuntime();
-            return jsonRedirectToOrgFiles("success", "logoUploaded");
-        } catch (WebApplicationException e) {
-            String error = "logoUploadFailed";
-            String message = e.getMessage() == null ? "" : e.getMessage();
-            if (message.contains("PNG") || message.contains("JPEG") || message.contains("WebP")) {
-                error = "invalidLogo";
-            } else if (message.contains("too large")) {
-                error = "logoTooLarge";
-            }
-            return jsonRedirectToOrgFiles("error", error);
-        } catch (IOException e) {
-            logger.error("cannot save logo file", e);
-            return jsonRedirectToOrgFiles("error", "logoUploadFailed");
-        }
+        return uploadOrgAsset(
+                file, AppContext.get().logoService()::save, () -> AppContext.get().config().applyRuntime(), "logo", false);
     }
 
     @DELETE
@@ -348,14 +287,12 @@ public class AdminApi {
     @RequireRole(RoleCode.ADMIN)
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteLogo() {
-        try {
-            logoService.delete();
-            config.applyRuntime();
-            return jsonRedirectToOrgFiles("success", "logoDeleted");
-        } catch (IOException e) {
-            logger.error("cannot delete logo file", e);
-            return jsonRedirectToOrgFiles("error", "logoDeleteFailed");
-        }
+        return deleteOrgAsset(
+                () -> {
+                    AppContext.get().logoService().delete();
+                    AppContext.get().config().applyRuntime();
+                },
+                "logo");
     }
 
     @POST
@@ -364,22 +301,7 @@ public class AdminApi {
     @Consumes({"image/png", "image/jpeg", "image/webp", "application/octet-stream"})
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadSignature(InputStream file) {
-        try {
-            signatureService.save(file);
-            return jsonRedirectToOrgFiles("success", "signatureUploaded");
-        } catch (WebApplicationException e) {
-            String error = "signatureUploadFailed";
-            String message = e.getMessage() == null ? "" : e.getMessage();
-            if (message.contains("PNG") || message.contains("JPEG") || message.contains("WebP")) {
-                error = "invalidSignature";
-            } else if (message.contains("too large")) {
-                error = "signatureTooLarge";
-            }
-            return jsonRedirectToOrgFiles("error", error);
-        } catch (IOException e) {
-            logger.error("cannot save signature file", e);
-            return jsonRedirectToOrgFiles("error", "signatureUploadFailed");
-        }
+        return uploadOrgAsset(file, AppContext.get().signatureService()::save, null, "signature", false);
     }
 
     @DELETE
@@ -387,13 +309,7 @@ public class AdminApi {
     @RequireRole(RoleCode.ADMIN)
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteSignature() {
-        try {
-            signatureService.delete();
-            return jsonRedirectToOrgFiles("success", "signatureDeleted");
-        } catch (IOException e) {
-            logger.error("cannot delete signature file", e);
-            return jsonRedirectToOrgFiles("error", "signatureDeleteFailed");
-        }
+        return deleteOrgAsset(AppContext.get().signatureService()::delete, "signature");
     }
 
     @POST
@@ -402,23 +318,12 @@ public class AdminApi {
     @Consumes({"image/png", "image/jpeg", "image/webp", "application/octet-stream"})
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadBackground(InputStream file) {
-        try {
-            backgroundService.save(file);
-            config.applyRuntime();
-            return jsonRedirectToOrgFiles("success", "backgroundUploaded");
-        } catch (WebApplicationException e) {
-            String error = "backgroundUploadFailed";
-            String message = e.getMessage() == null ? "" : e.getMessage();
-            if (message.contains("PNG") || message.contains("JPEG") || message.contains("WebP")) {
-                error = "invalidBackground";
-            } else if (message.contains("too large")) {
-                error = "backgroundTooLarge";
-            }
-            return jsonRedirectToOrgFiles("error", error);
-        } catch (IOException e) {
-            logger.error("cannot save background file", e);
-            return jsonRedirectToOrgFiles("error", "backgroundUploadFailed");
-        }
+        return uploadOrgAsset(
+                file,
+                AppContext.get().backgroundService()::save,
+                () -> AppContext.get().config().applyRuntime(),
+                "background",
+                false);
     }
 
     @DELETE
@@ -426,13 +331,54 @@ public class AdminApi {
     @RequireRole(RoleCode.ADMIN)
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteBackground() {
+        return deleteOrgAsset(
+                () -> {
+                    AppContext.get().backgroundService().delete();
+                    AppContext.get().config().applyRuntime();
+                },
+                "background");
+    }
+
+    @FunctionalInterface
+    private interface IoConsumer {
+        void accept(InputStream in) throws IOException;
+    }
+
+    @FunctionalInterface
+    private interface IoRunnable {
+        void run() throws IOException;
+    }
+
+    private Response uploadOrgAsset(
+            InputStream file, IoConsumer saver, Runnable afterSave, String key, boolean pdfOnly) {
         try {
-            backgroundService.delete();
-            config.applyRuntime();
-            return jsonRedirectToOrgFiles("success", "backgroundDeleted");
+            saver.accept(file);
+            if (afterSave != null) {
+                afterSave.run();
+            }
+            return jsonRedirectToOrgFiles("success", key + "Uploaded");
+        } catch (WebApplicationException e) {
+            String message = e.getMessage() == null ? "" : e.getMessage();
+            String error = key + "UploadFailed";
+            if (pdfOnly ? message.contains("PDF") : message.contains("PNG") || message.contains("JPEG") || message.contains("WebP")) {
+                error = "invalid" + Character.toUpperCase(key.charAt(0)) + key.substring(1);
+            } else if (message.contains("too large")) {
+                error = key + "TooLarge";
+            }
+            return jsonRedirectToOrgFiles("error", error);
         } catch (IOException e) {
-            logger.error("cannot delete background file", e);
-            return jsonRedirectToOrgFiles("error", "backgroundDeleteFailed");
+            logger.error("cannot save {} file", key, e);
+            return jsonRedirectToOrgFiles("error", key + "UploadFailed");
+        }
+    }
+
+    private Response deleteOrgAsset(IoRunnable deleter, String key) {
+        try {
+            deleter.run();
+            return jsonRedirectToOrgFiles("success", key + "Deleted");
+        } catch (IOException e) {
+            logger.error("cannot delete {} file", key, e);
+            return jsonRedirectToOrgFiles("error", key + "DeleteFailed");
         }
     }
 
@@ -450,7 +396,7 @@ public class AdminApi {
     private URI orgFilesRedirectUri(String queryName, String queryValue) {
         Organisation current = OrgScope.currentOrg();
         if (current != null && current.getId() != null) {
-            return Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+            return Redirects.toSameOriginRelative(RequestContext.require().uriInfo().getBaseUriBuilder()
                     .path("admin/organisations")
                     .path(String.valueOf(current.getId()))
                     .queryParam(queryName, queryValue)
@@ -462,7 +408,7 @@ public class AdminApi {
     }
 
     private URI orgRedirectUri(String queryName, String queryValue, String tab) {
-        return Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+        return Redirects.toSameOriginRelative(RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("admin")
                 .path("org")
                 .queryParam(queryName, queryValue)

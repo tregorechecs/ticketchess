@@ -1,8 +1,12 @@
 package com.github.gcolin.organisation;
 
 import java.net.URI;
+import com.github.gcolin.platform.plugin.PluginIds;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -10,6 +14,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -28,12 +33,14 @@ public class OrgConfig {
     public static final String FEATURE_MEMBERSHIPS = "feature.memberships";
     public static final String FEATURE_EVENTS = "feature.events";
     public static final String FEATURE_PAYMENTS = "feature.payments";
+    /** Enabled plugin ids (JSON array in {@code settings_json}); absent means derived from {@code feature.*}. */
+    public static final String KEY_PLUGINS = "plugins";
 
     /** Public source repository URL (AGPL). Not configurable per organisation. */
     public static final String SOURCE_URL = "https://github.com/gcolin/ticketchess";
 
     private static final Set<String> SCOPED_KEYS =
-            Set.of("title", "contact.url", "membership.notif.emails");
+            Set.of("title", "contact.url", "membership.notif.emails", KEY_PLUGINS);
     private static final List<String> SCOPED_PREFIXES =
             List.of("invoice.", "org.", "keycloak.", "stripe.", "oauth.", "ui.", "feature.");
     private static final Set<String> SECRET_KEYS = Set.of("stripe.secret", "oauth.clientSecret", "mail.PASSWORD");
@@ -179,12 +186,88 @@ public class OrgConfig {
         return isFeatureEnabled(getProperty(key));
     }
 
+    /**
+     * Plugins enabled for an organisation. An explicit {@code plugins} list wins; otherwise they derive from
+     * {@code feature.*}: events/membership/payments follow their flag, desk follows events, and the
+     * email, player-index and custom-player plugins are on.
+     */
+    public static Set<String> resolveEnabledPlugins(Function<String, String> lookup) {
+        String raw = lookup.apply(KEY_PLUGINS);
+        if (raw != null) {
+            return Collections.unmodifiableSet(new LinkedHashSet<>(parsePlugins(raw)));
+        }
+        boolean events = isFeatureEnabled(lookup.apply(FEATURE_EVENTS));
+        boolean memberships = isFeatureEnabled(lookup.apply(FEATURE_MEMBERSHIPS));
+        boolean payments = isFeatureEnabled(lookup.apply(FEATURE_PAYMENTS));
+        Set<String> enabled = new LinkedHashSet<>();
+        for (String id : PluginIds.KNOWN) {
+            boolean on = switch (id) {
+                case PluginIds.EVENTS, PluginIds.DESK -> events;
+                case PluginIds.MEMBERSHIP -> memberships;
+                case PluginIds.PAYMENTS -> payments;
+                default -> true;
+            };
+            if (on) {
+                enabled.add(id);
+            }
+        }
+        return Collections.unmodifiableSet(enabled);
+    }
+
+    public Set<String> enabledPlugins() {
+        return resolveEnabledPlugins(this::getProperty);
+    }
+
+    public boolean isPluginEnabled(String pluginId) {
+        return enabledPlugins().contains(pluginId);
+    }
+
+    /** Stores an explicit plugin list ({@code null} removes it, restoring the {@code feature.*} derivation). */
+    public void setPlugins(Collection<String> pluginIds) {
+        JSONObject settings = settings();
+        if (pluginIds == null) {
+            settings.remove(KEY_PLUGINS);
+        } else {
+            settings.put(KEY_PLUGINS, new JSONArray(new ArrayList<>(new LinkedHashSet<>(pluginIds))));
+        }
+        organisation.setSettingsJson(settings.isEmpty() ? null : settings.toString());
+    }
+
+    static List<String> parsePlugins(String csv) {
+        List<String> ids = new ArrayList<>();
+        for (String part : csv.split(",")) {
+            String id = part.trim();
+            if (!id.isEmpty()) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    private static String pluginsCsv(JSONObject settings) {
+        Object value = settings.opt(KEY_PLUGINS);
+        if (value == null || JSONObject.NULL.equals(value)) {
+            return null;
+        }
+        if (value instanceof JSONArray array) {
+            List<String> ids = new ArrayList<>();
+            for (int i = 0; i < array.length(); i++) {
+                ids.add(array.optString(i, ""));
+            }
+            return String.join(",", ids);
+        }
+        return value.toString();
+    }
+
     public String getProperty(String key) {
         Accessor accessor = TYPED.get(key);
         if (accessor != null) {
             return accessor.get().apply(organisation);
         }
         JSONObject settings = settings();
+        if (KEY_PLUGINS.equals(key)) {
+            return pluginsCsv(settings);
+        }
         if (settings.has(key) && !settings.isNull(key)) {
             return settings.optString(key, null);
         }
@@ -235,6 +318,10 @@ public class OrgConfig {
             accessor.set().accept(organisation, value);
             return;
         }
+        if (KEY_PLUGINS.equals(key)) {
+            setPlugins(value == null ? null : parsePlugins(value));
+            return;
+        }
         JSONObject settings = settings();
         if (value == null) {
             settings.remove(key);
@@ -259,7 +346,7 @@ public class OrgConfig {
         JSONObject settings = settings();
         for (String key : settings.keySet()) {
             if (!settings.isNull(key) && (includeSecrets || !SECRET_KEYS.contains(key))) {
-                map.put(key, settings.optString(key, ""));
+                map.put(key, KEY_PLUGINS.equals(key) ? pluginsCsv(settings) : settings.optString(key, ""));
             }
         }
         return map;

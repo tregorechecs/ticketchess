@@ -1,6 +1,8 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.registration.PlayerSubscription;
@@ -14,7 +16,6 @@ import com.github.gcolin.platform.MailTemplate;
 import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.platform.Config;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -23,7 +24,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -49,29 +49,11 @@ import com.github.gcolin.platform.MustacheHtml;
 @RequireRole(RoleCode.ARBITRE)
 public class EventMailApi {
 
-    @Inject
-    private EventDao eventService;
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionService;
-
-    @Inject
-    private Config config;
-
-    @Inject
-    private SendMail sendMail;
-
-    @Context
-    UriInfo uriInfo;
-
-    @Inject
-    private Find find;
-
     private static final Logger logger = LoggerFactory.getLogger(EventMailApi.class);
 
     @GET
     public MustacheHtml showForm(@PathParam("id") Integer eventId, @QueryParam("sent") Integer sent) {
-        Event event = eventService.find(eventId);
+        Event event = RequestContext.require().eventDao().find(eventId);
         Map<String, Object> model = new HashMap<>();
         model.put("event", event);
         model.put("recipients", buildRecipients(event));
@@ -87,7 +69,7 @@ public class EventMailApi {
     @Produces(MediaType.TEXT_HTML)
     public Response preview(
             @PathParam("id") Integer eventId, @FormParam("body") String body, @FormParam("bcc") boolean bcc) {
-        Event event = eventService.find(eventId);
+        Event event = RequestContext.require().eventDao().find(eventId);
         Parser parser = Parser.builder().build();
         Node document = parser.parse(body == null ? "" : body);
         HtmlRenderer renderer = HtmlRenderer.builder().escapeHtml(true).build();
@@ -98,7 +80,7 @@ public class EventMailApi {
         mail.setBody(renderer.render(document));
 
         try {
-            config.applyOrg(mail);
+            AppContext.get().config().applyOrg(mail);
             MailTemplate tmpl = new MailTemplate();
             String html = tmpl.render(mail.getTemplate(), mail);
             return Response.ok(html, MediaType.TEXT_HTML).build();
@@ -119,8 +101,8 @@ public class EventMailApi {
             @FormParam("sendInBatches") String sendInBatches,
             @FormParam("recipientFilterEnabled") String recipientFilterEnabled,
             @FormParam("selectedSubscriptions") List<Integer> selectedSubscriptions) {
-        Event event = eventService.find(eventId);
-        List<PlayerSubscription> subscriptions = playerSubscriptionService.findByEvent(event);
+        Event event = RequestContext.require().eventDao().find(eventId);
+        List<PlayerSubscription> subscriptions = RequestContext.require().playerSubscriptionDao().findByEvent(event);
         boolean useRecipientFilter = "true".equals(recipientFilterEnabled);
         Set<Integer> selectedSubscriptionIds = toIdSet(selectedSubscriptions);
         boolean batched = "true".equals(sendInBatches);
@@ -147,7 +129,7 @@ public class EventMailApi {
                 selectedSubscriptionIds,
                 eventId);
 
-        URI location = uriInfo.getBaseUriBuilder()
+        URI location = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event/{id}/mail")
                 .queryParam("sent", sent)
                 .build(eventId);
@@ -178,9 +160,9 @@ public class EventMailApi {
         try {
             BroadcastMail mail = buildBroadcastMail(event, body, "", null);
             if (batched) {
-                return sendMail.sendBccBatched(mail, bccAddresses, subject);
+                return AppContext.get().sendMail().sendBccBatched(mail, bccAddresses, subject);
             }
-            sendMail.sendBcc(mail, bccAddresses, subject);
+            AppContext.get().sendMail().sendBcc(mail, bccAddresses, subject);
             return bccAddresses.size();
         } catch (Exception e) {
             logger.error("Failed to send BCC broadcast mail for event {}: {}", eventId, e.getMessage());
@@ -203,10 +185,10 @@ public class EventMailApi {
                     && selectedMatches(sub, useRecipientFilter, selectedSubscriptionIds)
                     && isValidCreationUser(sub)) {
                 try {
-                    IPlayer player = find.player(sub.getNrFfe(), null);
+                    IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
                     String fullName = player != null ? player.getFullname() : "";
                     BroadcastMail mail = buildBroadcastMail(event, body, fullName, sub.getCreationUser());
-                    sendMail.send(mail, sub.getCreationUser(), subject);
+                    AppContext.get().sendMail().send(mail, sub.getCreationUser(), subject);
                     sent++;
                 } catch (Exception e) {
                     logger.error("Failed to send broadcast mail for event {}: {}", eventId, e.getMessage());
@@ -247,10 +229,10 @@ public class EventMailApi {
     }
 
     private List<MailRecipient> buildRecipients(Event event) {
-        if (playerSubscriptionService == null) {
+        if (RequestContext.require().playerSubscriptionDao() == null) {
             return Collections.emptyList();
         }
-        List<PlayerSubscription> subscriptions = playerSubscriptionService.findByEvent(event);
+        List<PlayerSubscription> subscriptions = RequestContext.require().playerSubscriptionDao().findByEvent(event);
         List<MailRecipient> recipients = new ArrayList<>();
         for (PlayerSubscription sub : subscriptions) {
             if (!isValidCreationUser(sub) || sub.getStatus() == PlayerSubscriptionStatus.CANCELLED) {
@@ -258,11 +240,7 @@ public class EventMailApi {
             }
             IPlayer player = null;
             try {
-                if (find == null) {
-                    recipients.add(new MailRecipient(sub.getId(), "", "", sub.getCreationUser(), sub.getStatus()));
-                    continue;
-                }
-                player = find.player(sub.getNrFfe(), null);
+                player = RequestContext.require().find().player(sub.getNrFfe(), null);
             } catch (Exception e) {
                 logger.debug("Could not load player {} for mail recipients: {}", sub.getNrFfe(), e.getMessage());
             }
@@ -295,9 +273,9 @@ public class EventMailApi {
                 .issuer(event.getName())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
-            String loginUrl = uriInfo.getBaseUri() + "login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8);
+            String loginUrl = RequestContext.require().uriInfo().getBaseUri() + "login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8);
             mail.setLoginUrl(loginUrl);
         }
         return mail;

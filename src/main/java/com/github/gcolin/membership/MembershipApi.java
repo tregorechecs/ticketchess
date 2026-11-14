@@ -1,6 +1,8 @@
 package com.github.gcolin.membership;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.club.ClubSeason;
 import com.github.gcolin.club.ClubSeasonDao;
 import com.github.gcolin.club.ClubSeasonFilter;
@@ -19,7 +21,6 @@ import com.github.gcolin.platform.BroadcastMail;
 import com.github.gcolin.platform.MailTemplate;
 import com.github.gcolin.platform.SendMail;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +32,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -62,53 +62,14 @@ import com.github.gcolin.platform.MustacheHtml;
 @Path("membership")
 public class MembershipApi {
 
-    @Inject
-    private MembershipDao membershipDao;
-
-    @Inject
-    private MembershipOptionDao membershipOptionDao;
-
-    @Inject
-    private MembershipOptionSubscriptionDao membershipOptionSubscriptionDao;
-
-    @Inject
-    private SendMail sendMail;
-
-    @Inject
-    private Config config;
-
-    @Inject
-    private ClubSeasonFilter clubSeasonFilter;
-
-    @Inject
-    private ClubSeasonDao clubSeasonDao;
-
-    @Inject
-    private MembershipReportService membershipReportService;
-
-    @Inject
-    private LicenseDao licenseDao;
-
-    @Inject
-    private LicensePriceService licensePriceService;
-
-    @Inject
-    private Find find;
-
-    @Inject
-    private Caches caches;
-
     private static final LocalDate LICENSE_REFERENCE_DATE = LocalDate.of(2026, 9, 30);
 
     private static final Logger logger = LoggerFactory.getLogger(MembershipApi.class);
 
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public MustacheHtml list(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Membership> memberships = membershipDao.all(scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Membership> memberships = RequestContext.require().membershipDao().all(scope);
         memberships.sort(Comparator.comparing(Membership::getId, Comparator.nullsLast(Integer::compareTo)).reversed());
 
         List<MembershipOptionSubscription> allSubscriptions = findSubscriptionsForMemberships(memberships);
@@ -121,7 +82,7 @@ public class MembershipApi {
         Map<String, Object> model = new HashMap<String, Object>();
         model.put("memberships", memberships);
         model.put("membershipSubscriptions", subscriptionsByMembership);
-        clubSeasonFilter.addToModel(model, seasonId);
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         MembershipMustacheView.enrichListPage(model, memberships, subscriptionsByMembership);
         return new MustacheHtml(model, "membership/membership.mustache");
     }
@@ -130,8 +91,8 @@ public class MembershipApi {
     @Path("export/csv")
     @Produces("text/csv; charset=UTF-8")
     public Response exportCsv(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Membership> memberships = new java.util.ArrayList<>(membershipDao.all(scope));
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Membership> memberships = new java.util.ArrayList<>(RequestContext.require().membershipDao().all(scope));
         memberships.sort(Comparator.comparing(Membership::getId, Comparator.nullsLast(Integer::compareTo)).reversed());
         Map<Integer, List<String>> optionsByMembership = buildOptionsByMembership(memberships);
 
@@ -161,11 +122,11 @@ public class MembershipApi {
     @Path("export/pdf")
     @Produces("application/pdf")
     public Response exportPdf(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Membership> memberships = membershipDao.all(scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Membership> memberships = RequestContext.require().membershipDao().all(scope);
         Map<Integer, List<String>> optionsByMembership = buildOptionsByMembership(memberships);
         List<MembershipSummarySection> summarySections = buildSummarySections(memberships);
-        byte[] pdf = membershipReportService.generate(memberships, optionsByMembership, summarySections, scope);
+        byte[] pdf = AppContext.get().membershipReportService().generate(memberships, optionsByMembership, summarySections, scope);
         return Response.ok(pdf)
                 .header(
                         "Content-Disposition",
@@ -183,14 +144,14 @@ public class MembershipApi {
         if (membershipIds.isEmpty()) {
             return List.of();
         }
-        return membershipOptionSubscriptionDao.findByMembershipIds(membershipIds);
+        return RequestContext.require().membershipOptionSubscriptionDao().findByMembershipIds(membershipIds);
     }
 
     private List<MembershipOptionSubscription> findSubscriptionsForMembershipId(Integer membershipId) {
         if (membershipId == null) {
             return List.of();
         }
-        return membershipOptionSubscriptionDao.findByMembershipIds(List.of(membershipId));
+        return RequestContext.require().membershipOptionSubscriptionDao().findByMembershipIds(List.of(membershipId));
     }
 
     private Map<Integer, List<String>> buildOptionsByMembership(List<Membership> memberships) {
@@ -244,7 +205,7 @@ public class MembershipApi {
             addLicenseToSummary(licenseTotals, membership, optionSum);
         }
         LinkedHashMap<String, MembershipSummaryLine> licenseLines = new LinkedHashMap<>();
-        for (License license : licenseDao.all()) {
+        for (License license : RequestContext.require().licenseDao().all()) {
             addSummaryLineIfPresent(licenseLines, licenseTotals, formatLicenseLabel(license.getName()));
         }
         if (!licenseLines.isEmpty()) {
@@ -361,12 +322,12 @@ public class MembershipApi {
         if (category == null) {
             return null;
         }
-        for (License license : licenseDao.all()) {
+        for (License license : RequestContext.require().licenseDao().all()) {
             String name = license.getName();
             if (name == null || name.isBlank()) {
                 continue;
             }
-            Integer price = licensePriceService.getLicensePrice(category, name.charAt(0));
+            Integer price = AppContext.get().licensePriceService().getLicensePrice(category, name.charAt(0));
             if (price != null && price == licenseCents) {
                 return name.trim().toUpperCase(Locale.ROOT);
             }
@@ -379,7 +340,7 @@ public class MembershipApi {
         if (category == null || licenseType == null || licenseType.isBlank()) {
             return 0;
         }
-        Integer price = licensePriceService.getLicensePrice(category, licenseType.charAt(0));
+        Integer price = AppContext.get().licensePriceService().getLicensePrice(category, licenseType.charAt(0));
         return price == null ? 0 : price;
     }
 
@@ -403,14 +364,14 @@ public class MembershipApi {
     }
 
     private IPlayer findPlayer(Membership membership) {
-        if (find == null || membership == null) {
+        if (membership == null) {
             return null;
         }
         String nrFfe = ModelUtils.trimToNull(membership.getNrFfe());
         if (nrFfe == null) {
             return null;
         }
-        return find.player(nrFfe, null);
+        return RequestContext.require().find().player(nrFfe, null);
     }
 
     private void enrichMembershipFromPlayer(Membership membership) {
@@ -486,9 +447,9 @@ public class MembershipApi {
         Map<String, Object> model = new HashMap<String, Object>();
         model.put("membership", new Membership());
         model.put("statuses", MembershipStatus.values());
-        model.put("licenses", licenseDao.all());
-        clubSeasonFilter.addToModel(model, seasonId);
-        MembershipMustacheView.enrichNewPage(model, MembershipStatus.values(), licenseDao.all(), seasonId);
+        model.put("licenses", RequestContext.require().licenseDao().all());
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
+        MembershipMustacheView.enrichNewPage(model, MembershipStatus.values(), RequestContext.require().licenseDao().all(), seasonId);
         return new MustacheHtml(model, "membership/membershipNew.mustache");
     }
 
@@ -520,17 +481,17 @@ public class MembershipApi {
         membership.setSeason(resolveSeason(seasonId));
 
         enrichMembershipFromPlayer(membership);
-        membershipDao.persist(membership);
+        RequestContext.require().membershipDao().persist(membership);
         recalculateMembershipAmount(membership);
 
-        URI redirect = uriInfo.getBaseUriBuilder().path("membership").build();
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder().path("membership").build();
         return Response.seeOther(redirect).build();
     }
 
     @GET
     @Path("{id}/edit")
     public MustacheHtml editPage(@PathParam("id") Integer id) {
-        Membership membership = membershipDao.find(id);
+        Membership membership = RequestContext.require().membershipDao().find(id);
         if (membership == null) {
             throw new jakarta.ws.rs.NotFoundException("Membership not found");
         }
@@ -539,25 +500,25 @@ public class MembershipApi {
 
         ClubSeason optionSeason = membership.getSeason();
         if (optionSeason == null) {
-            optionSeason = clubSeasonDao.findCurrent();
+            optionSeason = RequestContext.require().clubSeasonDao().findCurrent();
         }
         List<MembershipOption> availableOptions = optionSeason != null
-                ? membershipOptionDao.all(SeasonScope.of(optionSeason))
-                : membershipOptionDao.all(SeasonScope.all());
+                ? RequestContext.require().membershipOptionDao().all(SeasonScope.of(optionSeason))
+                : RequestContext.require().membershipOptionDao().all(SeasonScope.all());
 
         Map<String, Object> model = new HashMap<String, Object>();
         model.put("membership", membership);
         model.put("statuses", MembershipStatus.values());
         model.put("membershipOptions", subscriptions);
         model.put("availableOptions", availableOptions);
-        model.put("licenses", licenseDao.all());
+        model.put("licenses", RequestContext.require().licenseDao().all());
         Integer seasonId = membership.getSeason() != null ? membership.getSeason().getId() : null;
-        clubSeasonFilter.addToModel(model, seasonId);
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         MembershipMustacheView.enrichEditPage(
                 model,
                 membership,
                 MembershipStatus.values(),
-                licenseDao.all(),
+                RequestContext.require().licenseDao().all(),
                 subscriptions,
                 availableOptions,
                 seasonId);
@@ -578,7 +539,7 @@ public class MembershipApi {
             @FormParam("amountCents") Integer amountCents,
             @FormParam("licenseType") String licenseType,
             @FormParam("seasonId") Integer seasonId) {
-        Membership membership = membershipDao.find(id);
+        Membership membership = RequestContext.require().membershipDao().find(id);
         if (membership == null) {
             throw new jakarta.ws.rs.NotFoundException("Membership not found");
         }
@@ -599,26 +560,26 @@ public class MembershipApi {
 
         enrichMembershipFromPlayer(membership);
         recalculateMembershipAmount(membership);
-        caches.getDebtCache().invalidateAll();
+        AppContext.get().caches().getDebtCache().invalidateAll();
 
-        URI redirect = uriInfo.getBaseUriBuilder().path("membership").path(id.toString()).path("edit").build();
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder().path("membership").path(id.toString()).path("edit").build();
         return Response.seeOther(redirect).build();
     }
 
     @POST
     @Path("{id}/delete")
     public Response delete(@PathParam("id") Integer id, @FormParam("seasonId") Integer seasonId) {
-        Membership membership = membershipDao.find(id);
+        Membership membership = RequestContext.require().membershipDao().find(id);
         if (membership == null) {
             throw new jakarta.ws.rs.NotFoundException("Membership not found");
         }
 
         for (MembershipOptionSubscription subscription : findSubscriptionsForMembershipId(id)) {
-            membershipOptionSubscriptionDao.remove(subscription.getId());
+            RequestContext.require().membershipOptionSubscriptionDao().remove(subscription.getId());
         }
-        membershipDao.remove(id);
+        RequestContext.require().membershipDao().remove(id);
 
-        jakarta.ws.rs.core.UriBuilder builder = uriInfo.getBaseUriBuilder().path("membership");
+        jakarta.ws.rs.core.UriBuilder builder = RequestContext.require().uriInfo().getBaseUriBuilder().path("membership");
         if (seasonId != null) {
             builder.queryParam("seasonId", seasonId);
         }
@@ -629,14 +590,14 @@ public class MembershipApi {
     @Path("{id}/mail-preview")
     @Produces(MediaType.TEXT_HTML)
     public Response previewMail(@PathParam("id") Integer id) {
-        Membership membership = membershipDao.find(id);
+        Membership membership = RequestContext.require().membershipDao().find(id);
         if (membership == null) {
             throw new jakarta.ws.rs.NotFoundException("Membership not found");
         }
 
         try {
             BroadcastMail mail = buildConfirmationMail(membership);
-            config.applyOrg(mail);
+            AppContext.get().config().applyOrg(mail);
             String html = new MailTemplate().render(mail.getTemplate(), mail);
             return Response.ok(html, MediaType.TEXT_HTML).build();
         } catch (Exception e) {
@@ -651,7 +612,7 @@ public class MembershipApi {
     @POST
     @Path("{id}/send-mail")
     public Response sendMailToUser(@PathParam("id") Integer id) {
-        Membership membership = membershipDao.find(id);
+        Membership membership = RequestContext.require().membershipDao().find(id);
         if (membership == null) {
             throw new jakarta.ws.rs.NotFoundException("Membership not found");
         }
@@ -664,12 +625,12 @@ public class MembershipApi {
         BroadcastMail mail = buildConfirmationMail(membership);
 
         try {
-            sendMail.send(mail, recipient, "Votre préinscription a bien été enregistrée");
+            AppContext.get().sendMail().send(mail, recipient, "Votre préinscription a bien été enregistrée");
         } catch (Exception e) {
             logger.error("Unable to send membership confirmation email to {}: {}", recipient, e.getMessage());
         }
 
-        URI redirect = uriInfo.getBaseUriBuilder().path("membership").path(id.toString()).path("edit").build();
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder().path("membership").path(id.toString()).path("edit").build();
         return Response.seeOther(redirect).build();
     }
 
@@ -684,14 +645,14 @@ public class MembershipApi {
                 .issuer(fullName.isEmpty() ? recipient : fullName)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
 
-        String loginUrl = config.getPublicBaseUrl()
+        String loginUrl = AppContext.get().config().getPublicBaseUrl()
                 + "/login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8)
                 + "&redirect_uri=" + URLEncoder.encode("/club-register?success=mail", StandardCharsets.UTF_8);
 
-        List<String> optionValues = membershipOptionSubscriptionDao.all().stream()
+        List<String> optionValues = RequestContext.require().membershipOptionSubscriptionDao().all().stream()
                 .filter(sub -> sub.getMembership() != null
                         && sub.getMembership().getId() != null
                         && sub.getMembership().getId().equals(membership.getId()))
@@ -704,7 +665,10 @@ public class MembershipApi {
                 ? "<i>Aucune option sélectionnée</i>"
                 : "<i><b>" + String.join("<br>", optionValues) + "</b></i>";
 
-        String orgName = config.getPage().getOrgName() != null ? config.getPage().getOrgName() : "TicketChess";
+        String orgName = AppContext.get().config().pageForRequest().getOrgName();
+        if (orgName == null || orgName.isBlank()) {
+            orgName = "TicketChess";
+        }
         String greetingName = firstname.isBlank() ? "" : firstname;
         boolean needsConfirmation = membership.getStatus() == MembershipStatus.PENDING_CONFIRMATION;
 
@@ -738,7 +702,7 @@ public class MembershipApi {
         }
         if (membership.getStatus() == MembershipStatus.FREE) {
             membership.setAmountCents(0);
-            membershipDao.merge(membership);
+            RequestContext.require().membershipDao().merge(membership);
             return;
         }
         int optionSum = findSubscriptionsForMembershipId(membership.getId()).stream()
@@ -758,7 +722,7 @@ public class MembershipApi {
             }
         }
         membership.setAmountCents(Math.max(0, licenseCents + optionSum));
-        membershipDao.merge(membership);
+        RequestContext.require().membershipDao().merge(membership);
     }
 
     @POST
@@ -767,12 +731,12 @@ public class MembershipApi {
     public Response addOption(
             @PathParam("id") Integer membershipId,
             @FormParam("optionId") Integer optionId) {
-        Membership membership = membershipDao.find(membershipId);
+        Membership membership = RequestContext.require().membershipDao().find(membershipId);
         if (membership == null) {
             throw new jakarta.ws.rs.NotFoundException("Membership not found");
         }
 
-        MembershipOption option = membershipOptionDao.find(optionId);
+        MembershipOption option = RequestContext.require().membershipOptionDao().find(optionId);
         if (option == null) {
             throw new jakarta.ws.rs.NotFoundException("Option not found");
         }
@@ -782,11 +746,11 @@ public class MembershipApi {
         subscription.setMembershipOption(option);
         subscription.setNrFfe(membership.getNrFfe());
 
-        membershipOptionSubscriptionDao.persist(subscription);
+        RequestContext.require().membershipOptionSubscriptionDao().persist(subscription);
 
         recalculateMembershipAmount(membership);
 
-        URI redirect = uriInfo.getBaseUriBuilder().path("membership").path(membershipId.toString()).path("edit").build();
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder().path("membership").path(membershipId.toString()).path("edit").build();
         return Response.seeOther(redirect).build();
     }
 
@@ -795,7 +759,7 @@ public class MembershipApi {
     public Response removeOption(
             @PathParam("id") Integer membershipId,
             @PathParam("optionId") Integer optionId) {
-        MembershipOptionSubscription subscription = membershipOptionSubscriptionDao.find(optionId);
+        MembershipOptionSubscription subscription = RequestContext.require().membershipOptionSubscriptionDao().find(optionId);
         if (subscription == null) {
             throw new jakarta.ws.rs.NotFoundException("Subscription not found");
         }
@@ -804,25 +768,25 @@ public class MembershipApi {
             throw new jakarta.ws.rs.BadRequestException("Subscription does not belong to this membership");
         }
 
-        membershipOptionSubscriptionDao.remove(optionId);
+        RequestContext.require().membershipOptionSubscriptionDao().remove(optionId);
 
         recalculateMembershipAmount(subscription.getMembership());
 
-        URI redirect = uriInfo.getBaseUriBuilder().path("membership").path(membershipId.toString()).path("edit").build();
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder().path("membership").path(membershipId.toString()).path("edit").build();
         return Response.seeOther(redirect).build();
     }
 
     private String currentSeasonName() {
-        ClubSeason current = clubSeasonDao.findCurrent();
+        ClubSeason current = RequestContext.require().clubSeasonDao().findCurrent();
         return current != null && current.getName() != null ? current.getName() : "";
     }
 
     private ClubSeason resolveSeason(Integer seasonId) {
-        Integer effectiveId = clubSeasonFilter.effectiveSeasonId(seasonId);
+        Integer effectiveId = RequestContext.require().clubSeasonFilter().effectiveSeasonId(seasonId);
         if (effectiveId == null) {
             return null;
         }
-        return clubSeasonDao.find(effectiveId);
+        return RequestContext.require().clubSeasonDao().find(effectiveId);
     }
 
     private static String safe(String value) {

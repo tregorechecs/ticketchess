@@ -11,7 +11,6 @@ import com.github.gcolin.payment.PaymentMail;
 import com.github.gcolin.registration.RegistrationMail;
 import com.github.gcolin.platform.SendMail;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -33,12 +32,6 @@ import org.slf4j.LoggerFactory;
 public class AdminMailApi {
 
     private static final Logger logger = LoggerFactory.getLogger(AdminMailApi.class);
-
-    @Inject
-    private SendMail sendMail;
-
-    @Inject
-    private Config config;
 
     /**
      * Show a simple form to send a templated email.
@@ -79,7 +72,7 @@ public class AdminMailApi {
                         .build();
             }
 
-            config.applyOrg(mail);
+            AppContext.get().config().applyOrg(mail);
             String html = new MailTemplate().render(mail.getTemplate(), mail);
             return Response.ok(html, MediaType.TEXT_HTML).build();
         } catch (Exception e) {
@@ -116,7 +109,7 @@ public class AdminMailApi {
                         .entity("Unknown template")
                         .build();
             }
-            sendMail.send(mail, to, subject);
+            AppContext.get().sendMail().send(mail, to, subject);
         } catch (Exception e) {
             logger.error("Error sending email: {}", e.getMessage());
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
@@ -144,14 +137,14 @@ public class AdminMailApi {
         switch (template) {
             case "registrationConfirmation": {
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? AppContext.get().config().getPublicBaseUrl() : baseUrl;
                 
                 String jwt = Jwts.builder()
                         .subject(to.trim())
                         .issuer(safeName.isBlank() ? to.trim() : safeName)
                         .issuedAt(new Date())
                         .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                        .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                        .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                         .compact();
                 String loginUrl = selectedBaseUrl + "/login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8)
                         + "&redirect_uri=" + URLEncoder.encode("/event/my", StandardCharsets.UTF_8);
@@ -169,14 +162,14 @@ public class AdminMailApi {
             }
             case "paymentConfirmation": {
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? AppContext.get().config().getPublicBaseUrl() : baseUrl;
                 
                 String jwt = Jwts.builder()
                         .subject(to.trim())
                         .issuer(safeName.isBlank() ? to.trim() : safeName)
                         .issuedAt(new Date())
                         .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                        .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                        .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                         .compact();
                 String loginUrl = selectedBaseUrl + "/login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8)
                         + "&redirect_uri=" + URLEncoder.encode("/event/my", StandardCharsets.UTF_8);
@@ -194,14 +187,14 @@ public class AdminMailApi {
             }
             case "cancelConfirmation": {
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? AppContext.get().config().getPublicBaseUrl() : baseUrl;
                 
                 String jwt = Jwts.builder()
                         .subject(to.trim())
                         .issuer(safeName.isBlank() ? to.trim() : safeName)
                         .issuedAt(new Date())
                         .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                        .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                        .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                         .compact();
                 String loginUrl = selectedBaseUrl + "/login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8)
                         + "&redirect_uri=" + URLEncoder.encode("/event/my", StandardCharsets.UTF_8);
@@ -222,13 +215,13 @@ public class AdminMailApi {
                     return null;
                 }
                 String selectedBaseUrl =
-                        baseUrl == null || baseUrl.isEmpty() ? config.getPublicBaseUrl() : baseUrl;
+                        baseUrl == null || baseUrl.isEmpty() ? AppContext.get().config().getPublicBaseUrl() : baseUrl;
                 String jwt = Jwts.builder()
                         .subject(to.trim())
                         .issuer(safeName.isBlank() ? to.trim() : safeName)
                         .issuedAt(new Date())
                         .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                        .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                        .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                         .compact();
 
                 String loginUrl = selectedBaseUrl + "/login?jwt=" + URLEncoder.encode(jwt, StandardCharsets.UTF_8);

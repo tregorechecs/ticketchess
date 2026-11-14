@@ -7,10 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doAnswer;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.club.ClubSeasonFilter;
 import com.github.gcolin.club.SeasonScope;
 
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -40,20 +40,17 @@ class EventAdminApiTest {
             return null;
         }).when(clubSeasonFilter).addToModel(any(), any());
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "eventGroupDao", eventGroupDao);
-        inject(api, "clubSeasonFilter", clubSeasonFilter);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setEventGroupDao(eventGroupDao);
+            ctx.setClubSeasonFilter(clubSeasonFilter);
+        })) {
 
-        MustacheHtml html = api.page(null);
+            MustacheHtml html = api.page(null);
 
-        assertEquals("event/eventAdminTree.mustache", html.getTemplate());
-        verify(eventDao).fillNbSubscriptions(List.of(event));
-        verify(eventDao).detachAll(List.of(event));
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
+            assertEquals("event/eventAdminTree.mustache", html.getTemplate());
+            verify(eventDao).fillNbSubscriptions(List.of(event));
+            verify(eventDao).detachAll(List.of(event));
+        }
     }
 }

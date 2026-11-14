@@ -7,6 +7,7 @@ import com.github.gcolin.organisation.OrganisationDao;
 import com.github.gcolin.organisation.OrganisationFiles;
 import com.github.gcolin.organisation.OrgProperties;
 import com.github.gcolin.organisation.OrgScope;
+import com.github.gcolin.platform.plugin.PluginIds;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.MacAlgorithm;
@@ -247,7 +248,8 @@ public class Config {
 
     public void applyOrg(AbstractMail mail) {
         if (mail != null) {
-            mail.setOrgName(page.getOrgName());
+            // Use request-scoped org branding, not the platform page defaults (e.g. title=Event Test).
+            mail.setOrgName(pageForRequest().getOrgName());
         }
     }
 
@@ -607,15 +609,21 @@ public class Config {
         return OrgConfig.isFeatureEnabled(getProperty(key));
     }
 
+    /** Plugins enabled for the current organisation (derived from {@code feature.*} until a list is stored). */
+    public Set<String> enabledPlugins() {
+        return OrgConfig.resolveEnabledPlugins(this::getProperty);
+    }
+
     /** Request-scoped page view: current org identity + per-org logo/background when available. */
     public Page pageForRequest() {
         Page base = page;
         Page view = new Page();
         view.setTitle(firstNonBlank(getProperty("title"), base.getTitle(), "TicketChess"));
         view.setContactUrl(firstNonBlank(getProperty("contact.url"), base.getContactUrl()));
-        boolean memberships = isFeatureEnabled(OrgConfig.FEATURE_MEMBERSHIPS);
-        boolean events = isFeatureEnabled(OrgConfig.FEATURE_EVENTS);
-        boolean payments = isFeatureEnabled(OrgConfig.FEATURE_PAYMENTS);
+        Set<String> plugins = enabledPlugins();
+        boolean memberships = plugins.contains(PluginIds.MEMBERSHIP);
+        boolean events = plugins.contains(PluginIds.EVENTS);
+        boolean payments = plugins.contains(PluginIds.PAYMENTS);
         view.setMembershipsEnabled(memberships);
         view.setEventsEnabled(events);
         view.setPaymentsEnabled(payments);

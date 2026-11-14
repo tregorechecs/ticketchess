@@ -7,7 +7,6 @@ import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.container.ResourceInfo;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
@@ -24,11 +23,8 @@ public class RateLimitFilter implements ContainerResponseFilter {
     // Map<ip, List<Long timestamps>>
     private final Map<String, List<Long>> attemptsByIp = new HashMap<>();
 
-    @Context
+    /** Not injected (no HK2): set explicitly if this filter is ever registered per resource method. */
     private ResourceInfo resourceInfo;
-
-    @Context
-    private HttpServletRequest servletRequest;
 
     @Override
     public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) throws IOException {
@@ -101,6 +97,8 @@ public class RateLimitFilter implements ContainerResponseFilter {
         }
 
         // Fall back to servlet remote address
+        RequestContext requestScope = RequestContext.current();
+        HttpServletRequest servletRequest = requestScope == null ? null : requestScope.request();
         if (servletRequest != null) {
             String remoteAddr = servletRequest.getRemoteAddr();
             if (remoteAddr != null && !remoteAddr.isBlank()) {

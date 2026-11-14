@@ -21,6 +21,7 @@ import com.github.gcolin.registration.PlayerPendingSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.CancelMail;
 import com.github.gcolin.registration.RegistrationMail;
+import com.github.gcolin.platform.Mails;
 import com.github.gcolin.platform.SendMail;
 import io.jsonwebtoken.Jwts;
 import java.net.URLEncoder;
@@ -166,7 +167,7 @@ public class RegisterService {
         registrationMail.setLoginUrl(buildLoginUrl(email, registrationMail.getName(), baseUrl));
 
         try {
-            sendMail.send(registrationMail, email, "Confirmation inscription " + event.getName());
+            Mails.send(sendMail, registrationMail, email, "Confirmation inscription " + event.getName());
         } catch (Exception e) {
             LoggerFactory.getLogger(this.getClass().getName()).error("cannot send mail", e);
         }
@@ -211,7 +212,7 @@ public class RegisterService {
             buildLoginUrl(ps.getCreationUser(), registrationMail.getName(), properties.getProperty("baseurl")));
 
         try {
-            sendMail.send(registrationMail, ps.getCreationUser(), "Confirmation annulation " + event.getName());
+            Mails.send(sendMail, registrationMail, ps.getCreationUser(), "Confirmation annulation " + event.getName());
         } catch (Exception e) {
             LoggerFactory.getLogger(this.getClass().getName()).error("cannot send mail", e.toString());
         }
@@ -382,7 +383,8 @@ public class RegisterService {
         registrationMail.setLoginUrl(buildLoginUrl(pending.getCreationUser(), registrationMail.getName(), baseUrl));
 
         try {
-            sendMail.send(
+            Mails.send(
+                    sendMail,
                     registrationMail,
                     pending.getCreationUser(),
                     "Confirmation inscription " + targetEvent.getName());

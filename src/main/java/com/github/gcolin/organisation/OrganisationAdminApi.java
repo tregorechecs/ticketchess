@@ -16,7 +16,9 @@ import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.platform.SendMail;
 import com.github.gcolin.platform.ServiceUtils;
 import com.github.gcolin.platform.SignatureService;
-import jakarta.inject.Inject;
+import com.github.gcolin.platform.plugin.FeatureModule;
+import com.github.gcolin.platform.plugin.PluginIds;
+import com.github.gcolin.platform.plugin.PluginRegistry;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
@@ -28,7 +30,6 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
@@ -40,6 +41,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -130,33 +132,6 @@ public class OrganisationAdminApi {
 
     private static final Set<String> PLATFORM_SETTINGS_TABS = Set.of("oauth", "system");
 
-    @Inject
-    private OrganisationDao organisationDao;
-
-    @Inject
-    private LoggedUser user;
-
-    @Inject
-    private Config config;
-
-    @Inject
-    private LogoService logoService;
-
-    @Inject
-    private SignatureService signatureService;
-
-    @Inject
-    private BackgroundService backgroundService;
-
-    @Inject
-    private RibService ribService;
-
-    @Inject
-    private SendMail sendMail;
-
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public Response list(@QueryParam("success") String success) {
         Response denied = requirePlatformAdmin();
@@ -164,7 +139,7 @@ public class OrganisationAdminApi {
             return denied;
         }
         Map<String, Object> model = new HashMap<>();
-        model.put("organisations", organisationDao.allOrdered());
+        model.put("organisations", RequestContext.require().organisationDao().allOrdered());
         model.put("success", success == null ? "" : success);
         model.put("titleKey", "page.organisations");
         model.put("activePageTitleKey", "breadcrumb.organisations");
@@ -188,7 +163,7 @@ public class OrganisationAdminApi {
             @QueryParam("tab") @DefaultValue("") String tab,
             @QueryParam("success") @DefaultValue("") String success,
             @QueryParam("error") @DefaultValue("") String error) {
-        Organisation org = organisationDao.find(id);
+        Organisation org = RequestContext.require().organisationDao().find(id);
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -198,7 +173,7 @@ public class OrganisationAdminApi {
         }
         String requestedTab = tab == null ? "" : tab.trim();
         if (PLATFORM_SETTINGS_TABS.contains(requestedTab)) {
-            var builder = uriInfo.getBaseUriBuilder().path("admin/org").queryParam("tab", requestedTab);
+            var builder = RequestContext.require().uriInfo().getBaseUriBuilder().path("admin/org").queryParam("tab", requestedTab);
             if (success != null && !success.isBlank()) {
                 builder.queryParam("success", success);
             }
@@ -229,10 +204,10 @@ public class OrganisationAdminApi {
             return Response.ok(form(org, error, "identity", "", "")).build();
         }
 
-        organisationDao.persist(org);
+        RequestContext.require().organisationDao().persist(org);
         AppContext.get().organisationResolver().invalidate();
         logger.info("Created organisation {} ({})", org.getName(), org.getBaseUrl());
-        return Response.seeOther(Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+        return Response.seeOther(Redirects.toSameOriginRelative(RequestContext.require().uriInfo().getBaseUriBuilder()
                         .path("admin/organisations")
                         .queryParam("success", "created")
                         .build()))
@@ -251,7 +226,7 @@ public class OrganisationAdminApi {
         if (denied != null) {
             return denied;
         }
-        Organisation org = organisationDao.find(id);
+        Organisation org = RequestContext.require().organisationDao().find(id);
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -262,10 +237,10 @@ public class OrganisationAdminApi {
             return Response.ok(form(org, error, "identity", "", "")).build();
         }
 
-        organisationDao.merge(org);
+        RequestContext.require().organisationDao().merge(org);
         AppContext.get().organisationResolver().invalidate();
         logger.info("Updated organisation {} ({})", org.getName(), org.getBaseUrl());
-        return Response.seeOther(Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+        return Response.seeOther(Redirects.toSameOriginRelative(RequestContext.require().uriInfo().getBaseUriBuilder()
                         .path("admin/organisations")
                         .path(String.valueOf(org.getId()))
                         .queryParam("success", "updated")
@@ -278,7 +253,7 @@ public class OrganisationAdminApi {
     @Path("{id}/config")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response saveConfig(@PathParam("id") int id, MultivaluedMap<String, String> form) {
-        Organisation org = organisationDao.find(id);
+        Organisation org = RequestContext.require().organisationDao().find(id);
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -290,10 +265,10 @@ public class OrganisationAdminApi {
         if (!SETTINGS_TAB_KEYS.containsKey(tab)) {
             return redirectToEdit(org, "error", "configInvalid", "features");
         }
-        if ("payment".equals(tab) && !new OrgConfig(org).isFeatureEnabledKey(OrgConfig.FEATURE_PAYMENTS)) {
+        if ("payment".equals(tab) && !new OrgConfig(org).isPluginEnabled(PluginIds.PAYMENTS)) {
             return redirectToEdit(org, "error", "configInvalid", "features");
         }
-        if ("identity".equals(tab) && user != null && user.isPlatformAdmin()) {
+        if ("identity".equals(tab) && RequestContext.require().loggedUser() != null && RequestContext.require().loggedUser().isPlatformAdmin()) {
             String name = formValue(form, "org.name");
             applyIdentity(
                     org,
@@ -304,7 +279,7 @@ public class OrganisationAdminApi {
             if (identityError != null) {
                 return Response.ok(form(org, identityError, "identity", "", "")).build();
             }
-            organisationDao.merge(org);
+            RequestContext.require().organisationDao().merge(org);
             AppContext.get().organisationResolver().invalidate();
         }
         Map<String, String> updates = new LinkedHashMap<>();
@@ -328,6 +303,7 @@ public class OrganisationAdminApi {
             updates.put(OrgUiStyle.KEY_FONT, OrgUiStyle.sanitizeFontId(updates.get(OrgUiStyle.KEY_FONT)));
         }
         if ("features".equals(tab)) {
+            applyPlugins(org, form, updates);
             if (!"true".equals(updates.get(OrgConfig.FEATURE_EVENTS))) {
                 updates.put("stripe.card.events", "false");
                 updates.put("payment.transfer.events", "false");
@@ -337,14 +313,14 @@ public class OrganisationAdminApi {
                 updates.put("payment.transfer.memberships", "false");
             }
         }
-        if ("mail".equals(tab) && !new OrgConfig(org).isFeatureEnabledKey(OrgConfig.FEATURE_MEMBERSHIPS)) {
+        if ("mail".equals(tab) && !new OrgConfig(org).isPluginEnabled(PluginIds.MEMBERSHIP)) {
             // Field is hidden when memberships are off — keep the stored value.
             updates.remove("membership.notif.emails");
         }
         if ("payment".equals(tab)) {
             OrgConfig orgConfig = new OrgConfig(org);
-            boolean eventsOn = orgConfig.isFeatureEnabledKey(OrgConfig.FEATURE_EVENTS);
-            boolean membershipsOn = orgConfig.isFeatureEnabledKey(OrgConfig.FEATURE_MEMBERSHIPS);
+            boolean eventsOn = orgConfig.isPluginEnabled(PluginIds.EVENTS);
+            boolean membershipsOn = orgConfig.isPluginEnabled(PluginIds.MEMBERSHIP);
             boolean simuled = "true".equals(updates.get("stripe.simuled"));
             if (simuled) {
                 // Disabled key fields are omitted from the POST — keep existing values.
@@ -369,13 +345,13 @@ public class OrganisationAdminApi {
         }
         try {
             withOrgScope(org, () -> {
-                if ("payment".equals(tab) && !ribService.exists()) {
+                if ("payment".equals(tab) && !AppContext.get().ribService().exists()) {
                     updates.put("payment.transfer.events", "false");
                     updates.put("payment.transfer.memberships", "false");
                 }
-                config.updateProperties(updates);
-                if ("mail".equals(tab) && sendMail != null) {
-                    sendMail.reloadCredentials();
+                AppContext.get().config().updateProperties(updates);
+                if ("mail".equals(tab) && AppContext.get().sendMail() != null) {
+                    AppContext.get().sendMail().reloadCredentials();
                 }
             });
             return redirectToEdit(org, "success", "configSaved", tab);
@@ -390,7 +366,7 @@ public class OrganisationAdminApi {
     @Consumes({"image/png", "image/jpeg", "image/webp", "application/octet-stream"})
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadLogo(@PathParam("id") int id, InputStream file) {
-        return uploadOrgFile(id, file, logoService::save, () -> config.applyRuntime(), "logo", "invalidLogo", "logoTooLarge",
+        return uploadOrgFile(id, file, AppContext.get().logoService()::save, () -> AppContext.get().config().applyRuntime(), "logo", "invalidLogo", "logoTooLarge",
                 "logoUploadFailed", "logoUploaded");
     }
 
@@ -398,7 +374,7 @@ public class OrganisationAdminApi {
     @Path("{id}/logo")
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteLogo(@PathParam("id") int id) {
-        return deleteOrgFile(id, logoService::delete, () -> config.applyRuntime(), "logoDeleted", "logoDeleteFailed");
+        return deleteOrgFile(id, AppContext.get().logoService()::delete, () -> AppContext.get().config().applyRuntime(), "logoDeleted", "logoDeleteFailed");
     }
 
     @POST
@@ -409,7 +385,7 @@ public class OrganisationAdminApi {
         return uploadOrgFile(
                 id,
                 file,
-                signatureService::save,
+                AppContext.get().signatureService()::save,
                 null,
                 "signature",
                 "invalidSignature",
@@ -422,7 +398,7 @@ public class OrganisationAdminApi {
     @Path("{id}/signature")
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteSignature(@PathParam("id") int id) {
-        return deleteOrgFile(id, signatureService::delete, null, "signatureDeleted", "signatureDeleteFailed");
+        return deleteOrgFile(id, AppContext.get().signatureService()::delete, null, "signatureDeleted", "signatureDeleteFailed");
     }
 
     @POST
@@ -433,8 +409,8 @@ public class OrganisationAdminApi {
         return uploadOrgFile(
                 id,
                 file,
-                backgroundService::save,
-                () -> config.applyRuntime(),
+                AppContext.get().backgroundService()::save,
+                () -> AppContext.get().config().applyRuntime(),
                 "background",
                 "invalidBackground",
                 "backgroundTooLarge",
@@ -447,7 +423,7 @@ public class OrganisationAdminApi {
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteBackground(@PathParam("id") int id) {
         return deleteOrgFile(
-                id, backgroundService::delete, () -> config.applyRuntime(), "backgroundDeleted", "backgroundDeleteFailed");
+                id, AppContext.get().backgroundService()::delete, () -> AppContext.get().config().applyRuntime(), "backgroundDeleted", "backgroundDeleteFailed");
     }
 
     @POST
@@ -455,7 +431,7 @@ public class OrganisationAdminApi {
     @Consumes({"application/pdf", "application/x-pdf", "application/octet-stream", "*/*"})
     @Produces(MediaType.APPLICATION_JSON)
     public Response uploadRib(@PathParam("id") int id, InputStream file) {
-        return uploadOrgFile(id, file, ribService::save, null, "rib", "invalidRib", "ribTooLarge", "ribUploadFailed",
+        return uploadOrgFile(id, file, AppContext.get().ribService()::save, null, "rib", "invalidRib", "ribTooLarge", "ribUploadFailed",
                 "ribUploaded");
     }
 
@@ -463,7 +439,7 @@ public class OrganisationAdminApi {
     @Path("{id}/rib")
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteRib(@PathParam("id") int id) {
-        Organisation org = organisationDao.find(id);
+        Organisation org = RequestContext.require().organisationDao().find(id);
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -473,11 +449,11 @@ public class OrganisationAdminApi {
         }
         try {
             withOrgScope(org, () -> {
-                ribService.delete();
+                AppContext.get().ribService().delete();
                 Map<String, String> updates = new LinkedHashMap<>();
                 updates.put("payment.transfer.events", "false");
                 updates.put("payment.transfer.memberships", "false");
-                config.updateProperties(updates);
+                AppContext.get().config().updateProperties(updates);
             });
             return jsonRedirectToEdit(org, "success", "ribDeleted", "files");
         } catch (IOException e) {
@@ -490,12 +466,12 @@ public class OrganisationAdminApi {
     @Path("{id}/files/logo")
     public Response downloadLogo(@PathParam("id") int id) {
         return streamOrgFile(id, () -> {
-            if (!logoService.exists()) {
+            if (!AppContext.get().logoService().exists()) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
-            StreamingOutput stream = ClientDisconnect.copyFile(logoService.getLogoFile());
+            StreamingOutput stream = ClientDisconnect.copyFile(AppContext.get().logoService().getLogoFile());
             return Response.ok(stream)
-                    .type(logoService.getContentType())
+                    .type(AppContext.get().logoService().getContentType())
                     .header("Cache-Control", "no-cache")
                     .build();
         });
@@ -505,12 +481,12 @@ public class OrganisationAdminApi {
     @Path("{id}/files/signature")
     public Response downloadSignature(@PathParam("id") int id) {
         return streamOrgFile(id, () -> {
-            if (!signatureService.exists()) {
+            if (!AppContext.get().signatureService().exists()) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
-            StreamingOutput stream = ClientDisconnect.copyFile(signatureService.getSignatureFile());
+            StreamingOutput stream = ClientDisconnect.copyFile(AppContext.get().signatureService().getSignatureFile());
             return Response.ok(stream)
-                    .type(signatureService.getContentType())
+                    .type(AppContext.get().signatureService().getContentType())
                     .header("Cache-Control", "no-cache")
                     .build();
         });
@@ -520,12 +496,12 @@ public class OrganisationAdminApi {
     @Path("{id}/files/background")
     public Response downloadBackground(@PathParam("id") int id) {
         return streamOrgFile(id, () -> {
-            if (!backgroundService.exists()) {
+            if (!AppContext.get().backgroundService().exists()) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
-            StreamingOutput stream = ClientDisconnect.copyFile(backgroundService.getBackgroundFile());
+            StreamingOutput stream = ClientDisconnect.copyFile(AppContext.get().backgroundService().getBackgroundFile());
             return Response.ok(stream)
-                    .type(backgroundService.getContentType())
+                    .type(AppContext.get().backgroundService().getContentType())
                     .header("Cache-Control", "no-cache")
                     .build();
         });
@@ -535,10 +511,10 @@ public class OrganisationAdminApi {
     @Path("{id}/files/rib")
     public Response downloadRib(@PathParam("id") int id) {
         return streamOrgFile(id, () -> {
-            if (!ribService.exists()) {
+            if (!AppContext.get().ribService().exists()) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
-            StreamingOutput stream = ClientDisconnect.copyFile(ribService.getRibFile());
+            StreamingOutput stream = ClientDisconnect.copyFile(AppContext.get().ribService().getRibFile());
             return Response.ok(stream)
                     .type("application/pdf")
                     .header("Content-Disposition", "inline; filename=\"rib.pdf\"")
@@ -556,7 +532,7 @@ public class OrganisationAdminApi {
             String tooLargeError,
             String failedError,
             String successValue) {
-        Organisation org = organisationDao.find(id);
+        Organisation org = RequestContext.require().organisationDao().find(id);
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -592,7 +568,7 @@ public class OrganisationAdminApi {
 
     private Response deleteOrgFile(
             int id, IoRunnable deleter, Runnable afterDelete, String successValue, String failedError) {
-        Organisation org = organisationDao.find(id);
+        Organisation org = RequestContext.require().organisationDao().find(id);
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -615,7 +591,7 @@ public class OrganisationAdminApi {
     }
 
     private Response streamOrgFile(int id, ResponseSupplier supplier) {
-        Organisation org = organisationDao.find(id);
+        Organisation org = RequestContext.require().organisationDao().find(id);
         if (org == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -636,7 +612,7 @@ public class OrganisationAdminApi {
             Organisation organisation, String identityError, String tab, String success, String queryError) {
         Map<String, Object> model = new HashMap<>();
         boolean editMode = organisation != null && organisation.getId() != null;
-        boolean canEditIdentity = user != null && user.isPlatformAdmin();
+        boolean canEditIdentity = RequestContext.require().loggedUser() != null && RequestContext.require().loggedUser().isPlatformAdmin();
         model.put("organisation", organisation != null ? organisation : new Organisation());
         model.put("editMode", editMode);
         model.put("canEditIdentity", canEditIdentity);
@@ -661,7 +637,7 @@ public class OrganisationAdminApi {
 
     private void enrichSettings(Map<String, Object> model, Organisation organisation, String tab) {
         OrgConfig orgConfig = new OrgConfig(organisation);
-        boolean paymentsEnabled = orgConfig.isFeatureEnabledKey(OrgConfig.FEATURE_PAYMENTS);
+        boolean paymentsEnabled = orgConfig.isPluginEnabled(PluginIds.PAYMENTS);
         String effectiveTab = normalizeSettingsTab(tab);
         if (!SETTINGS_TABS.contains(effectiveTab)) {
             effectiveTab = "features";
@@ -677,13 +653,13 @@ public class OrganisationAdminApi {
 
         try {
             withOrgScope(organisation, () -> {
-                boolean ribAvailable = ribService.exists();
+                boolean ribAvailable = AppContext.get().ribService().exists();
                 model.put("ribAvailable", ribAvailable);
-                model.put("logoAvailable", logoService.exists());
-                model.put("signatureAvailable", signatureService.exists());
-                model.put("backgroundAvailable", backgroundService.exists());
-                model.put("publicBaseUrl", config.getPublicBaseUrl());
-                model.put("clubRegisterEnabled", config.pageForRequest().isClubRegisterEnabled());
+                model.put("logoAvailable", AppContext.get().logoService().exists());
+                model.put("signatureAvailable", AppContext.get().signatureService().exists());
+                model.put("backgroundAvailable", AppContext.get().backgroundService().exists());
+                model.put("publicBaseUrl", AppContext.get().config().getPublicBaseUrl());
+                model.put("clubRegisterEnabled", AppContext.get().config().pageForRequest().isClubRegisterEnabled());
 
                 Map<String, String> cfg = new LinkedHashMap<>(orgConfig.toMap(false));
                 for (Set<String> keys : SETTINGS_TAB_KEYS.values()) {
@@ -728,7 +704,7 @@ public class OrganisationAdminApi {
                     if (OrgConfig.isOrgScoped(key) || OrgConfig.isSecret(key)) {
                         secrets.put(key, blankToNull(orgConfig.getProperty(key)) != null);
                     } else {
-                        secrets.put(key, config.isSecretConfigured(key));
+                        secrets.put(key, AppContext.get().config().isSecretConfigured(key));
                     }
                 }
                 secrets.put("stripe.secret", blankToNull(orgConfig.getProperty("stripe.secret")) != null);
@@ -737,12 +713,13 @@ public class OrganisationAdminApi {
 
                 if (ribAvailable) {
                     try {
-                        model.put("ribSize", ServiceUtils.readable(Files.size(ribService.getRibFile())));
+                        model.put("ribSize", ServiceUtils.readable(Files.size(AppContext.get().ribService().getRibFile())));
                     } catch (IOException e) {
                         logger.warn("cannot read RIB file size for org {}", organisation.getId(), e);
                     }
                 }
                 MustacheOrgConfigView.enrich(model);
+                model.put("pluginOptions", pluginOptions(orgConfig.enabledPlugins()));
             });
         } catch (IOException e) {
             throw new IllegalStateException(e);
@@ -757,7 +734,7 @@ public class OrganisationAdminApi {
                 || !EMAIL.matcher(org.getSuperUserEmail()).matches()) {
             return "invalid";
         }
-        Organisation byBaseUrl = organisationDao.findByBaseUrl(org.getBaseUrl());
+        Organisation byBaseUrl = RequestContext.require().organisationDao().findByBaseUrl(org.getBaseUrl());
         if (byBaseUrl != null && !byBaseUrl.getId().equals(org.getId())) {
             return "baseUrlTaken";
         }
@@ -766,7 +743,7 @@ public class OrganisationAdminApi {
 
     /** Platform administrators (params.properties {@code admins}) only. */
     private Response requirePlatformAdmin() {
-        return user != null && user.isPlatformAdmin()
+        return RequestContext.require().loggedUser() != null && RequestContext.require().loggedUser().isPlatformAdmin()
                 ? null
                 : Response.status(Response.Status.FORBIDDEN)
                         .entity("platform admin required")
@@ -776,11 +753,11 @@ public class OrganisationAdminApi {
 
     /** Platform admin, or club ADMIN for the organisation currently in request scope. */
     private Response requireOrgAdminOrPlatform(Organisation org) {
-        if (user != null && user.isPlatformAdmin()) {
+        if (RequestContext.require().loggedUser() != null && RequestContext.require().loggedUser().isPlatformAdmin()) {
             return null;
         }
-        if (user != null
-                && user.isAdmin()
+        if (RequestContext.require().loggedUser() != null
+                && RequestContext.require().loggedUser().isAdmin()
                 && org.getId() != null
                 && org.getId().equals(OrgScope.currentOrgId())) {
             return null;
@@ -825,13 +802,68 @@ public class OrganisationAdminApi {
     }
 
     private URI editRedirectUri(Organisation org, String queryName, String queryValue, String tab) {
-        return Redirects.toSameOriginRelative(uriInfo.getBaseUriBuilder()
+        return Redirects.toSameOriginRelative(RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("admin/organisations")
                 .path(String.valueOf(org.getId()))
                 .queryParam(queryName, queryValue)
                 .queryParam("tab", tab)
                 .fragment(tab)
                 .build());
+    }
+
+    /**
+     * Persists the plugin checkboxes of the features tab (and keeps {@code feature.*} in step). Without
+     * checkboxes in the form, a stored plugin list is only synced with the events/membership/payments flags.
+     */
+    private static void applyPlugins(Organisation org, MultivaluedMap<String, String> form, Map<String, String> updates) {
+        Set<String> plugins;
+        if (formValue(form, "pluginsForm") != null) {
+            plugins = new LinkedHashSet<>();
+            for (String id : pluginModules().ids()) {
+                String value = formValue(form, "plugin." + id);
+                if (value != null && !value.isBlank() && !"false".equalsIgnoreCase(value)) {
+                    plugins.add(id);
+                }
+            }
+            updates.put(OrgConfig.FEATURE_EVENTS, String.valueOf(plugins.contains(PluginIds.EVENTS)));
+            updates.put(OrgConfig.FEATURE_MEMBERSHIPS, String.valueOf(plugins.contains(PluginIds.MEMBERSHIP)));
+            updates.put(OrgConfig.FEATURE_PAYMENTS, String.valueOf(plugins.contains(PluginIds.PAYMENTS)));
+        } else {
+            OrgConfig current = new OrgConfig(org);
+            if (!current.isExplicitlySet(OrgConfig.KEY_PLUGINS)) {
+                return;
+            }
+            plugins = new LinkedHashSet<>(current.enabledPlugins());
+            syncPlugin(plugins, PluginIds.EVENTS, updates.get(OrgConfig.FEATURE_EVENTS));
+            syncPlugin(plugins, PluginIds.MEMBERSHIP, updates.get(OrgConfig.FEATURE_MEMBERSHIPS));
+            syncPlugin(plugins, PluginIds.PAYMENTS, updates.get(OrgConfig.FEATURE_PAYMENTS));
+        }
+        updates.put(OrgConfig.KEY_PLUGINS, String.join(",", plugins));
+    }
+
+    private static void syncPlugin(Set<String> plugins, String id, String featureFlag) {
+        if ("true".equals(featureFlag)) {
+            plugins.add(id);
+        } else {
+            plugins.remove(id);
+        }
+    }
+
+    private static PluginRegistry pluginModules() {
+        PluginRegistry registry = AppContext.get().pluginRegistry();
+        return registry != null ? registry : PluginRegistry.load();
+    }
+
+    private static List<Map<String, Object>> pluginOptions(Set<String> enabled) {
+        List<Map<String, Object>> options = new java.util.ArrayList<>();
+        for (FeatureModule module : pluginModules().modules()) {
+            Map<String, Object> option = new HashMap<>();
+            option.put("id", module.id());
+            option.put("labelKey", module.labelKey());
+            option.put("checked", enabled.contains(module.id()));
+            options.add(option);
+        }
+        return options;
     }
 
     private static String formValue(MultivaluedMap<String, String> form, String key) {

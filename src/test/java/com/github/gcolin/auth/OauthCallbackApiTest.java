@@ -1,9 +1,11 @@
 package com.github.gcolin.auth;
 
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.platform.Config;
 import io.jsonwebtoken.security.Keys;
@@ -24,14 +26,18 @@ class OauthCallbackApiTest {
     @Test
     void callbackShouldReturnBadRequestWhenCodeMissing() throws Exception {
         OauthCallbackApi api = new OauthCallbackApi() {};
-        inject(api, "loggedUser", mock(LoggedUser.class));
-        inject(api, "caches", new Caches());
-        inject(api, "config", mock(Config.class));
-        inject(api, "uriInfo", mock(UriInfo.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+            app.setConfig(mock(Config.class));
+        }, ctx -> {
+            ctx.setLoggedUser(mock(LoggedUser.class));
+        })) {
+            RequestContext.require().setUriInfo(mock(UriInfo.class));
 
-        Response response = api.callback(null, null);
+            Response response = api.callback(null, null);
 
-        assertEquals(400, response.getStatus());
+            assertEquals(400, response.getStatus());
+        }
     }
 
     @Test
@@ -51,14 +57,18 @@ class OauthCallbackApiTest {
         when(config.getOauthClientSecret()).thenReturn("secret");
         when(config.getOauthRedirectUri()).thenReturn("http://localhost:8080/oauth-callback");
 
-        inject(api, "loggedUser", mock(LoggedUser.class));
-        inject(api, "caches", new Caches());
-        inject(api, "config", config);
-        inject(api, "uriInfo", mock(UriInfo.class));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+            app.setConfig(config);
+        }, ctx -> {
+            ctx.setLoggedUser(mock(LoggedUser.class));
+        })) {
+            RequestContext.require().setUriInfo(mock(UriInfo.class));
 
-        Response r = api.callback("invalid_code", null);
+            Response r = api.callback("invalid_code", null);
 
-        assertEquals(401, r.getStatus());
+            assertEquals(401, r.getStatus());
+        }
     }
 
     @Test
@@ -94,20 +104,24 @@ class OauthCallbackApiTest {
         when(config.getKeys())
                 .thenReturn(Keys.hmacShaKeyFor(
                         "9f3b2a8c5d4e7f1b2c9a0d6e3f1b4c7a8d2e5f9c1b0a3d6e4f7c8b9a2d1e6f3b".getBytes()));
-        inject(api, "loggedUser", mock(LoggedUser.class));
-        inject(api, "caches", new Caches());
-        inject(api, "config", config);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+            app.setConfig(config);
+        }, ctx -> {
+            ctx.setLoggedUser(mock(LoggedUser.class));
+        })) {
 
-        UriInfo uriInfo = mock(UriInfo.class);
-        UriBuilder uriBuilder = mock(UriBuilder.class);
-        when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
-        when(uriBuilder.path(decodedState)).thenReturn(uriBuilder);
-        when(uriBuilder.build()).thenReturn(URI.create("http://localhost:8080/event/5"));
-        inject(api, "uriInfo", uriInfo);
+            UriInfo uriInfo = mock(UriInfo.class);
+            UriBuilder uriBuilder = mock(UriBuilder.class);
+            when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
+            when(uriBuilder.path(decodedState)).thenReturn(uriBuilder);
+            when(uriBuilder.build()).thenReturn(URI.create("http://localhost:8080/event/5"));
+            RequestContext.require().setUriInfo(uriInfo);
 
-        Response r = api.callback("invalid", encodedState);
+            Response r = api.callback("invalid", encodedState);
 
-        assertEquals(303, r.getStatus());
+            assertEquals(303, r.getStatus());
+        }
     }
 
     @Test
@@ -143,34 +157,21 @@ class OauthCallbackApiTest {
         when(config.getKeys())
                 .thenReturn(Keys.hmacShaKeyFor(
                         "9f3b2a8c5d4e7f1b2c9a0d6e3f1b4c7a8d2e5f9c1b0a3d6e4f7c8b9a2d1e6f3b".getBytes()));
-        inject(api, "loggedUser", mock(LoggedUser.class));
-        inject(api, "caches", new Caches());
-        inject(api, "config", config);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+            app.setConfig(config);
+        }, ctx -> {
+            ctx.setLoggedUser(mock(LoggedUser.class));
+        })) {
 
-        UriInfo uriInfo = mock(UriInfo.class);
-        when(uriInfo.getBaseUri()).thenReturn(URI.create("http://localhost:8080"));
-        inject(api, "uriInfo", uriInfo);
+            UriInfo uriInfo = mock(UriInfo.class);
+            when(uriInfo.getBaseUri()).thenReturn(URI.create("http://localhost:8080"));
+            RequestContext.require().setUriInfo(uriInfo);
 
-        Response r = api.callback("code", null);
+            Response r = api.callback("code", null);
 
-        assertEquals(303, r.getStatus());
+            assertEquals(303, r.getStatus());
+        }
     }
 
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Class<?> type = target.getClass();
-        Field field = null;
-        while (type != null) {
-            try {
-                field = type.getDeclaredField(fieldName);
-                break;
-            } catch (NoSuchFieldException e) {
-                type = type.getSuperclass();
-            }
-        }
-        if (field == null) {
-            throw new NoSuchFieldException(fieldName);
-        }
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

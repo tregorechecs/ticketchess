@@ -1,13 +1,13 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.platform.Caches;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.Config;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -25,20 +25,8 @@ import org.json.JSONObject;
 @Path("/{callback: oauth-callback|keycloak-callback}")
 public class OauthCallbackApi {
 
-    @Inject
-    private LoggedUser loggedUser;
-
-    @Inject
-    private Caches caches;
-
-    @Inject
-    private Config config;
-
-    @Context
-    UriInfo uriInfo;
-
     protected HttpResponse<String> requestToken(String form) throws IOException, InterruptedException {
-        String tokenUrl = config.getOauthTokenUrl();
+        String tokenUrl = AppContext.get().config().getOauthTokenUrl();
         if (tokenUrl == null || tokenUrl.isBlank()) {
             throw new IOException("OAuth token URL is not configured");
         }
@@ -51,7 +39,7 @@ public class OauthCallbackApi {
     }
 
     protected HttpResponse<String> requestUserinfo(String accessToken) throws IOException, InterruptedException {
-        String userinfoUrl = config.getOauthUserinfoUrl();
+        String userinfoUrl = AppContext.get().config().getOauthUserinfoUrl();
         if (userinfoUrl == null || userinfoUrl.isBlank()) {
             throw new IOException("OAuth userinfo URL is not configured");
         }
@@ -71,8 +59,8 @@ public class OauthCallbackApi {
                     .build();
         }
 
-        String clientId = nullToEmpty(config.getOauthClientId());
-        String clientSecret = nullToEmpty(config.getOauthClientSecret());
+        String clientId = nullToEmpty(AppContext.get().config().getOauthClientId());
+        String clientSecret = nullToEmpty(AppContext.get().config().getOauthClientSecret());
         String form = "grant_type=authorization_code"
                 + "&code="
                 + URLEncoder.encode(code, StandardCharsets.UTF_8)
@@ -81,7 +69,7 @@ public class OauthCallbackApi {
                 + "&client_secret="
                 + URLEncoder.encode(clientSecret, StandardCharsets.UTF_8)
                 + "&redirect_uri="
-                + URLEncoder.encode(config.getOauthRedirectUri(), StandardCharsets.UTF_8);
+                + URLEncoder.encode(AppContext.get().config().getOauthRedirectUri(), StandardCharsets.UTF_8);
 
         try {
             HttpResponse<String> tokenResponse = requestToken(form);
@@ -108,11 +96,11 @@ public class OauthCallbackApi {
             }
             String email = profile.optString("email");
 
-            loggedUser.setEmail(email);
-            loggedUser.setUsername(username);
-            loggedUser.setLogged(true);
-            caches.getDebtCache().invalidateAll();
-            caches.getRoleCache().invalidateAll();
+            RequestContext.require().loggedUser().setEmail(email);
+            RequestContext.require().loggedUser().setUsername(username);
+            RequestContext.require().loggedUser().setLogged(true);
+            AppContext.get().caches().getDebtCache().invalidateAll();
+            AppContext.get().caches().getRoleCache().invalidateAll();
 
             String idToken = json.optString("id_token", null);
             String jwt = Jwts.builder()
@@ -121,7 +109,7 @@ public class OauthCallbackApi {
                     .id(idToken)
                     .issuedAt(new Date())
                     .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 30))
-                    .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                    .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                     .compact();
 
             NewCookie newCookie = new NewCookie.Builder("remember_me")
@@ -135,9 +123,9 @@ public class OauthCallbackApi {
             URI redirectUri;
             if (state != null) {
                 String decodedState = new String(Base64.getUrlDecoder().decode(state), StandardCharsets.UTF_8);
-                redirectUri = uriInfo.getBaseUriBuilder().path(decodedState).build();
+                redirectUri = RequestContext.require().uriInfo().getBaseUriBuilder().path(decodedState).build();
             } else {
-                redirectUri = uriInfo.getBaseUri();
+                redirectUri = RequestContext.require().uriInfo().getBaseUri();
             }
 
             return Response.seeOther(redirectUri).cookie(newCookie).build();
@@ -161,7 +149,7 @@ public class OauthCallbackApi {
             }
         }
         String accessToken = json.optString("access_token", null);
-        if (accessToken != null && !accessToken.isBlank() && config.getOauthUserinfoUrl() != null) {
+        if (accessToken != null && !accessToken.isBlank() && AppContext.get().config().getOauthUserinfoUrl() != null) {
             HttpResponse<String> userinfo = requestUserinfo(accessToken);
             if (userinfo.statusCode() == 200) {
                 return new JSONObject(userinfo.body());

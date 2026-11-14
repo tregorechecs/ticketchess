@@ -1,5 +1,8 @@
 package com.github.gcolin.event;
 
+import com.github.gcolin.platform.ApiTestBase;
+
+import com.github.gcolin.platform.RequestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,6 +13,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.event.EventCollection;
 import com.github.gcolin.event.EventCollectionOptionType;
 import com.github.gcolin.platform.Caches;
@@ -26,7 +30,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import com.github.gcolin.platform.MustacheHtml;
 
-class EventCollectionApiTest {
+class EventCollectionApiTest extends ApiTestBase {
 
     @Test
     void pageShouldReturnTemplateAndModel() throws Exception {
@@ -38,15 +42,18 @@ class EventCollectionApiTest {
         one.setName("Festival");
 
         when(dao.allOrdered()).thenReturn(List.of(one));
-        inject(api, "eventCollectionService", dao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventCollectionDao(dao);
+        })) {
 
-        MustacheHtml html = api.page("1", null, null, null);
+            MustacheHtml html = api.page("1", null, null, null);
 
-        assertEquals("event/eventcollection.mustache", html.getTemplate());
-        assertTrue((Boolean) html.getModel().get("created"));
-        @SuppressWarnings("unchecked")
-        List<EventCollection> events = (List<EventCollection>) html.getModel().get("eventCollections");
-        assertEquals(1, events.size());
+            assertEquals("event/eventcollection.mustache", html.getTemplate());
+            assertTrue((Boolean) html.getModel().get("created"));
+            @SuppressWarnings("unchecked")
+            List<EventCollection> events = (List<EventCollection>) html.getModel().get("eventCollections");
+            assertEquals(1, events.size());
+        }
     }
 
     @Test
@@ -74,16 +81,20 @@ class EventCollectionApiTest {
                 .when(dao)
                 .persist(any(EventCollection.class));
 
-        inject(api, "eventCollectionService", dao);
-        inject(api, "eventCollectionOptionService", optionDao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventcollection/11?success=save")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventCollectionDao(dao);
+            ctx.setEventCollectionOptionDao(optionDao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/eventcollection/11?success=save")));
 
-        Response response = api.post("create", null, " Open Series ", "12");
+            Response response = api.post("create", null, " Open Series ", "12");
 
-        assertEquals(303, response.getStatus());
-        verify(dao).persist(any(EventCollection.class));
-        verify(optionDao).setOption(11, EventCollectionOptionType.MAX_SUBSCRIPTIONS, "12");
+            assertEquals(303, response.getStatus());
+            verify(dao).persist(any(EventCollection.class));
+            verify(optionDao).setOption(11, EventCollectionOptionType.MAX_SUBSCRIPTIONS, "12");
+        }
     }
 
     @Test
@@ -97,14 +108,18 @@ class EventCollectionApiTest {
         when(dao.find(8)).thenReturn(event);
         when(dao.countLinkedEvents(8)).thenReturn(2L);
 
-        inject(api, "eventCollectionService", dao);
-    inject(api, "eventCollectionOptionService", optionDao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventcollection?error=linkedEvents")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventCollectionDao(dao);
+            ctx.setEventCollectionOptionDao(optionDao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/eventcollection?error=linkedEvents")));
 
-    Response response = api.post("remove", 8, null, null);
+        Response response = api.post("remove", 8, null, null);
 
-        assertEquals(303, response.getStatus());
+            assertEquals(303, response.getStatus());
+        }
     }
 
     @Test
@@ -118,15 +133,19 @@ class EventCollectionApiTest {
         when(dao.find(9)).thenReturn(event);
         when(dao.countLinkedEvents(9)).thenReturn(0L);
 
-        inject(api, "eventCollectionService", dao);
-    inject(api, "eventCollectionOptionService", optionDao);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/admin/events")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventCollectionDao(dao);
+            ctx.setEventCollectionOptionDao(optionDao);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/admin/events")));
 
-    Response response = api.post("remove", 9, null, null);
+        Response response = api.post("remove", 9, null, null);
 
-        assertEquals(303, response.getStatus());
-        verify(dao).remove(event);
+            assertEquals(303, response.getStatus());
+            verify(dao).remove(event);
+        }
     }
 
     @Test
@@ -141,19 +160,23 @@ class EventCollectionApiTest {
         event.setName("Old Name");
         when(dao.find(10)).thenReturn(event);
 
-        inject(api, "eventCollectionService", dao);
-        inject(api, "eventCollectionOptionService", optionDao);
-        inject(api, "registerService", registerService);
-        inject(api, "caches", new Caches());
-        inject(api, "uriInfo", mockUriInfo(URI.create("http://localhost:8080/eventcollection/10?success=save")));
+        try (TestContext tc = TestContext.open(app -> {
+            app.setCaches(new Caches());
+        }, ctx -> {
+            ctx.setEventCollectionDao(dao);
+            ctx.setEventCollectionOptionDao(optionDao);
+            ctx.setRegisterService(registerService);
+        })) {
+            RequestContext.require().setUriInfo(mockUriInfo(URI.create("http://localhost:8080/eventcollection/10?success=save")));
 
-        Response response = api.post("update", 10, " New Name ", "24");
+            Response response = api.post("update", 10, " New Name ", "24");
 
-        assertEquals(303, response.getStatus());
-        assertEquals("New Name", event.getName());
-        verify(dao).merge(event);
-        verify(optionDao).setOption(10, EventCollectionOptionType.MAX_SUBSCRIPTIONS, "24");
-        verify(registerService).promoteNextPendingSubscriptionInCollection(event);
+            assertEquals(303, response.getStatus());
+            assertEquals("New Name", event.getName());
+            verify(dao).merge(event);
+            verify(optionDao).setOption(10, EventCollectionOptionType.MAX_SUBSCRIPTIONS, "24");
+            verify(registerService).promoteNextPendingSubscriptionInCollection(event);
+        }
     }
 
     @Test
@@ -167,14 +190,17 @@ class EventCollectionApiTest {
         event.setName("Spring Open");
         when(dao.find(6)).thenReturn(event);
 
-        inject(api, "eventCollectionService", dao);
-        inject(api, "eventCollectionOptionService", optionDao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventCollectionDao(dao);
+            ctx.setEventCollectionOptionDao(optionDao);
+        })) {
 
-        MustacheHtml html = api.edit(6, "save", null);
+            MustacheHtml html = api.edit(6, "save", null);
 
-        assertEquals("event/eventcollectionEdit.mustache", html.getTemplate());
-        assertEquals(event, html.getModel().get("eventCollection"));
-        assertEquals("save", html.getModel().get("success"));
+            assertEquals("event/eventcollectionEdit.mustache", html.getTemplate());
+            assertEquals(event, html.getModel().get("eventCollection"));
+            assertEquals("save", html.getModel().get("success"));
+        }
     }
 
     @Test
@@ -183,26 +209,13 @@ class EventCollectionApiTest {
         EventCollectionDao dao = mock(EventCollectionDao.class);
         when(dao.find(999)).thenReturn(null);
 
-        inject(api, "eventCollectionService", dao);
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventCollectionDao(dao);
+        })) {
 
-        assertThrows(NotFoundException.class, () -> api.edit(999, null, null));
+            assertThrows(NotFoundException.class, () -> api.edit(999, null, null));
+        }
     }
 
-    private static UriInfo mockUriInfo(URI target) {
-        UriInfo uriInfo = mock(UriInfo.class);
-        UriBuilder uriBuilder = mock(UriBuilder.class);
 
-        when(uriInfo.getBaseUriBuilder()).thenReturn(uriBuilder);
-        when(uriBuilder.path(anyString())).thenReturn(uriBuilder);
-        when(uriBuilder.queryParam(anyString(), any())).thenReturn(uriBuilder);
-        when(uriBuilder.build()).thenReturn(target);
-
-        return uriInfo;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
 }

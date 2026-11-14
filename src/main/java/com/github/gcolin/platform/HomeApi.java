@@ -1,9 +1,7 @@
 package com.github.gcolin.platform;
 
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
@@ -11,15 +9,9 @@ import java.net.URI;
 @Path("/")
 public class HomeApi {
 
-    @Inject
-    private Config config;
-
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public Response home() {
-        Page page = config != null ? config.pageForRequest() : null;
+        Page page = AppContext.get().config().pageForRequest();
         String target = "event";
         if (page != null) {
             if (page.isEventsEnabled()) {
@@ -32,7 +24,7 @@ public class HomeApi {
                 target = "admin";
             }
         }
-        URI uri = uriInfo.getBaseUriBuilder().path(target).build();
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder().path(target).build();
         return Response.seeOther(uri).build();
     }
 }

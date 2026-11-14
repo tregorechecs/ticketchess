@@ -1,6 +1,8 @@
 package com.github.gcolin.payment;
 
 import com.github.gcolin.auth.LoggedOnly;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RequireRole;
 import com.github.gcolin.club.ClubSeasonDao;
 import com.github.gcolin.club.ClubSeasonFilter;
@@ -34,7 +36,6 @@ import com.github.gcolin.platform.MailAttachment;
 import com.github.gcolin.payment.PaymentDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import com.github.gcolin.registration.PlayerSubscriptionOptionDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
@@ -45,7 +46,6 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
@@ -70,55 +70,7 @@ import com.github.gcolin.player.Player;
 @Path("payment")
 public class PaymentApi {
 
-    @Inject
-    private LoggedUser loggerUser;
-
-    @Inject
-    private DebtService debtService;
-
-    @Inject
-    private Find find;
-
     private static final Logger logger = LoggerFactory.getLogger(PaymentApi.class);
-
-    @Context
-    UriInfo uriInfo;
-
-    @Inject
-    private StripeCheckoutService stripeCheckoutService;
-
-    @Inject
-    private PaymentDao paymentService;
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionService;
-
-    @Inject
-    private PlayerSubscriptionOptionDao playerSubscriptionOptionService;
-
-    @Inject
-    private Properties properties;
-
-    @Inject
-    private ClubSeasonFilter clubSeasonFilter;
-
-    @Inject
-    private ClubSeasonDao clubSeasonDao;
-
-    @Inject
-    private MembershipDao membershipDao;
-
-    @Inject
-    private MembershipOptionSubscriptionDao membershipOptionSubscriptionDao;
-
-    @Inject
-    private EventPaymentsReportService eventPaymentsReportService;
-
-    @Inject
-    private PaymentReceiptPdfService paymentReceiptPdfService;
-
-    @Inject
-    private SendMail sendMail;
 
     @GET
     @RequireRole(RoleCode.TRESORIER)
@@ -134,11 +86,11 @@ public class PaymentApi {
             throw new WebApplicationException("size must be between 1 and 100", Response.Status.BAD_REQUEST);
         }
         int start = page * size;
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
 
         PagedList<Payment> paged = search.isBlank()
-                ? paymentService.page(start, size, scope)
-                : paymentService.pageSearch(search, start, size, scope);
+                ? RequestContext.require().paymentDao().page(start, size, scope)
+                : RequestContext.require().paymentDao().pageSearch(search, start, size, scope);
         long totalItems = paged.getTotal();
         int totalPages = (int) Math.max(1, (totalItems + size - 1) / size);
         page++;
@@ -150,20 +102,20 @@ public class PaymentApi {
         Map<String, String> paymentSearchNames = new HashMap<>();
         for (Payment payment : paged.getElements()) {
             List<PlayerSubscription> subs =
-                    playerSubscriptionService.findByPaymentId(payment.getId().intValue());
+                    RequestContext.require().playerSubscriptionDao().findByPaymentId(payment.getId().intValue());
             LinkedHashSet<String> licences = new LinkedHashSet<>();
             LinkedHashSet<String> names = new LinkedHashSet<>();
             for (PlayerSubscription sub : subs) {
                 if (sub.getNrFfe() != null && !sub.getNrFfe().isBlank()) {
                     licences.add(sub.getNrFfe().trim());
                 }
-                IPlayer player = find.player(sub.getNrFfe(), null);
+                IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
                 String fullName = buildFullName(player);
                 if (!fullName.isBlank()) {
                     names.add(fullName);
                 }
             }
-            List<Membership> memberships = membershipDao.findByPaymentId(payment.getId().intValue());
+            List<Membership> memberships = RequestContext.require().membershipDao().findByPaymentId(payment.getId().intValue());
             for (Membership membership : memberships) {
                 if (membership.getNrFfe() != null && !membership.getNrFfe().isBlank()) {
                     licences.add(membership.getNrFfe().trim());
@@ -195,7 +147,7 @@ public class PaymentApi {
         model.put("hasNext", page < totalPages);
         model.put("prevPage", Math.max(0, page - 2));
         model.put("nextPage", Math.min(totalPages, page));
-        clubSeasonFilter.addToModel(model, seasonId);
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         return new MustacheHtml(model, "payment/payments.mustache");
     }
 
@@ -206,7 +158,7 @@ public class PaymentApi {
             @QueryParam("donation") @DefaultValue("false") boolean donation,
             @QueryParam("membershipId") Integer membershipId) {
         if (membershipId != null && !donation) {
-            Membership membership = membershipDao.find(membershipId);
+            Membership membership = RequestContext.require().membershipDao().find(membershipId);
             if (membership == null) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
             }
@@ -239,13 +191,13 @@ public class PaymentApi {
         List<PlayerSubscriptionOption> currentOptions = List.of();
         List<Membership> currentMemberships = List.of();
         if (id != null) {
-            payment = paymentService.find(id);
+            payment = RequestContext.require().paymentDao().find(id);
             if (payment == null) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
             }
-            currentSubs = playerSubscriptionService.findByPaymentId(id);
-            currentOptions = playerSubscriptionOptionService.findByPaymentId(id);
-            currentMemberships = membershipDao.findByPaymentId(id);
+            currentSubs = RequestContext.require().playerSubscriptionDao().findByPaymentId(id);
+            currentOptions = RequestContext.require().playerSubscriptionOptionDao().findByPaymentId(id);
+            currentMemberships = RequestContext.require().membershipDao().findByPaymentId(id);
             donationMode = payment.isDonation();
         } else {
             payment = new Payment();
@@ -255,7 +207,7 @@ public class PaymentApi {
             payment.setDonation(donationMode);
 
             if (membershipId != null && !donationMode) {
-                Membership membership = membershipDao.find(membershipId);
+                Membership membership = RequestContext.require().membershipDao().find(membershipId);
                 if (membership == null) {
                     throw new WebApplicationException(Response.Status.NOT_FOUND);
                 }
@@ -280,7 +232,7 @@ public class PaymentApi {
                 display.setEventLink("/event/" + sub.getEvent().getId());
                 display.setEventName(sub.getEvent().getName());
 
-                String playerName = buildFullName(find.player(sub.getNrFfe(), null));
+                String playerName = buildFullName(RequestContext.require().find().player(sub.getNrFfe(), null));
                 if (!playerName.isBlank()) {
                     display.setPlayerName(playerName);
                 }
@@ -306,7 +258,7 @@ public class PaymentApi {
                 display.setEventLink("/event/" + parent.getEvent().getId());
                 display.setEventName(parent.getEvent().getName());
             }
-            String playerName = buildFullName(find.player(parent.getNrFfe(), null));
+            String playerName = buildFullName(RequestContext.require().find().player(parent.getNrFfe(), null));
             if (!playerName.isBlank()) {
                 display.setPlayerName(playerName);
             }
@@ -369,7 +321,7 @@ public class PaymentApi {
         if (subscription.getAmountCents() != null) {
             return subscription.getAmountCents();
         }
-        IPlayer player = find.player(subscription.getNrFfe(), null);
+        IPlayer player = RequestContext.require().find().player(subscription.getNrFfe(), null);
         if (player == null || subscription.getEvent() == null) {
             return null;
         }
@@ -398,24 +350,24 @@ public class PaymentApi {
             @FormParam("membershipIds") List<String> membershipIdsRaw) {
         if ("true".equals(toRemove)) {
             if (id != null) {
-                List<PlayerSubscription> attached = playerSubscriptionService.findByPaymentId(id);
+                List<PlayerSubscription> attached = RequestContext.require().playerSubscriptionDao().findByPaymentId(id);
                 for (PlayerSubscription sub : attached) {
                     sub.setPayment(null);
-                    playerSubscriptionService.persist(sub);
+                    RequestContext.require().playerSubscriptionDao().persist(sub);
                 }
-                List<PlayerSubscriptionOption> attachedOptions = playerSubscriptionOptionService.findByPaymentId(id);
+                List<PlayerSubscriptionOption> attachedOptions = RequestContext.require().playerSubscriptionOptionDao().findByPaymentId(id);
                 for (PlayerSubscriptionOption option : attachedOptions) {
                     option.setPayment(null);
-                    playerSubscriptionOptionService.merge(option);
+                    RequestContext.require().playerSubscriptionOptionDao().merge(option);
                 }
-                List<Membership> attachedMemberships = membershipDao.findByPaymentId(id);
+                List<Membership> attachedMemberships = RequestContext.require().membershipDao().findByPaymentId(id);
                 for (Membership membership : attachedMemberships) {
                     membership.setPayment(null);
-                    membershipDao.merge(membership);
+                    RequestContext.require().membershipDao().merge(membership);
                 }
-                paymentService.remove(id);
+                RequestContext.require().paymentDao().remove(id);
             }
-            return Response.seeOther(uriInfo.getBaseUriBuilder().path("payment").build())
+            return Response.seeOther(RequestContext.require().uriInfo().getBaseUriBuilder().path("payment").build())
                     .build();
         }
 
@@ -440,7 +392,7 @@ public class PaymentApi {
 
         Payment payment;
         if (id != null) {
-            payment = paymentService.find(id);
+            payment = RequestContext.require().paymentDao().find(id);
             if (payment == null) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
             }
@@ -468,17 +420,17 @@ public class PaymentApi {
         payment.setStripeIntent(stripeIntent);
 
         if (id == null) {
-            paymentService.persist(payment);
-            paymentService.flush();
+            RequestContext.require().paymentDao().persist(payment);
+            RequestContext.require().paymentDao().flush();
         } else {
-            payment = paymentService.merge(payment);
+            payment = RequestContext.require().paymentDao().merge(payment);
         }
 
         List<PlayerSubscription> previouslyAttached =
-                playerSubscriptionService.findByPaymentId(payment.getId().intValue());
+                RequestContext.require().playerSubscriptionDao().findByPaymentId(payment.getId().intValue());
         for (PlayerSubscription sub : previouslyAttached) {
             sub.setPayment(null);
-            playerSubscriptionService.persist(sub);
+            RequestContext.require().playerSubscriptionDao().persist(sub);
         }
 
         if (!donation && subscriptionIdsRaw != null) {
@@ -494,22 +446,22 @@ public class PaymentApi {
                             "subscriptionIds contains an invalid value: " + subscriptionIdRaw,
                             Response.Status.BAD_REQUEST);
                 }
-                PlayerSubscription selectedSub = playerSubscriptionService.find(subscriptionId);
+                PlayerSubscription selectedSub = RequestContext.require().playerSubscriptionDao().find(subscriptionId);
                 if (selectedSub != null) {
                     selectedSub.setPayment(payment);
                     if (selectedSub.getAmountCents() == null) {
                         selectedSub.setAmountCents(resolveAmountCents(selectedSub));
                     }
-                    playerSubscriptionService.persist(selectedSub);
+                    RequestContext.require().playerSubscriptionDao().persist(selectedSub);
                 }
             }
         }
 
         List<PlayerSubscriptionOption> previouslyAttachedOptions =
-                playerSubscriptionOptionService.findByPaymentId(payment.getId().intValue());
+                RequestContext.require().playerSubscriptionOptionDao().findByPaymentId(payment.getId().intValue());
         for (PlayerSubscriptionOption option : previouslyAttachedOptions) {
             option.setPayment(null);
-            playerSubscriptionOptionService.merge(option);
+            RequestContext.require().playerSubscriptionOptionDao().merge(option);
         }
 
         if (!donation && optionIdsRaw != null) {
@@ -524,19 +476,19 @@ public class PaymentApi {
                     throw new WebApplicationException(
                             "optionIds contains an invalid value: " + optionIdRaw, Response.Status.BAD_REQUEST);
                 }
-                PlayerSubscriptionOption selectedOption = playerSubscriptionOptionService.find(optionId);
+                PlayerSubscriptionOption selectedOption = RequestContext.require().playerSubscriptionOptionDao().find(optionId);
                 if (selectedOption != null) {
                     selectedOption.setPayment(payment);
-                    playerSubscriptionOptionService.merge(selectedOption);
+                    RequestContext.require().playerSubscriptionOptionDao().merge(selectedOption);
                 }
             }
         }
 
         List<Membership> previouslyAttachedMemberships =
-                membershipDao.findByPaymentId(payment.getId().intValue());
+                RequestContext.require().membershipDao().findByPaymentId(payment.getId().intValue());
         for (Membership membership : previouslyAttachedMemberships) {
             membership.setPayment(null);
-            membershipDao.merge(membership);
+            RequestContext.require().membershipDao().merge(membership);
         }
 
         if (!donation && membershipIdsRaw != null) {
@@ -552,15 +504,15 @@ public class PaymentApi {
                             "membershipIds contains an invalid value: " + membershipIdRaw,
                             Response.Status.BAD_REQUEST);
                 }
-                Membership selectedMembership = membershipDao.find(membershipId);
+                Membership selectedMembership = RequestContext.require().membershipDao().find(membershipId);
                 if (selectedMembership != null) {
                     selectedMembership.setPayment(payment);
-                    membershipDao.merge(selectedMembership);
+                    RequestContext.require().membershipDao().merge(selectedMembership);
                 }
             }
         }
 
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("payment")
                 .path(String.valueOf(payment.getId()))
                 .path("edit")
@@ -587,7 +539,7 @@ public class PaymentApi {
     @LoggedOnly
     @Transactional
     public String initiate() {
-        double amount = debtService.calculateEventDebt(loggerUser.getEmail());
+        double amount = RequestContext.require().debtService().calculateEventDebt(RequestContext.require().loggedUser().getEmail());
 
         if (amount == 0) {
             throw new WebApplicationException("you have nothing to pay", Response.Status.BAD_GATEWAY);
@@ -597,75 +549,75 @@ public class PaymentApi {
             throw new WebApplicationException("amount too small for card payment", Response.Status.BAD_GATEWAY);
         }
 
-        if (!Config.isStripeCardEnabledForEvents(properties)) {
+        if (!Config.isStripeCardEnabledForEvents(AppContext.get().config().getProperties())) {
             throw new WebApplicationException("card payment disabled for events", Response.Status.BAD_GATEWAY);
         }
 
-        if (Config.isStripeSimulated(properties)) {
+        if (Config.isStripeSimulated(AppContext.get().config().getProperties())) {
             throw new WebApplicationException("card payment simulation enabled", Response.Status.BAD_GATEWAY);
         }
 
-        Payment existing = paymentService.findPendingEventPayment(loggerUser.getEmail());
+        Payment existing = RequestContext.require().paymentDao().findPendingEventPayment(RequestContext.require().loggedUser().getEmail());
         if (existing != null) {
             try {
                 StripeCheckoutSession session =
-                        stripeCheckoutService.retrieveSession(stripeSecret(), existing.getStripeSessionId());
+                        AppContext.get().stripeCheckoutService().retrieveSession(stripeSecret(), existing.getStripeSessionId());
                 String status = session.getStatus();
                 String paymentStatus = session.getPaymentStatus();
 
                 if ("open".equals(status)) {
-                    logger.info("session exists payment {} for {} euros", loggerUser.getEmail(), amount);
+                    logger.info("session exists payment {} for {} euros", RequestContext.require().loggedUser().getEmail(), amount);
                     return ("{\"sessionId\":\"" + existing.getStripeSessionId() + "\"}");
                 }
 
                 if ("complete".equals(status) && "paid".equals(paymentStatus)) {
-                    debtService.payment(
-                            amount, loggerUser.getEmail(), existing.getStripeSessionId(), session.getPaymentIntent());
+                    RequestContext.require().debtService().payment(
+                            amount, RequestContext.require().loggedUser().getEmail(), existing.getStripeSessionId(), session.getPaymentIntent());
 
                     return "{}";
                 }
 
                 if ("expired".equals(status) || "complete".equals(status)) {
                     existing.setStatus(PaymentStatus.EXPIRED);
-                    paymentService.persist(existing);
+                    RequestContext.require().paymentDao().persist(existing);
                 }
             } catch (StripeException ex) {
                 logger.info("error while getting previous session " + existing.getStripeSessionId(), ex);
             }
         }
 
-        logger.info("start payment {} for {} euros", loggerUser.getEmail(), amount);
+        logger.info("start payment {} for {} euros", RequestContext.require().loggedUser().getEmail(), amount);
 
         long amountCents = (long) (amount * 100);
-        String successUrl = uriInfo.getBaseUriBuilder()
+        String successUrl = RequestContext.require().uriInfo().getBaseUriBuilder()
                         .path("payment")
                         .path("success")
                         .build()
                         .toString()
                 + "?session_id={CHECKOUT_SESSION_ID}";
-        String cancelUrl = uriInfo.getBaseUriBuilder()
+        String cancelUrl = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("event")
                 .path("my")
                 .build()
                 .toString();
 
-        Payment payment = debtService.createPayment(loggerUser.getEmail(), amount);
+        Payment payment = RequestContext.require().debtService().createPayment(RequestContext.require().loggedUser().getEmail(), amount);
 
         try {
-            String paymentPrefix = properties.getProperty("stripe.keyprefix", "p");
-            StripeCheckoutSession session = stripeCheckoutService.createPaymentSession(
+            String paymentPrefix = AppContext.get().config().getProperties().getProperty("stripe.keyprefix", "p");
+            StripeCheckoutSession session = AppContext.get().stripeCheckoutService().createPaymentSession(
                     stripeSecret(),
                     paymentPrefix + payment.getId(),
                     amountCents,
-                    "Commande " + loggerUser.getUsername(),
-                    loggerUser.getEmail(),
+                    "Commande " + RequestContext.require().loggedUser().getUsername(),
+                    RequestContext.require().loggedUser().getEmail(),
                     successUrl,
                     cancelUrl,
-                    Map.of("email", loggerUser.getEmail(), "scope", "event"));
+                    Map.of("email", RequestContext.require().loggedUser().getEmail(), "scope", "event"));
 
             payment.setStripeSessionId(session.getId());
             payment.setStripeIntent(session.getPaymentIntent());
-            paymentService.persist(payment);
+            RequestContext.require().paymentDao().persist(payment);
 
             return "{\"sessionId\":\"" + session.getId() + "\"}";
         } catch (StripeException e) {
@@ -679,43 +631,43 @@ public class PaymentApi {
     @LoggedOnly
     @Transactional
     public Response sim(@QueryParam("status") String status) {
-        if (!Config.isStripeCardEnabledForEvents(properties)) {
+        if (!Config.isStripeCardEnabledForEvents(AppContext.get().config().getProperties())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
 
-        if (!Config.isStripeSimulated(properties)) {
+        if (!Config.isStripeSimulated(AppContext.get().config().getProperties())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
 
-        String email = loggerUser.getEmail();
+        String email = RequestContext.require().loggedUser().getEmail();
         String simSession = "sim-session-" + email;
         String simIntent = "sim-intent-" + email;
-        double amount = debtService.calculateEventDebt(email);
+        double amount = RequestContext.require().debtService().calculateEventDebt(email);
         if (status != null) {
             UriBuilder redirectBuilder =
-                    uriInfo.getBaseUriBuilder().path("event").path("my");
+                    RequestContext.require().uriInfo().getBaseUriBuilder().path("event").path("my");
             if (status.equals("paid")) {
-                Payment existing = paymentService.findPendingEventPayment(email);
+                Payment existing = RequestContext.require().paymentDao().findPendingEventPayment(email);
                 if (existing == null) {
-                    existing = debtService.createPayment(email, amount);
+                    existing = RequestContext.require().debtService().createPayment(email, amount);
                     existing.setStripeIntent(simIntent);
                     existing.setStripeSessionId(simSession);
-                    paymentService.persist(existing);
+                    RequestContext.require().paymentDao().persist(existing);
                 } else if (existing.getStripeSessionId() != null) {
                     simSession = existing.getStripeSessionId();
                 }
-                debtService.payment(amount, email, simSession, simIntent);
+                RequestContext.require().debtService().payment(amount, email, simSession, simIntent);
                 redirectBuilder.queryParam("success", "payment");
             }
             return Response.seeOther(redirectBuilder.build()).build();
         }
 
-        Payment existing = paymentService.findPendingEventPayment(email);
+        Payment existing = RequestContext.require().paymentDao().findPendingEventPayment(email);
         if (existing == null) {
-            existing = debtService.createPayment(email, amount);
+            existing = RequestContext.require().debtService().createPayment(email, amount);
             existing.setStripeIntent(simIntent);
             existing.setStripeSessionId(simSession);
-            paymentService.persist(existing);
+            RequestContext.require().paymentDao().persist(existing);
         }
         return Response.ok(new MustacheHtml(
                         Map.of("simulationPath", "/payment/sim"),
@@ -729,10 +681,10 @@ public class PaymentApi {
     @LoggedOnly
     @Transactional
     public String membershipInitiate() {
-        SeasonScope scope = clubSeasonDao.findCurrent() != null
-                ? SeasonScope.of(clubSeasonDao.findCurrent())
+        SeasonScope scope = RequestContext.require().clubSeasonDao().findCurrent() != null
+                ? SeasonScope.of(RequestContext.require().clubSeasonDao().findCurrent())
                 : SeasonScope.all();
-        double amount = debtService.calculateMembershipDebt(loggerUser.getEmail(), scope);
+        double amount = RequestContext.require().debtService().calculateMembershipDebt(RequestContext.require().loggedUser().getEmail(), scope);
 
         if (amount == 0) {
             throw new WebApplicationException("you have nothing to pay", Response.Status.BAD_GATEWAY);
@@ -742,71 +694,71 @@ public class PaymentApi {
             throw new WebApplicationException("amount too small for card payment", Response.Status.BAD_GATEWAY);
         }
 
-        if (!Config.isStripeCardEnabledForMemberships(properties)) {
+        if (!Config.isStripeCardEnabledForMemberships(AppContext.get().config().getProperties())) {
             throw new WebApplicationException("card payment disabled for memberships", Response.Status.BAD_GATEWAY);
         }
 
-        if (Config.isStripeSimulated(properties)) {
+        if (Config.isStripeSimulated(AppContext.get().config().getProperties())) {
             throw new WebApplicationException("card payment simulation enabled", Response.Status.BAD_GATEWAY);
         }
 
-        Payment existing = paymentService.findPendingMembershipPayment(loggerUser.getEmail());
+        Payment existing = RequestContext.require().paymentDao().findPendingMembershipPayment(RequestContext.require().loggedUser().getEmail());
         if (existing != null) {
             try {
                 StripeCheckoutSession session =
-                        stripeCheckoutService.retrieveSession(stripeSecret(), existing.getStripeSessionId());
+                        AppContext.get().stripeCheckoutService().retrieveSession(stripeSecret(), existing.getStripeSessionId());
                 String status = session.getStatus();
                 String paymentStatus = session.getPaymentStatus();
 
                 if ("open".equals(status)) {
-                    logger.info("membership session exists payment {} for {} euros", loggerUser.getEmail(), amount);
+                    logger.info("membership session exists payment {} for {} euros", RequestContext.require().loggedUser().getEmail(), amount);
                     return ("{\"sessionId\":\"" + existing.getStripeSessionId() + "\"}");
                 }
 
                 if ("complete".equals(status) && "paid".equals(paymentStatus)) {
-                    debtService.payment(
-                            amount, loggerUser.getEmail(), existing.getStripeSessionId(), session.getPaymentIntent());
+                    RequestContext.require().debtService().payment(
+                            amount, RequestContext.require().loggedUser().getEmail(), existing.getStripeSessionId(), session.getPaymentIntent());
                     return "{}";
                 }
 
                 if ("expired".equals(status) || "complete".equals(status)) {
                     existing.setStatus(PaymentStatus.EXPIRED);
-                    paymentService.persist(existing);
+                    RequestContext.require().paymentDao().persist(existing);
                 }
             } catch (StripeException ex) {
                 logger.info("error while getting previous membership session " + existing.getStripeSessionId(), ex);
             }
         }
 
-        logger.info("start membership payment {} for {} euros", loggerUser.getEmail(), amount);
+        logger.info("start membership payment {} for {} euros", RequestContext.require().loggedUser().getEmail(), amount);
 
         long amountCents = (long) (amount * 100);
-        String successUrl = uriInfo.getBaseUriBuilder()
+        String successUrl = RequestContext.require().uriInfo().getBaseUriBuilder()
                         .path("payment")
                         .path("success")
                         .build()
                         .toString()
                 + "?session_id={CHECKOUT_SESSION_ID}";
         String cancelUrl =
-                uriInfo.getBaseUriBuilder().path("club-register").build().toString();
+                RequestContext.require().uriInfo().getBaseUriBuilder().path("club-register").build().toString();
 
-        Payment payment = debtService.createMembershipPayment(loggerUser.getEmail(), amount, scope);
+        Payment payment = RequestContext.require().debtService().createMembershipPayment(RequestContext.require().loggedUser().getEmail(), amount, scope);
 
         try {
-            String paymentPrefix = properties.getProperty("stripe.keyprefix", "p");
-            StripeCheckoutSession session = stripeCheckoutService.createPaymentSession(
+            String paymentPrefix = AppContext.get().config().getProperties().getProperty("stripe.keyprefix", "p");
+            StripeCheckoutSession session = AppContext.get().stripeCheckoutService().createPaymentSession(
                     stripeSecret(),
                     paymentPrefix + payment.getId(),
                     amountCents,
-                    "Adhesion " + loggerUser.getUsername(),
-                    loggerUser.getEmail(),
+                    "Adhesion " + RequestContext.require().loggedUser().getUsername(),
+                    RequestContext.require().loggedUser().getEmail(),
                     successUrl,
                     cancelUrl,
-                    Map.of("email", loggerUser.getEmail(), "scope", "membership"));
+                    Map.of("email", RequestContext.require().loggedUser().getEmail(), "scope", "membership"));
 
             payment.setStripeSessionId(session.getId());
             payment.setStripeIntent(session.getPaymentIntent());
-            paymentService.persist(payment);
+            RequestContext.require().paymentDao().persist(payment);
 
             return "{\"sessionId\":\"" + session.getId() + "\"}";
         } catch (StripeException e) {
@@ -820,49 +772,49 @@ public class PaymentApi {
     @LoggedOnly
     @Transactional
     public Response membershipSim(@QueryParam("status") String status) {
-        if (!Config.isStripeCardEnabledForMemberships(properties)) {
+        if (!Config.isStripeCardEnabledForMemberships(AppContext.get().config().getProperties())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
 
-        if (!Config.isStripeSimulated(properties)) {
+        if (!Config.isStripeSimulated(AppContext.get().config().getProperties())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
 
-        SeasonScope scope = clubSeasonDao.findCurrent() != null
-                ? SeasonScope.of(clubSeasonDao.findCurrent())
+        SeasonScope scope = RequestContext.require().clubSeasonDao().findCurrent() != null
+                ? SeasonScope.of(RequestContext.require().clubSeasonDao().findCurrent())
                 : SeasonScope.all();
-        String email = loggerUser.getEmail();
+        String email = RequestContext.require().loggedUser().getEmail();
         String simSession = "sim-membership-session-" + email;
         String simIntent = "sim-membership-intent-" + email;
-        double amount = debtService.calculateMembershipDebt(email, scope);
+        double amount = RequestContext.require().debtService().calculateMembershipDebt(email, scope);
         if (status != null) {
-            UriBuilder redirectBuilder = uriInfo.getBaseUriBuilder().path("club-register");
+            UriBuilder redirectBuilder = RequestContext.require().uriInfo().getBaseUriBuilder().path("club-register");
             if (status.equals("paid")) {
-                Payment existing = paymentService.findPendingMembershipPayment(email);
+                Payment existing = RequestContext.require().paymentDao().findPendingMembershipPayment(email);
                 if (existing == null) {
-                    existing = debtService.createMembershipPayment(email, amount, scope);
+                    existing = RequestContext.require().debtService().createMembershipPayment(email, amount, scope);
                     existing.setStripeIntent(simIntent);
                     existing.setStripeSessionId(simSession);
-                    paymentService.persist(existing);
+                    RequestContext.require().paymentDao().persist(existing);
                 } else if (existing.getStripeSessionId() == null) {
                     existing.setStripeIntent(simIntent);
                     existing.setStripeSessionId(simSession);
-                    paymentService.persist(existing);
+                    RequestContext.require().paymentDao().persist(existing);
                 } else {
                     simSession = existing.getStripeSessionId();
                 }
-                debtService.payment(amount, email, simSession, simIntent);
+                RequestContext.require().debtService().payment(amount, email, simSession, simIntent);
                 redirectBuilder.queryParam("success", "payment");
             }
             return Response.seeOther(redirectBuilder.build()).build();
         }
 
-        Payment existing = paymentService.findPendingMembershipPayment(email);
+        Payment existing = RequestContext.require().paymentDao().findPendingMembershipPayment(email);
         if (existing == null) {
-            existing = debtService.createMembershipPayment(email, amount, scope);
+            existing = RequestContext.require().debtService().createMembershipPayment(email, amount, scope);
             existing.setStripeIntent(simIntent);
             existing.setStripeSessionId(simSession);
-            paymentService.persist(existing);
+            RequestContext.require().paymentDao().persist(existing);
         }
         return Response.ok(new MustacheHtml(
                         Map.of("simulationPath", "/payment/membership/sim"),
@@ -881,7 +833,7 @@ public class PaymentApi {
 
         StripeCheckoutSession session;
         try {
-            session = stripeCheckoutService.retrieveSession(stripeSecret(), sessionId);
+            session = AppContext.get().stripeCheckoutService().retrieveSession(stripeSecret(), sessionId);
         } catch (StripeException e) {
             logger.error("Erreur Stripe : {}", e.getMessage());
             throw new WebApplicationException("Erreur Stripe : " + e.getMessage());
@@ -901,11 +853,11 @@ public class PaymentApi {
                 scope);
 
         UriBuilder redirectBuilder = "membership".equals(scope)
-                ? uriInfo.getBaseUriBuilder().path("club-register")
-                : uriInfo.getBaseUriBuilder().path("event").path("my");
+                ? RequestContext.require().uriInfo().getBaseUriBuilder().path("club-register")
+                : RequestContext.require().uriInfo().getBaseUriBuilder().path("event").path("my");
         if ("paid".equals(session.getPaymentStatus())) {
             double amount = amountTotal / 100.0;
-            debtService.payment(amount, email, sessionId, session.getPaymentIntent());
+            RequestContext.require().debtService().payment(amount, email, sessionId, session.getPaymentIntent());
             redirectBuilder.queryParam("success", "payment");
         }
 
@@ -917,8 +869,8 @@ public class PaymentApi {
     @Produces("text/csv")
     @RequireRole(RoleCode.TRESORIER)
     public Response exportCsv(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Payment> payments = paymentService.all(scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Payment> payments = RequestContext.require().paymentDao().all(scope);
 
         StringWriter writer = new StringWriter();
 
@@ -947,15 +899,15 @@ public class PaymentApi {
     @Produces("text/csv")
     @RequireRole(RoleCode.TRESORIER)
     public Response exportCsvDetails(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Payment> payments = paymentService.all(scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Payment> payments = RequestContext.require().paymentDao().all(scope);
         StringWriter writer = new StringWriter();
         writer.append(
                 "id;type;status;amount;line_type;event_name;membership_name;license_type;option_labels;player_name;player_license\n");
         for (Payment p : payments) {
             List<PlayerSubscription> subs =
-                    playerSubscriptionService.findByPaymentId(p.getId().intValue());
-            List<Membership> memberships = membershipDao.findByPaymentId(p.getId().intValue());
+                    RequestContext.require().playerSubscriptionDao().findByPaymentId(p.getId().intValue());
+            List<Membership> memberships = RequestContext.require().membershipDao().findByPaymentId(p.getId().intValue());
             if (subs.isEmpty() && memberships.isEmpty()) {
                 writer.append(String.valueOf(p.getId())).append(";");
                 writer.append(String.valueOf(p.getType())).append(";");
@@ -987,10 +939,10 @@ public class PaymentApi {
     @Produces("application/pdf")
     @RequireRole(RoleCode.TRESORIER)
     public Response exportAccountingPdf(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Payment> payments = paymentService.findPaid(scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Payment> payments = RequestContext.require().paymentDao().findPaid(scope);
         List<EventPaymentsReportService.AccountingDetailRow> rows = buildAccountingDetailRows(payments);
-        byte[] pdf = eventPaymentsReportService.generateForAccountingDetails(rows, scope);
+        byte[] pdf = AppContext.get().eventPaymentsReportService().generateForAccountingDetails(rows, scope);
         return Response.ok(pdf)
                 .header(
                         "Content-Disposition",
@@ -1015,8 +967,8 @@ public class PaymentApi {
             throw new WebApplicationException("size must be between 1 and 100", Response.Status.BAD_REQUEST);
         }
         int start = page * size;
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        return paymentService.page(start, size, scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        return RequestContext.require().paymentDao().page(start, size, scope);
     }
 
     @GET
@@ -1024,7 +976,7 @@ public class PaymentApi {
     @Produces(MediaType.APPLICATION_JSON)
     @RequireRole(RoleCode.TRESORIER)
     public Payment exportById(@PathParam("payment_id") Integer payment_id) {
-        return paymentService.find(payment_id);
+        return RequestContext.require().paymentDao().find(payment_id);
     }
 
     @GET
@@ -1032,7 +984,7 @@ public class PaymentApi {
     @Produces(MediaType.APPLICATION_JSON)
     @RequireRole(RoleCode.TRESORIER)
     public List<PlayerSubscription> subById(@PathParam("payment_id") Integer payment_id) {
-        return playerSubscriptionService.findByPaymentId(payment_id);
+        return RequestContext.require().playerSubscriptionDao().findByPaymentId(payment_id);
     }
 
     @GET
@@ -1040,8 +992,8 @@ public class PaymentApi {
     @RequireRole(RoleCode.TRESORIER)
     @Transactional
     public MustacheHtml audit(@QueryParam("seasonId") Integer seasonId) {
-        SeasonScope scope = clubSeasonFilter.resolve(seasonId);
-        List<Payment> payments = paymentService.all(scope);
+        SeasonScope scope = RequestContext.require().clubSeasonFilter().resolve(seasonId);
+        List<Payment> payments = RequestContext.require().paymentDao().all(scope);
         List<Map<String, Object>> mismatches = new ArrayList<>();
         for (Payment payment : payments) {
             if (payment.getStatus() != com.github.gcolin.payment.PaymentStatus.PAID) {
@@ -1050,20 +1002,20 @@ public class PaymentApi {
             if (payment.getAmountCents() == null) {
                 if (payment.getAmount() != null) {
                     payment.setAmountCents((long) (payment.getAmount() * 100L));
-                    paymentService.persist(payment);
+                    RequestContext.require().paymentDao().persist(payment);
                 } else {
                     continue;
                 }
             }
             List<PlayerSubscription> subs =
-                    playerSubscriptionService.findByPaymentId(payment.getId().intValue());
+                    RequestContext.require().playerSubscriptionDao().findByPaymentId(payment.getId().intValue());
             long sumCents = subs.stream()
                     .filter(s -> s.getAmountCents() != null)
                     .mapToLong(PlayerSubscription::getAmountCents)
                     .sum();
             long expectedCents = 0L;
             for (PlayerSubscription sub : subs) {
-                IPlayer player = find.player(sub.getNrFfe(), null);
+                IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
                 if (player != null && sub.getEvent() != null) {
                     expectedCents += ServiceUtils.calculatePrice(player, sub.getEvent());
                 } else if (sub.getAmountCents() != null) {
@@ -1084,7 +1036,7 @@ public class PaymentApi {
         }
         Map<String, Object> model = new HashMap<>();
         model.put("mismatches", mismatches);
-        clubSeasonFilter.addToModel(model, seasonId);
+        RequestContext.require().clubSeasonFilter().addToModel(model, seasonId);
         return new MustacheHtml(model, "payment/paymentAudit.mustache");
     }
 
@@ -1094,26 +1046,26 @@ public class PaymentApi {
     @Transactional
     public Response auditFix(
             @PathParam("payment_id") Integer paymentId, @FormParam("seasonId") Integer seasonId) {
-        Payment payment = paymentService.find(paymentId);
+        Payment payment = RequestContext.require().paymentDao().find(paymentId);
         if (payment == null) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
-        List<PlayerSubscription> subs = playerSubscriptionService.findByPaymentId(paymentId);
+        List<PlayerSubscription> subs = RequestContext.require().playerSubscriptionDao().findByPaymentId(paymentId);
         if (subs.isEmpty()) {
             return Response.seeOther(buildAuditUri(seasonId)).build();
         }
         for (PlayerSubscription sub : subs) {
-            IPlayer player = find.player(sub.getNrFfe(), null);
+            IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
             if (player != null && sub.getEvent() != null) {
                 sub.setAmountCents(ServiceUtils.calculatePrice(player, sub.getEvent()));
-                playerSubscriptionService.persist(sub);
+                RequestContext.require().playerSubscriptionDao().persist(sub);
             }
         }
         return Response.seeOther(buildAuditUri(seasonId)).build();
     }
 
     private URI buildAuditUri(Integer seasonId) {
-        UriBuilder builder = uriInfo.getBaseUriBuilder().path("payment").path("audit");
+        UriBuilder builder = RequestContext.require().uriInfo().getBaseUriBuilder().path("payment").path("audit");
         if (seasonId != null) {
             builder.queryParam("seasonId", seasonId);
         }
@@ -1121,7 +1073,7 @@ public class PaymentApi {
     }
 
     private String stripeSecret() {
-        return properties.getProperty("stripe.secret");
+        return AppContext.get().config().getProperties().getProperty("stripe.secret");
     }
 
     private String safe(String value) {
@@ -1137,15 +1089,15 @@ public class PaymentApi {
             @QueryParam("returnTo") String returnTo,
             @QueryParam("success") String success) {
         Payment payment = requireOwnedPaidPayment(id);
-        List<PlayerSubscription> subs = playerSubscriptionService.findByPaymentId(id);
-        List<Membership> memberships = membershipDao.findByPaymentId(id);
+        List<PlayerSubscription> subs = RequestContext.require().playerSubscriptionDao().findByPaymentId(id);
+        List<Membership> memberships = RequestContext.require().membershipDao().findByPaymentId(id);
 
         Map<String, Object> model = new HashMap<>();
         model.put("payment", payment);
         model.put(
                 "suggestedPayerName",
-                paymentReceiptPdfService.suggestPayerName(
-                        payment, subs, memberships, find, loggerUser.getUsername()));
+                AppContext.get().paymentReceiptPdfService().suggestPayerName(
+                        payment, subs, memberships, RequestContext.require().find(), RequestContext.require().loggedUser().getUsername()));
         model.put("returnTo", defaultPayerReturnTo(returnTo, memberships));
         model.put("success", success == null ? "" : success);
         return new MustacheHtml(model, "payment/paymentPayer.mustache");
@@ -1162,17 +1114,17 @@ public class PaymentApi {
             @FormParam("returnTo") String returnTo) {
         Payment payment = requireOwnedPaidPayment(id);
         payment.setPayerName(payerName == null || payerName.isBlank() ? null : payerName.trim());
-        paymentService.merge(payment);
+        RequestContext.require().paymentDao().merge(payment);
 
-        List<Membership> memberships = membershipDao.findByPaymentId(id);
+        List<Membership> memberships = RequestContext.require().membershipDao().findByPaymentId(id);
         String target = defaultPayerReturnTo(returnTo, memberships);
         URI redirect = Redirects.safeRedirect(
                 withSuccessQuery(target, "payerUpdated"),
-                uriInfo.getBaseUriBuilder()
+                RequestContext.require().uriInfo().getBaseUriBuilder()
                         .path(target.startsWith("/") ? target.substring(1) : target)
                         .queryParam("success", "payerUpdated")
                         .build(),
-                uriInfo);
+                RequestContext.require().uriInfo());
         return Response.seeOther(Redirects.toSameOriginRelative(redirect)).build();
     }
 
@@ -1191,13 +1143,13 @@ public class PaymentApi {
     }
 
     private Payment requireOwnedPaidPayment(Integer id) {
-        Payment payment = paymentService.find(id);
+        Payment payment = RequestContext.require().paymentDao().find(id);
         if (payment == null || payment.getStatus() != PaymentStatus.PAID) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
-        boolean isOwner = loggerUser.getEmail() != null
+        boolean isOwner = RequestContext.require().loggedUser().getEmail() != null
                 && payment.getUserEmail() != null
-                && loggerUser.getEmail().equalsIgnoreCase(payment.getUserEmail());
+                && RequestContext.require().loggedUser().getEmail().equalsIgnoreCase(payment.getUserEmail());
         if (!isOwner) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
@@ -1219,14 +1171,14 @@ public class PaymentApi {
     @Produces("application/pdf")
     @LoggedOnly
     public Response invoice(@PathParam("id") Integer id) {
-        Payment payment = paymentService.find(id);
+        Payment payment = RequestContext.require().paymentDao().find(id);
         if (payment == null) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
-        boolean isOwner = loggerUser.getEmail() != null
+        boolean isOwner = RequestContext.require().loggedUser().getEmail() != null
                 && payment.getUserEmail() != null
-                && loggerUser.getEmail().equalsIgnoreCase(payment.getUserEmail());
-        boolean isTreasurer = loggerUser.hasRole(RoleCode.TRESORIER);
+                && RequestContext.require().loggedUser().getEmail().equalsIgnoreCase(payment.getUserEmail());
+        boolean isTreasurer = RequestContext.require().loggedUser().hasRole(RoleCode.TRESORIER);
         if (!isOwner && !isTreasurer) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
@@ -1249,7 +1201,7 @@ public class PaymentApi {
     @Path("{id:\\d+}/send-receipt")
     @RequireRole(RoleCode.TRESORIER)
     public Response sendReceipt(@PathParam("id") Integer id) {
-        Payment payment = paymentService.find(id);
+        Payment payment = RequestContext.require().paymentDao().find(id);
         if (payment == null || payment.getStatus() != PaymentStatus.PAID) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
@@ -1273,7 +1225,7 @@ public class PaymentApi {
             String subject = payment.isDonation()
                     ? "Votre attestation fiscale"
                     : "Votre reçu de paiement";
-            sendMail.send(
+            AppContext.get().sendMail().send(
                     mail,
                     payment.getUserEmail().trim(),
                     subject,
@@ -1285,7 +1237,7 @@ public class PaymentApi {
             throw new WebApplicationException(Response.Status.INTERNAL_SERVER_ERROR);
         }
 
-        URI redirect = uriInfo.getBaseUriBuilder()
+        URI redirect = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("payment")
                 .path(String.valueOf(id))
                 .path("edit")
@@ -1296,22 +1248,22 @@ public class PaymentApi {
 
     private GeneratedReceipt generateReceipt(Payment payment, Integer id) throws Exception {
         if (payment.isDonation()) {
-            byte[] pdf = paymentReceiptPdfService.generateDonationAttestation(payment);
+            byte[] pdf = AppContext.get().paymentReceiptPdfService().generateDonationAttestation(payment);
             return new GeneratedReceipt(pdf, "attestation-fiscale-" + id + ".pdf", true);
         }
-        List<PlayerSubscription> subs = playerSubscriptionService.findByPaymentId(id);
-        List<Membership> memberships = membershipDao.findByPaymentId(id);
+        List<PlayerSubscription> subs = RequestContext.require().playerSubscriptionDao().findByPaymentId(id);
+        List<Membership> memberships = RequestContext.require().membershipDao().findByPaymentId(id);
         Map<Integer, List<MembershipOptionSubscription>> optionSubscriptions = memberships.isEmpty()
                 ? Map.of()
-                : membershipOptionSubscriptionDao
+                : RequestContext.require().membershipOptionSubscriptionDao()
                         .findByMembershipIds(memberships.stream().map(Membership::getId).toList())
                         .stream()
                         .collect(Collectors.groupingBy(s -> s.getMembership().getId()));
         String fallbackName = payment.getPayerName() != null && !payment.getPayerName().isBlank()
                 ? payment.getPayerName()
-                : (loggerUser.getUsername() != null ? loggerUser.getUsername() : "");
-        byte[] pdf = paymentReceiptPdfService.generatePaymentReceipt(
-                payment, subs, memberships, optionSubscriptions, find, fallbackName);
+                : (RequestContext.require().loggedUser().getUsername() != null ? RequestContext.require().loggedUser().getUsername() : "");
+        byte[] pdf = AppContext.get().paymentReceiptPdfService().generatePaymentReceipt(
+                payment, subs, memberships, optionSubscriptions, RequestContext.require().find(), fallbackName);
         return new GeneratedReceipt(pdf, "facture-" + id + ".pdf", false);
     }
 
@@ -1346,7 +1298,7 @@ public class PaymentApi {
         writer.append(membershipName).append(";");
         writer.append(licenseType).append(";");
         writer.append(optionLabels).append(";");
-        IPlayer player = find.player(sub.getNrFfe(), null);
+        IPlayer player = RequestContext.require().find().player(sub.getNrFfe(), null);
         if (player != null) {
             writer.append(player.getFullname());
         }
@@ -1358,7 +1310,7 @@ public class PaymentApi {
         String membershipName = buildMembershipFullName(membership);
         String licenseType = membership.getLicenseType() != null ? membership.getLicenseType() : "";
         List<MembershipOptionSubscription> subscriptions =
-                membershipOptionSubscriptionDao.findByMembershipIds(List.of(membership.getId()));
+                RequestContext.require().membershipOptionSubscriptionDao().findByMembershipIds(List.of(membership.getId()));
         String optionLabels = subscriptions.stream()
                 .map(MembershipOptionSubscription::getMembershipOption)
                 .filter(java.util.Objects::nonNull)
@@ -1391,8 +1343,8 @@ public class PaymentApi {
                     payment.getUpdatedAt() != null ? payment.getUpdatedAt() : payment.getCreatedAt();
             String paymentType = EventPaymentsReportService.resolvePaymentType(payment);
             List<PlayerSubscription> subs =
-                    playerSubscriptionService.findByPaymentId(payment.getId().intValue());
-            List<Membership> memberships = membershipDao.findByPaymentId(payment.getId().intValue());
+                    RequestContext.require().playerSubscriptionDao().findByPaymentId(payment.getId().intValue());
+            List<Membership> memberships = RequestContext.require().membershipDao().findByPaymentId(payment.getId().intValue());
             if (payment.isDonation() || (subs.isEmpty() && memberships.isEmpty())) {
                 String nature = payment.isDonation() ? "donation" : "";
                 String label = payment.isDonation()

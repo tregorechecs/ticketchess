@@ -7,13 +7,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import com.github.gcolin.platform.MustacheHtml;
 import com.github.gcolin.registration.PlayerSubscription;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import java.lang.reflect.Field;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -37,18 +37,22 @@ class EventCollectionStatisticsApiTest {
         when(statistics.generateCsv(rows, true)).thenReturn("header\n");
         when(statistics.generatePdf("Cup", report)).thenReturn(new byte[] {1, 2});
         when(payments.generateForEventCollection(collection, rows)).thenReturn(new byte[] {3, 4});
-        inject(api, "eventCollectionDao", collections);
-        inject(api, "playerSubscriptionDao", subscriptions);
-        inject(api, "statisticsReportService", statistics);
-        inject(api, "eventPaymentsReportService", payments);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setStatisticsReportService(statistics);
+            app.setEventPaymentsReportService(payments);
+        }, ctx -> {
+            ctx.setEventCollectionDao(collections);
+            ctx.setPlayerSubscriptionDao(subscriptions);
+        })) {
 
-        MustacheHtml html = api.show(7);
-        assertEquals("event/eventCollectionStatistics.mustache", html.getTemplate());
-        assertEquals("header\n", api.csv(7).getEntity());
-        assertEquals(200, api.pdf(7).getStatus());
-        assertEquals(200, api.paymentsPdf(7).getStatus());
-        verify(statistics).generatePdf("Cup", report);
-        verify(payments).generateForEventCollection(collection, rows);
+            MustacheHtml html = api.show(7);
+            assertEquals("event/eventCollectionStatistics.mustache", html.getTemplate());
+            assertEquals("header\n", api.csv(7).getEntity());
+            assertEquals(200, api.pdf(7).getStatus());
+            assertEquals(200, api.paymentsPdf(7).getStatus());
+            verify(statistics).generatePdf("Cup", report);
+            verify(payments).generateForEventCollection(collection, rows);
+        }
     }
 
     @Test
@@ -56,11 +60,14 @@ class EventCollectionStatisticsApiTest {
         EventCollectionStatisticsApi api = new EventCollectionStatisticsApi();
         EventCollectionDao dao = mock(EventCollectionDao.class);
         when(dao.find(99)).thenReturn(null);
-        inject(api, "eventCollectionDao", dao);
-        assertThrows(NotFoundException.class, () -> api.show(99));
-        assertThrows(NotFoundException.class, () -> api.csv(99));
-        assertThrows(NotFoundException.class, () -> api.pdf(99));
-        assertThrows(NotFoundException.class, () -> api.paymentsPdf(99));
+        try (TestContext tc = TestContext.openRequest(ctx -> {
+            ctx.setEventCollectionDao(dao);
+        })) {
+            assertThrows(NotFoundException.class, () -> api.show(99));
+            assertThrows(NotFoundException.class, () -> api.csv(99));
+            assertThrows(NotFoundException.class, () -> api.pdf(99));
+            assertThrows(NotFoundException.class, () -> api.paymentsPdf(99));
+        }
     }
 
     @Test
@@ -79,18 +86,16 @@ class EventCollectionStatisticsApiTest {
                 .thenThrow(new RuntimeException("pdf"));
         when(payments.generateForEventCollection(org.mockito.ArgumentMatchers.any(), anyList()))
                 .thenThrow(new RuntimeException("payments"));
-        inject(api, "eventCollectionDao", collections);
-        inject(api, "playerSubscriptionDao", subscriptions);
-        inject(api, "statisticsReportService", statistics);
-        inject(api, "eventPaymentsReportService", payments);
-        assertEquals(500, assertThrows(WebApplicationException.class, () -> api.pdf(1)).getResponse().getStatus());
-        assertEquals(
-                500, assertThrows(WebApplicationException.class, () -> api.paymentsPdf(1)).getResponse().getStatus());
-    }
-
-    private static void inject(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
+        try (TestContext tc = TestContext.open(app -> {
+            app.setStatisticsReportService(statistics);
+            app.setEventPaymentsReportService(payments);
+        }, ctx -> {
+            ctx.setEventCollectionDao(collections);
+            ctx.setPlayerSubscriptionDao(subscriptions);
+        })) {
+            assertEquals(500, assertThrows(WebApplicationException.class, () -> api.pdf(1)).getResponse().getStatus());
+            assertEquals(
+                    500, assertThrows(WebApplicationException.class, () -> api.paymentsPdf(1)).getResponse().getStatus());
+        }
     }
 }

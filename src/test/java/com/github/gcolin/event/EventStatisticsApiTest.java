@@ -13,7 +13,6 @@ import com.github.gcolin.player.Find;
 import com.github.gcolin.event.StatisticsReportService;
 import com.github.gcolin.event.EventDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -57,18 +56,21 @@ class EventStatisticsApiTest {
         when(find.player("A12345", null)).thenReturn(player);
         when(find.player("B99999", null)).thenReturn(player);
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "playerSubscriptionDao", playerSubscriptionDao);
-        inject(api, "statisticsReportService", new StatisticsReportService());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setStatisticsReportService(new StatisticsReportService());
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(playerSubscriptionDao);
+            ctx.setFind(find);
+        })) {
 
-        try (TestContext ignored = TestContext.open(find)) {
-        MustacheHtml html = api.show(1);
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.show(1);
+            Map<String, Object> model = html.getModel();
 
-        assertEquals("event/eventStatistics.mustache", html.getTemplate());
-        assertEquals(2, model.get("total"));
-        assertEquals(30.0, (Double) model.get("totalAmount"), 0.001);
-        assertSame(event, model.get("event"));
+            assertEquals("event/eventStatistics.mustache", html.getTemplate());
+            assertEquals(2, model.get("total"));
+            assertEquals(30.0, (Double) model.get("totalAmount"), 0.001);
+            assertSame(event, model.get("event"));
         }
     }
 
@@ -94,16 +96,19 @@ class EventStatisticsApiTest {
         when(eventDao.find(2)).thenReturn(event);
         when(playerSubscriptionDao.findByEvent(event)).thenReturn(List.of(noNrFfe, nullNrFfe));
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "playerSubscriptionDao", playerSubscriptionDao);
-        inject(api, "statisticsReportService", new StatisticsReportService());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setStatisticsReportService(new StatisticsReportService());
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(playerSubscriptionDao);
+            ctx.setFind(find);
+        })) {
 
-        try (TestContext ignored = TestContext.open(find)) {
-        MustacheHtml html = api.show(2);
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.show(2);
+            Map<String, Object> model = html.getModel();
 
-        assertEquals(0, model.get("total"));
-        assertEquals(0.0, (Double) model.get("totalAmount"), 0.001);
+            assertEquals(0, model.get("total"));
+            assertEquals(0.0, (Double) model.get("totalAmount"), 0.001);
         }
     }
 
@@ -127,20 +132,23 @@ class EventStatisticsApiTest {
         when(playerSubscriptionDao.findByEvent(event)).thenReturn(List.of(sub));
         when(find.player("X00001", null)).thenReturn(null);
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "playerSubscriptionDao", playerSubscriptionDao);
-        inject(api, "statisticsReportService", new StatisticsReportService());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setStatisticsReportService(new StatisticsReportService());
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(playerSubscriptionDao);
+            ctx.setFind(find);
+        })) {
 
-        try (TestContext ignored = TestContext.open(find)) {
-        MustacheHtml html = api.show(3);
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.show(3);
+            Map<String, Object> model = html.getModel();
 
-        // total counts the subscription even if player not found
-        assertEquals(1, model.get("total"));
-        // but byClub/byCategory/byFederation should be empty
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> byClub = (Map<String, Integer>) model.get("byClub");
-        assertEquals(0, byClub.size());
+            // total counts the subscription even if player not found
+            assertEquals(1, model.get("total"));
+            // but byClub/byCategory/byFederation should be empty
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> byClub = (Map<String, Integer>) model.get("byClub");
+            assertEquals(0, byClub.size());
         }
     }
 
@@ -170,26 +178,29 @@ class EventStatisticsApiTest {
         when(playerSubscriptionDao.findByEvent(event)).thenReturn(List.of(sub));
         when(find.player("Y00001", null)).thenReturn(player);
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "playerSubscriptionDao", playerSubscriptionDao);
-        inject(api, "statisticsReportService", new StatisticsReportService());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setStatisticsReportService(new StatisticsReportService());
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(playerSubscriptionDao);
+            ctx.setFind(find);
+        })) {
 
-        try (TestContext ignored = TestContext.open(find)) {
-        MustacheHtml html = api.show(4);
-        Map<String, Object> model = html.getModel();
+            MustacheHtml html = api.show(4);
+            Map<String, Object> model = html.getModel();
 
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> byClub = (Map<String, Integer>) model.get("byClub");
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> byCategory = (Map<String, Integer>) model.get("byCategory");
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> byFederation = (Map<String, Integer>) model.get("byFederation");
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> byClub = (Map<String, Integer>) model.get("byClub");
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> byCategory = (Map<String, Integer>) model.get("byCategory");
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> byFederation = (Map<String, Integer>) model.get("byFederation");
 
-        assertEquals(1, byClub.get("—"));
-        assertEquals(1, byCategory.get("—"));
-        assertEquals(1, byFederation.get("—"));
-        // null amountCents should not add to total amount
-        assertEquals(0.0, (Double) model.get("totalAmount"), 0.001);
+            assertEquals(1, byClub.get("—"));
+            assertEquals(1, byCategory.get("—"));
+            assertEquals(1, byFederation.get("—"));
+            // null amountCents should not add to total amount
+            assertEquals(0.0, (Double) model.get("totalAmount"), 0.001);
         }
     }
 
@@ -226,20 +237,23 @@ class EventStatisticsApiTest {
         when(find.player("B1", null)).thenReturn(playerB);
         when(find.player("B2", null)).thenReturn(playerB);
 
-        inject(api, "eventDao", eventDao);
-        inject(api, "playerSubscriptionDao", playerSubscriptionDao);
-        inject(api, "statisticsReportService", new StatisticsReportService());
+        try (TestContext tc = TestContext.open(app -> {
+            app.setStatisticsReportService(new StatisticsReportService());
+        }, ctx -> {
+            ctx.setEventDao(eventDao);
+            ctx.setPlayerSubscriptionDao(playerSubscriptionDao);
+            ctx.setFind(find);
+        })) {
 
-        try (TestContext ignored = TestContext.open(find)) {
-        MustacheHtml html = api.show(5);
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> byClub = (Map<String, Integer>) html.getModel().get("byClub");
+            MustacheHtml html = api.show(5);
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> byClub = (Map<String, Integer>) html.getModel().get("byClub");
 
-        // BetaClub has 2, AlphaClub has 1 → BetaClub should be first
-        String firstKey = byClub.keySet().iterator().next();
-        assertEquals("BetaClub", firstKey);
-        assertEquals(2, byClub.get("BetaClub"));
-        assertEquals(1, byClub.get("AlphaClub"));
+            // BetaClub has 2, AlphaClub has 1 → BetaClub should be first
+            String firstKey = byClub.keySet().iterator().next();
+            assertEquals("BetaClub", firstKey);
+            assertEquals(2, byClub.get("BetaClub"));
+            assertEquals(1, byClub.get("AlphaClub"));
         }
     }
 
@@ -249,11 +263,5 @@ class EventStatisticsApiTest {
         sub.setNrFfe(nrFfe);
         sub.setAmountCents(amountCents);
         return sub;
-    }
-
-    private static void inject(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }

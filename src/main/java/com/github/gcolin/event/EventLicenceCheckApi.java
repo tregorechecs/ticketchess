@@ -1,6 +1,8 @@
 package com.github.gcolin.event;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.registration.PlayerSubscription;
@@ -11,7 +13,6 @@ import com.github.gcolin.player.IPlayer;
 import com.github.gcolin.player.Find;
 import com.github.gcolin.event.EventDao;
 import com.github.gcolin.registration.PlayerSubscriptionDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -31,29 +32,17 @@ import com.github.gcolin.player.CustomPlayer;
 @Path("event/{id}/licencecheck")
 public class EventLicenceCheckApi {
 
-    @Inject
-    private EventDao eventDao;
-
-    @Inject
-    private PlayerSubscriptionDao playerSubscriptionDao;
-
-    @Inject
-    private LuceneDb luceneDb;
-
-    @Inject
-    private Find find;
-
     @GET
     @RequireRole(RoleCode.ARBITRE)
     public Response licenceCheck(@PathParam("id") Integer eventId) throws IOException {
 
-        Event event = eventDao.find(eventId);
+        Event event = RequestContext.require().eventDao().find(eventId);
         if (event == null) {
             throw new WebApplicationException("Event not found", Response.Status.NOT_FOUND);
         }
 
         boolean requiresLicenceA = event.getEventType() == EventType.STANDARD;
-        List<PlayerSubscription> subscriptions = playerSubscriptionDao.findByEvent(event);
+        List<PlayerSubscription> subscriptions = RequestContext.require().playerSubscriptionDao().findByEvent(event);
 
         StringBuilder csv = new StringBuilder();
         csv.append("nom/prenom;eventName;eventId;subId;error\n");
@@ -69,7 +58,7 @@ public class EventLicenceCheckApi {
 
             if (!nrFfe.startsWith("@")) {
                 try {
-                    Player player = luceneDb.searchJoueur(nrFfe);
+                    Player player = AppContext.get().luceneDb().searchJoueur(nrFfe);
                     if (player != null) {
                         if (requiresLicenceA) {
                             if (!"A".equals(player.getAffType())) {
@@ -93,7 +82,7 @@ public class EventLicenceCheckApi {
                         }
                     } else {
                         error = "joueur introuvable";
-                        IPlayer fallback = find.player(nrFfe, null);
+                        IPlayer fallback = RequestContext.require().find().player(nrFfe, null);
                         if (fallback != null && fallback.getName() != null) {
                             playerName = fallback.getName();
                             if (fallback.getFirstname() != null && !fallback.getFirstname().isEmpty()) {
@@ -107,7 +96,7 @@ public class EventLicenceCheckApi {
             } else {
                 // CustomPlayer (@) : utilise Find pour récupérer le nom
                 error = "joueur custom";
-                IPlayer fallback = find.player(nrFfe, null);
+                IPlayer fallback = RequestContext.require().find().player(nrFfe, null);
                 if (fallback != null && fallback.getName() != null) {
                     playerName = fallback.getName();
                     if (fallback.getFirstname() != null && !fallback.getFirstname().isEmpty()) {

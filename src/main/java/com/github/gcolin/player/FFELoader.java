@@ -7,18 +7,14 @@ import com.healthmarketscience.jackcess.Table;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.IntField;
-import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.TopDocs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +31,7 @@ public class FFELoader {
         this.excludeAffTypeN = excludeAffTypeN;
     }
 
-    private Document toDocument(Row row, IndexSearcher searcher) throws IOException {
+    private Document toDocument(Row row, Map<Integer, String> clubNames) {
         Document doc = new Document();
 
         String nrffe = row.getString("NrFFE");
@@ -92,15 +88,11 @@ public class FFELoader {
         }
         doc.add(new StringField("affType", row.getString("AffType"), Field.Store.YES));
 
-        // filtres utiles
-        doc.add(new IntField("clubRef", row.getInt("ClubRef"), Field.Store.YES));
-        Query nrffeQuery = IntPoint.newExactQuery("clubRef", row.getInt("ClubRef"));
-        TopDocs hits = searcher.search(nrffeQuery, 1);
-        if (hits.scoreDocs.length > 0) {
-            for (ScoreDoc sd : hits.scoreDocs) {
-                Document clubDoc = searcher.storedFields().document(sd.doc);
-                doc.add(new StringField("club", clubDoc.get("nom"), Field.Store.YES));
-            }
+        int clubRef = row.getInt("ClubRef");
+        doc.add(new IntField("clubRef", clubRef, Field.Store.YES));
+        String clubName = clubNames.get(clubRef);
+        if (clubName != null) {
+            doc.add(new StringField("club", clubName, Field.Store.YES));
         }
 
         doc.add(new StringField("eloStd", eloStd, Field.Store.YES));
@@ -142,22 +134,22 @@ public class FFELoader {
 
     public void load(IndexWriter writer, String mdb) throws IOException {
         int count = 0;
-        try (Database db = DatabaseBuilder.open(new File(mdb))) {
+        try (Database db = new DatabaseBuilder(new File(mdb)).setReadOnly(true).open()) {
 
             Table clubTable = db.getTable("CLUB");
+            Map<Integer, String> clubNames = new HashMap<>();
 
             for (Row row : clubTable) {
                 Document doc = clubToDocument(row);
                 if (doc != null) {
+                    clubNames.put(row.getInt("Ref"), row.getString("Nom"));
                     writer.addDocument(doc);
                 }
             }
 
             Table joueurs = db.getTable("JOUEUR");
-            DirectoryReader reader = DirectoryReader.open(writer);
-            IndexSearcher searcher = new IndexSearcher(reader);
             for (Row row : joueurs) {
-                Document doc = toDocument(row, searcher);
+                Document doc = toDocument(row, clubNames);
                 if (doc != null) {
                     writer.addDocument(doc);
                     count++;
@@ -166,7 +158,6 @@ public class FFELoader {
                     }
                 }
             }
-            reader.close();
         }
     }
 }

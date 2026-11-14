@@ -1,17 +1,17 @@
 package com.github.gcolin.auth;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.AuthorizationScopeType;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.platform.Caches;
 import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.auth.UserAuthorizationDao;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import java.time.LocalDateTime;
@@ -26,22 +26,10 @@ import com.github.gcolin.platform.MustacheHtml;
 @RequireRole(RoleCode.ADMIN)
 public class UserAuthorizationApi {
 
-    @Inject
-    private UserAuthorizationDao userAuthorizationDao;
-
-    @Inject
-    private LoggedUser user;
-
-    @Inject
-    private Caches caches;
-
-    @Context
-    UriInfo uriInfo;
-
     @GET
     public MustacheHtml page() {
         Map<String, Object> model = new HashMap<>();
-        List<UserAuthorization> authorizations = userAuthorizationDao.allOrdered();
+        List<UserAuthorization> authorizations = RequestContext.require().userAuthorizationDao().allOrdered();
         List<RoleCode> roles = Arrays.asList(RoleCode.values());
         model.put("authorizations", authorizations);
         model.put("roles", roles);
@@ -63,8 +51,8 @@ public class UserAuthorizationApi {
             @FormParam("validUntil") String validUntil) {
         if ("true".equals(toRemove)) {
             if (id != null) {
-                userAuthorizationDao.remove(id);
-                caches.getRoleCache().invalidateAll();
+                RequestContext.require().userAuthorizationDao().remove(id);
+                AppContext.get().caches().getRoleCache().invalidateAll();
             }
             return redirectToPage();
         }
@@ -79,21 +67,21 @@ public class UserAuthorizationApi {
                     .build();
         }
 
-        userAuthorizationDao.upsert(
+        RequestContext.require().userAuthorizationDao().upsert(
                 email,
                 roleCode,
                 authorizationScopeType,
                 parsedScopeId,
                 parseNullableDateTime(validUntil),
-                user == null ? null : user.getEmail());
-        caches.getRoleCache().invalidateAll();
+                RequestContext.require().loggedUser() == null ? null : RequestContext.require().loggedUser().getEmail());
+        AppContext.get().caches().getRoleCache().invalidateAll();
 
         return redirectToPage();
     }
 
     private Response redirectToPage() {
         return Response.seeOther(
-                        uriInfo.getBaseUriBuilder().path("user-authorization").build())
+                        RequestContext.require().uriInfo().getBaseUriBuilder().path("user-authorization").build())
                 .build();
     }
 

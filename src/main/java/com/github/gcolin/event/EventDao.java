@@ -488,7 +488,10 @@ public class EventDao extends AbstractDao<Event> {
             String cadence,
             String pairing,
             String eventMaxSubscriptionsStr) {
-        Event event = new Event();
+        Event event = id != null ? find(id) : null;
+        if (event == null) {
+            event = new Event();
+        }
         event.setName(name);
         LocalDate startDateLocal = LocalDate.parse(startDate);
         event.setStartDate(startDateLocal.atStartOfDay());
@@ -501,11 +504,10 @@ public class EventDao extends AbstractDao<Event> {
         if (rondesStr != null && !rondesStr.isEmpty()) {
             // Rondes now saved via EventOptionType.ROUNDS
         }
-        if (id != null) {
-            event.setId(id);
-        }
         if (eventgroupId != null && !eventgroupId.isEmpty()) {
             event.setEventGroup(eventGroupService.get().find(Integer.valueOf(eventgroupId)));
+        } else {
+            event.setEventGroup(null);
         }
         if (eventCollectionId != null && !eventCollectionId.isEmpty()) {
             event.setEventCollection(new EventCollectionDao().find(Integer.valueOf(eventCollectionId)));

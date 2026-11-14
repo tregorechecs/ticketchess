@@ -1,6 +1,8 @@
 package com.github.gcolin.desk;
 
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.RequestContext;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.event.Event;
 import com.github.gcolin.auth.RoleCode;
@@ -9,7 +11,6 @@ import com.github.gcolin.desk.EventDeskService;
 import com.github.gcolin.auth.LoggedUser;
 import com.github.gcolin.event.EventDao;
 import io.jsonwebtoken.Jwts;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -25,34 +26,22 @@ import com.github.gcolin.platform.MustacheHtml;
 @RequireRole(RoleCode.ARBITRE)
 public class EventDeskApi {
 
-    @Inject
-    private EventDao eventDao;
-
-    @Inject
-    private EventDeskService eventDeskService;
-
-    @Inject
-    private LoggedUser loggedUser;
-
-    @Inject
-    private Config config;
-
     @GET
     public MustacheHtml show(@PathParam("id") Integer eventId) {
-        Event event = eventDao.find(eventId);
+        Event event = RequestContext.require().eventDao().find(eventId);
         if (event == null) {
             throw new WebApplicationException("Event not found", Response.Status.NOT_FOUND);
         }
-        List<EventDeskEventDto> events = eventDeskService.collectionSnapshots(eventId);
+        List<EventDeskEventDto> events = AppContext.get().eventDeskService().collectionSnapshots(eventId);
         List<Integer> eventIds = events.stream().map(EventDeskEventDto::getId).toList();
         String deskTicket = Jwts.builder()
-                .subject(loggedUser.getEmail())
+                .subject(RequestContext.require().loggedUser().getEmail())
                 .claim("eventId", eventId)
                 .claim("eventIds", eventIds)
                 .claim("scope", "desk")
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 12))
-                .signWith(config.getKeys(), Config.JWT_ALGORITHM)
+                .signWith(AppContext.get().config().getKeys(), Config.JWT_ALGORITHM)
                 .compact();
         Map<String, Object> model = new HashMap<>();
         model.put("event", event);

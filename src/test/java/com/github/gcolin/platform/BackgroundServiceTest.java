@@ -53,7 +53,7 @@ class BackgroundServiceTest {
         BackgroundService service = new BackgroundService();
         Config config = mock(Config.class);
         when(config.getConfigDir()).thenReturn(tempDir.toString());
-        Field field = BackgroundService.class.getDeclaredField("config");
+        Field field = AbstractOrgImageFileService.class.getDeclaredField("config");
         field.setAccessible(true);
         field.set(service, config);
         return service;

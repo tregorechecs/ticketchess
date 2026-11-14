@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.github.gcolin.platform.TestContext;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
@@ -26,11 +27,10 @@ class MyEventsApiTest {
         when(uriBuilder.path(anyString())).thenReturn(uriBuilder);
         when(uriBuilder.build()).thenReturn(target);
 
-        Field field = MyEventsApi.class.getDeclaredField("uriInfo");
-        field.setAccessible(true);
-        field.set(api, uriInfo);
-
-        Response response = api.events();
+        Response response;
+        try (TestContext ignored = TestContext.openRequest(ctx -> ctx.setUriInfo(uriInfo))) {
+            response = api.events();
+        }
 
         assertEquals(303, response.getStatus());
         assertEquals(target, response.getLocation());

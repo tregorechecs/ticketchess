@@ -99,5 +99,20 @@ class MembershipMustacheViewTest {
         assertFalse((Boolean) licenseModel.get("licenseIsEdit"));
         MembershipMustacheView.enrichLicensePriceEditPage(licenseModel, null, null);
         assertEquals("", licenseModel.get("priceEuros"));
+
+        License license = new License("A");
+        license.setId(1);
+        LicensePrice price = new LicensePrice("SenM", 8200, license);
+        price.setId(29);
+        Map<String, Object> priceListModel = new HashMap<>();
+        MembershipMustacheView.enrichLicensePriceListPage(priceListModel, license, List.of(price));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> priceRows =
+                (List<Map<String, Object>>) priceListModel.get("priceRows");
+        assertEquals(1, priceRows.size());
+        assertEquals("82.00", priceRows.get(0).get("priceEuros"));
+        assertEquals("SenM", priceRows.get(0).get("category"));
+        assertEquals("heading.licensePrices", priceListModel.get("headingKey"));
+        assertEquals("A", priceListModel.get("headingParam"));
     }
 }

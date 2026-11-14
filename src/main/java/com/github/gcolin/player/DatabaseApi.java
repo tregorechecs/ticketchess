@@ -1,13 +1,14 @@
 package com.github.gcolin.player;
 
+import com.github.gcolin.platform.RequestContext;
 import com.github.gcolin.auth.RequireRole;
+import com.github.gcolin.platform.AppContext;
 import com.github.gcolin.auth.RoleCode;
 import com.github.gcolin.player.LuceneDb;
 import com.github.gcolin.player.ManualPlayerEntry;
 import com.github.gcolin.player.Player;
 import com.github.gcolin.platform.Config;
 import com.github.gcolin.platform.ServiceUtils;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -16,7 +17,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -38,22 +38,13 @@ import com.github.gcolin.platform.ModelUtils;
 @Path("database")
 public class DatabaseApi {
 
-    @Inject
-    private LuceneDb luceneDb;
-
-    @Inject
-    private Config config;
-
-    @Context
-    private UriInfo uriInfo;
-
     private static Logger logger = LoggerFactory.getLogger(DatabaseApi.class);
 
     @GET
     @RequireRole(RoleCode.ADMIN)
     public MustacheHtml page(@QueryParam("status") String status) {
         Map<String, Object> model = new HashMap<>();
-        model.put("excludeAffTypeN", Boolean.parseBoolean(config.getProperty("ffe.excludeAffTypeN", "false")));
+        model.put("excludeAffTypeN", Boolean.parseBoolean(AppContext.get().config().getProperty("ffe.excludeAffTypeN", "false")));
         model.put("status", status);
         return new MustacheHtml(model, "player/database.mustache");
     }
@@ -70,7 +61,7 @@ public class DatabaseApi {
                     excludeAffTypeN != null && !excludeAffTypeN.isBlank() && !"false".equalsIgnoreCase(excludeAffTypeN)
                             ? "true"
                             : "false");
-            config.updateProperties(updates);
+            AppContext.get().config().updateProperties(updates);
             return redirectToDatabase("settingsSaved");
         } catch (IOException e) {
             logger.error("cannot save FFE settings", e);
@@ -83,7 +74,7 @@ public class DatabaseApi {
     @RequireRole(RoleCode.ADMIN)
     @Produces(MediaType.TEXT_PLAIN)
     public String getFfeInfo() {
-        File file = luceneDb.getMdbFile();
+        File file = AppContext.get().luceneDb().getMdbFile();
         if (file == null || !file.exists()) {
             return "Data.mdb not found";
         }
@@ -97,8 +88,10 @@ public class DatabaseApi {
     @RequireRole(RoleCode.ADMIN)
     public Response downloadAndExtractFfeDb() {
         try {
-            luceneDb.downloadAndExtractFFeDb();
-            return Response.ok("Téléchargement et extraction OK").build();
+            AppContext.get().luceneDb().downloadAndExtractFFeDb();
+            AppContext.get().luceneDb().load(true);
+            AppContext.get().caches().getEvent().invalidateAll();
+            return Response.ok("Téléchargement, extraction et rechargement OK").build();
         } catch (IOException e) {
             logger.error("cannot download FFE db", e);
             return Response.serverError().entity(e.getMessage()).build();
@@ -110,7 +103,7 @@ public class DatabaseApi {
     @RequireRole(RoleCode.ADMIN)
     @Produces(MediaType.TEXT_PLAIN)
     public String getFideInfo() {
-        File file = luceneDb.getFideFile();
+        File file = AppContext.get().luceneDb().getFideFile();
         if (file == null || !file.exists()) {
             return "Data.mdb not found";
         }
@@ -124,10 +117,12 @@ public class DatabaseApi {
     @RequireRole(RoleCode.ADMIN)
     public Response downloadAndExtractFideDb() {
         try {
-            luceneDb.downloadFideDB();
-            return Response.ok("Téléchargement et extraction OK").build();
+            AppContext.get().luceneDb().downloadFideDB();
+            AppContext.get().luceneDb().load(true);
+            AppContext.get().caches().getEvent().invalidateAll();
+            return Response.ok("Téléchargement et rechargement OK").build();
         } catch (IOException e) {
-            logger.error("cannot download FFE db", e);
+            logger.error("cannot download FIDE db", e);
             return Response.serverError().entity(e.getMessage()).build();
         }
     }
@@ -137,7 +132,8 @@ public class DatabaseApi {
     @RequireRole(RoleCode.ADMIN)
     public Response reload() {
         try {
-            luceneDb.load(true);
+            AppContext.get().luceneDb().load(true);
+            AppContext.get().caches().getEvent().invalidateAll();
             return Response.ok("reload OK").build();
         } catch (IOException e) {
             logger.error("cannot reload db", e);
@@ -150,8 +146,8 @@ public class DatabaseApi {
     @RequireRole(RoleCode.ADMIN)
     public MustacheHtml manualPlayersPage(@QueryParam("status") String status) throws IOException {
         Map<String, Object> model = new HashMap<>();
-        model.put("players", luceneDb.getManualPlayers());
-        model.put("manualPlayersFile", luceneDb.getManualPlayersFile().getAbsolutePath());
+        model.put("players", AppContext.get().luceneDb().getManualPlayers());
+        model.put("manualPlayersFile", AppContext.get().luceneDb().getManualPlayersFile().getAbsolutePath());
         model.put("status", status);
         return new MustacheHtml(model, "player/databasePlayers.mustache");
     }
@@ -187,7 +183,7 @@ public class DatabaseApi {
             entry.setEloRapide(eloRapide);
             entry.setEloBlitz(eloBlitz);
             entry.setFideTitre(fideTitre);
-            luceneDb.addManualPlayer(entry);
+            AppContext.get().luceneDb().addManualPlayer(entry);
             return redirectToManualPlayers("added");
         } catch (IllegalArgumentException e) {
             return redirectToManualPlayers("validation");
@@ -203,9 +199,9 @@ public class DatabaseApi {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response deleteManualPlayer(@FormParam("key") String key) {
         try {
-            boolean removed = luceneDb.removeManualPlayer(key);
+            boolean removed = AppContext.get().luceneDb().removeManualPlayer(key);
             if (removed) {
-                luceneDb.load(true);
+                AppContext.get().luceneDb().load(true);
             }
             return redirectToManualPlayers(removed ? "deleted" : "missing");
         } catch (IOException e) {
@@ -225,10 +221,10 @@ public class DatabaseApi {
             String fideValue = com.github.gcolin.platform.ModelUtils.trimToNull(fide);
 
             if (nrffeValue != null) {
-                player = luceneDb.searchJoueurByNrffe(nrffeValue);
+                player = AppContext.get().luceneDb().searchJoueurByNrffe(nrffeValue);
             }
             if (player == null && fideValue != null) {
-                player = luceneDb.searchJoueurByFide(fideValue);
+                player = AppContext.get().luceneDb().searchJoueurByFide(fideValue);
             }
             if (player == null) {
                 throw new WebApplicationException(Response.Status.NOT_FOUND);
@@ -240,7 +236,7 @@ public class DatabaseApi {
     }
 
     private Response redirectToDatabase(String status) {
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("database")
                 .queryParam("status", status)
                 .build();
@@ -248,7 +244,7 @@ public class DatabaseApi {
     }
 
     private Response redirectToManualPlayers(String status) {
-        URI uri = uriInfo.getBaseUriBuilder()
+        URI uri = RequestContext.require().uriInfo().getBaseUriBuilder()
                 .path("database")
                 .path("manual-players")
                 .queryParam("status", status)
